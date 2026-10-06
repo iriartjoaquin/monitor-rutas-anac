@@ -1,0 +1,33 @@
+name: Actualizar Datos ANAC
+
+on:
+  schedule:
+    # Se ejecuta automáticamente el 10 y el 20 de cada mes a las 06:00 UTC
+    - cron: '0 6 10,20 * *'
+  workflow_dispatch: # Permite ejecutarlo a mano con un botón cuando quieras
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar librerías
+        run: pip install pandas requests
+
+      - name: Ejecutar script de actualización
+        run: python actualizar.py
+
+      - name: Guardar cambios si hay datos nuevos
+        run: |
+          git config --global user.name "Robot ANAC"
+          git config --global user.email "bot@github.com"
+          git add datos_actualizados.csv
+          git commit -m "Datos actualizados automáticamente" || exit 0
+          git push
