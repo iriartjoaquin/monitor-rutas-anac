@@ -15,7 +15,7 @@ st.set_page_config(
 st.title("✈️ Monitor de Rutas")
 st.markdown("Visualización y análisis de conectividad aérea de cabotaje a partir de datos oficiales.")
 
-# Mapeo exhaustivo de nombres de aeropuertos argentinos a código oficial IATA y ciudad
+# Mapeo exhaustivo de nombres de aeropuertos a código IATA y ciudad
 AEROPUERTOS_INFO = {
     'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
@@ -134,7 +134,7 @@ def procesar_datos(source):
     df['fecha'] = df['fecha'].fillna(pd.to_datetime(datetime.now()))
     df['periodo_mes'] = df['fecha'].dt.strftime('%Y-%m')
 
-    # 4. Origen, Destino y Tramo
+    # 4. Origen, Destino y Ruta Bidireccional
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c), None)
@@ -154,7 +154,6 @@ def procesar_datos(source):
         origen_raw = pd.Series(["AEP"] * len(df))
         destino_raw = pd.Series(["BRC"] * len(df))
 
-    # Mapear a códigos IATA y ciudades
     res_orig = [resolver_aeropuerto(x) for x in origen_raw]
     res_dest = [resolver_aeropuerto(x) for x in destino_raw]
 
@@ -163,18 +162,36 @@ def procesar_datos(source):
     df['destino_cod'] = [r[0] for r in res_dest]
     df['destino_ciu'] = [r[1] for r in res_dest]
 
-    # Etiquetas amigables
     df['origen_label'] = df['origen_cod'] + " (" + df['origen_ciu'] + ")"
     df['destino_label'] = df['destino_cod'] + " (" + df['destino_ciu'] + ")"
-    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod'] + " (" + df['origen_ciu'] + " a " + df['destino_ciu'] + ")"
-    df['ruta_label'] = df.apply(lambda r: " - ".join(sorted([r['origen_cod'], r['destino_cod']])), axis=1)
+    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod']
 
+    def armar_ruta_bidireccional(row):
+        pares = sorted([(row['origen_cod'], row['origen_ciu']), (row['destino_cod'], row['destino_ciu'])], key=lambda x: x[0])
+        return f"{pares[0][0]} - {pares[1][0]} ({pares[0][1]} ⇄ {pares[1][1]})"
+
+    df['ruta_label'] = df.apply(armar_ruta_bidireccional, axis=1)
     return df
 
 # ---------------------------------------------------------
 # INTERFAZ Y FUENTE DE DATOS
 # ---------------------------------------------------------
 st.sidebar.header("📁 Fuente de Datos")
+
+# Botones de enlace directo a las fuentes oficiales
+st.sidebar.link_button(
+    "🏛️ Secretaría de Transporte (ANAC)",
+    "https://datos.transporte.gob.ar/dataset/aterrizajes-y-despegues-procesados-por-la-administracion-nacional-de-aviacion-civil-anac",
+    use_container_width=True
+)
+
+st.sidebar.link_button(
+    "📊 Tablero SINTA (Yvera)",
+    "https://tableros.yvera.tur.ar/conectividad/",
+    use_container_width=True
+)
+
+st.sidebar.divider()
 
 archivo_local_auto = "datos_actualizados.csv"
 tiene_datos_auto = os.path.exists(archivo_local_auto)
@@ -189,7 +206,7 @@ archivo_a_procesar = None
 if metodo_carga == "Datos automáticos en la nube":
     archivo_a_procesar = archivo_local_auto
 else:
-    archivo_a_procesar = st.sidebar.file_uploader("Subí tu archivo CSV de SINTA:", type=['csv'])
+    archivo_a_procesar = st.sidebar.file_uploader("Subí tu archivo CSV:", type=['csv'])
 
 if archivo_a_procesar is None:
     st.info("👆 Por favor, subí tu archivo CSV desde el panel de la izquierda para comenzar.")
@@ -201,24 +218,33 @@ else:
             st.sidebar.divider()
             st.sidebar.header("🔍 Filtros de Vuelo")
 
-            # 1. Filtro principal por Tramo (Origen ➔ Destino)
-            tramos_disp = sorted(datos['tramo_label'].dropna().unique().tolist())
-            tramos_sel = st.sidebar.multiselect(
-                "✈️ Tramo / Conexión (Origen ➔ Destino):",
-                options=tramos_disp,
+            # 1. RUTA (Ida y vuelta combinadas)
+            rutas_disp = sorted(datos['ruta_label'].dropna().unique().tolist())
+            rutas_sel = st.sidebar.multiselect(
+                "🗺️ Ruta (Ida y Vuelta):",
+                options=rutas_disp,
                 default=[]
             )
 
-            # 2. Filtros individuales de Salida y Llegada (ancho completo)
+            # 2. AEROPUERTO DE SALIDA
             origenes_disp = sorted(datos['origen_label'].dropna().unique().tolist())
-            origenes_sel = st.sidebar.multiselect("🛫 Aeropuerto de Salida (Origen):", options=origenes_disp, default=[])
+            origenes_sel = st.sidebar.multiselect(
+                "🛫 Aeropuerto de Salida (Origen):",
+                options=origenes_disp,
+                default=[]
+            )
 
+            # 3. AEROPUERTO DE LLEGADA
             destinos_disp = sorted(datos['destino_label'].dropna().unique().tolist())
-            destinos_sel = st.sidebar.multiselect("🛬 Aeropuerto de Llegada (Destino):", options=destinos_disp, default=[])
+            destinos_sel = st.sidebar.multiselect(
+                "🛬 Aeropuerto de Llegada (Destino):",
+                options=destinos_disp,
+                default=[]
+            )
 
-            # 3. Fechas con Calendario
+            # 4. Fechas con Calendario
             st.sidebar.divider()
-            st.sidebar.subheader("📅 Rango de Fechas")
+            st.sidebar.subheader("📅 Fechas")
             fecha_min = datos['fecha'].min().date()
             fecha_max = datos['fecha'].max().date()
 
@@ -226,7 +252,7 @@ else:
             f_desde = c_f1.date_input("Desde:", value=fecha_min, min_value=fecha_min, max_value=fecha_max)
             f_hasta = c_f2.date_input("Hasta:", value=fecha_max, min_value=fecha_min, max_value=fecha_max)
 
-            # 4. Aerolíneas
+            # 5. Aerolíneas
             aerolineas_disp = sorted(datos['aerolinea'].dropna().unique().tolist())
             aerolineas_sel = st.sidebar.multiselect("Aerolíneas:", options=aerolineas_disp, default=[])
 
@@ -241,18 +267,17 @@ else:
                     "**AEP:** Aeroparque (Bs. As.) | **EZE:** Ezeiza\n\n"
                     "**BRC:** Bariloche | **SLA:** Salta | **JUJ:** Jujuy\n\n"
                     "**COR:** Córdoba | **MDZ:** Mendoza | **IGR:** Iguazú\n\n"
-                    "**TUC:** Tucumán | **NQN:** Neuquén | **FTE:** El Calafate\n\n"
-                    "**USH:** Ushuaia | **MDQ:** Mar del Plata | **SFN:** Santa Fe"
+                    "**TUC:** Tucumán | **NQN:** Neuquén | **FTE:** El Calafate"
                 )
 
-            # Aplicar filtros (vacío = no filtrar nada)
-            cond_tramo = datos['tramo_label'].isin(tramos_sel) if tramos_sel else True
+            # Aplicar filtros (vacío = incluye todo)
+            cond_ruta = datos['ruta_label'].isin(rutas_sel) if rutas_sel else True
             cond_orig = datos['origen_label'].isin(origenes_sel) if origenes_sel else True
             cond_dest = datos['destino_label'].isin(destinos_sel) if destinos_sel else True
             cond_aero = datos['aerolinea'].isin(aerolineas_sel) if aerolineas_sel else True
             cond_fecha = (datos['fecha'].dt.date >= f_desde) & (datos['fecha'].dt.date <= f_hasta)
 
-            df_filtro = datos[cond_tramo & cond_orig & cond_dest & cond_aero & cond_fecha].copy()
+            df_filtro = datos[cond_ruta & cond_orig & cond_dest & cond_aero & cond_fecha].copy()
             df_filtro['pax_por_vuelo'] = (df_filtro['pasajeros'] / df_filtro['vuelos']).replace([np.inf, -np.inf], 0).round(1)
             df_filtro['load_factor'] = np.where(df_filtro['asientos'] > 0, (df_filtro['pasajeros'] / df_filtro['asientos']) * 100, 0).round(1)
 
@@ -289,7 +314,7 @@ else:
                 # 1. GRÁFICOS
                 # -------------------------------------------------------------
                 with tab_graficos:
-                    agrup_grafico = df_filtro.groupby(['periodo_mes', 'aerolinea', 'tramo_label'], as_index=False).agg(
+                    agrup_grafico = df_filtro.groupby(['periodo_mes', 'aerolinea', 'ruta_label'], as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
                         asientos=('asientos', 'sum')
@@ -327,15 +352,25 @@ else:
 
                     c_g1, c_g2 = st.columns(2)
                     with c_g1:
-                        if df_filtro['tramo_label'].nunique() > 1:
-                            st.subheader("🛫 Pasajeros por Tramo")
-                            comp_tramos = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
-                            fig_tramos = px.bar(
-                                comp_tramos, x="tramo_label", y="pasajeros", color="tramo_label",
+                        if df_filtro['ruta_label'].nunique() > 1:
+                            st.subheader("🛫 Pasajeros por Ruta (Ida y Vuelta)")
+                            comp_rutas = df_filtro.groupby('ruta_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
+                            fig_rutas = px.bar(
+                                comp_rutas, x="ruta_label", y="pasajeros", color="ruta_label",
+                                labels={"ruta_label": "Ruta", "pasajeros": "Pasajeros"},
+                                template="plotly_white"
+                            )
+                            st.plotly_chart(fig_rutas, use_container_width=True)
+                        else:
+                            st.subheader("🔄 Pasajeros por Sentido (Tramo)")
+                            comp_tramo = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum()
+                            fig_tramo = px.bar(
+                                comp_tramo, x="tramo_label", y="pasajeros", color="tramo_label",
                                 labels={"tramo_label": "Tramo", "pasajeros": "Pasajeros"},
                                 template="plotly_white"
                             )
-                            st.plotly_chart(fig_tramos, use_container_width=True)
+                            st.plotly_chart(fig_tramo, use_container_width=True)
+
                     with c_g2:
                         if df_filtro['aerolinea'].nunique() > 1:
                             st.subheader("🥧 Cuota de Mercado (% Pasajeros)")
@@ -374,20 +409,20 @@ else:
                         st.dataframe(res_aero, use_container_width=True)
 
                     with c_t2:
-                        st.subheader("🔄 Cuadro 3: Resumen por Tramo (Sentido)")
-                        res_tramo = df_filtro.groupby('tramo_label', as_index=False).agg(
+                        st.subheader("🗺️ Cuadro 3: Resumen por Ruta (Ida y Vuelta)")
+                        res_ruta = df_filtro.groupby('ruta_label', as_index=False).agg(
                             pasajeros=('pasajeros', 'sum'),
                             vuelos=('vuelos', 'sum'),
                             asientos=('asientos', 'sum')
                         )
-                        res_tramo['load_factor_%'] = np.where(res_tramo['asientos'] > 0, 
-                                                              (res_tramo['pasajeros'] / res_tramo['asientos']) * 100, 
-                                                              0).round(1)
-                        st.dataframe(res_tramo, use_container_width=True)
+                        res_ruta['load_factor_%'] = np.where(res_ruta['asientos'] > 0, 
+                                                             (res_ruta['pasajeros'] / res_ruta['asientos']) * 100, 
+                                                             0).round(1)
+                        st.dataframe(res_ruta, use_container_width=True)
 
                     st.divider()
                     st.subheader("📄 Registros Detallados")
-                    columnas_ver = [c for c in ['fecha', 'tramo_label', 'aerolinea', 'pasajeros', 'asientos', 'vuelos', 'load_factor'] if c in df_filtro.columns]
+                    columnas_ver = [c for c in ['fecha', 'ruta_label', 'tramo_label', 'aerolinea', 'pasajeros', 'asientos', 'vuelos', 'load_factor'] if c in df_filtro.columns]
                     st.dataframe(df_filtro[columnas_ver].sort_values(by='fecha', ascending=False), use_container_width=True, height=300)
                     
                     csv_descarga = df_filtro.to_csv(index=False).encode('utf-8')
