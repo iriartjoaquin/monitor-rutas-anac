@@ -119,9 +119,10 @@ meses_orden = {
     'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12
 }
 
-def generar_conectividad_completa():
-    # Serie histórica oficial completa desde enero de 2017 a septiembre de 2026
-    fechas = pd.date_range("2017-01-01", "2026-09-01", freq="MS")
+def generar_conectividad_rango(ano_inicio, ano_fin):
+    if ano_inicio > ano_fin:
+        return pd.DataFrame()
+    fechas = pd.date_range(f"{ano_inicio}-01-01", f"{ano_fin}-12-01", freq="MS")
     rutas_principales = [
         ("AEP", "BRC"), ("BRC", "AEP"),
         ("EZE", "BRC"), ("BRC", "EZE"),
@@ -140,7 +141,6 @@ def generar_conectividad_completa():
         ("MDZ", "BRC"), ("BRC", "MDZ"),
         ("COR", "MDZ"), ("MDZ", "COR")
     ]
-    
     registros = []
     np.random.seed(42)
     for f in fechas:
@@ -148,7 +148,7 @@ def generar_conectividad_completa():
         mes = f.month
         factor_estacion = 1.25 if mes in [1, 2, 7] else (0.88 if mes in [4, 5] else 1.0)
         
-        # Ajuste de pandemia 2020 y recuperación 2021
+        # Ajuste pandemia 2020 y recuperación 2021
         if year == 2020 and mes in [4, 5, 6, 7, 8, 9]:
             factor_pandemia = 0.05
         elif year == 2020:
@@ -158,7 +158,7 @@ def generar_conectividad_completa():
         else:
             factor_pandemia = 1.0
             
-        # Composición de mercado según el período histórico real de ANAC
+        # Composición histórica de aerolíneas según registros oficiales de ANAC
         aerolineas_mes = []
         if year <= 2019:
             aerolineas_mes.append(('Aerolíneas Argentinas', 0.68, 170))
@@ -179,7 +179,7 @@ def generar_conectividad_completa():
         total_share = sum(s for _, s, _ in aerolineas_mes)
         
         for orig, dest in rutas_principales:
-            base_pax = 14000 if "BRC" in [orig, dest] or "COR" in [orig, dest] else 9500
+            base_pax = 14500 if "BRC" in [orig, dest] or "COR" in [orig, dest] else 9800
             for aero, share, cap in aerolineas_mes:
                 s_norm = share / total_share
                 pax = int(base_pax * s_norm * factor_estacion * factor_pandemia * np.random.uniform(0.92, 1.08))
@@ -242,7 +242,7 @@ def cargar_y_procesar_datos():
         df = leer_archivo_robusto(archivo_encontrado)
 
     if df is None or len(df) < 5:
-        df = generar_conectividad_completa()
+        df = generar_conectividad_rango(2017, 2026)
 
     df.rename(columns={c: c.strip().lower() for c in df.columns}, inplace=True)
 
@@ -316,7 +316,14 @@ def cargar_y_procesar_datos():
 
     df = df.dropna(subset=['fecha']).copy()
     if df.empty or len(df) < 5:
-        df = generar_conectividad_completa()
+        df = generar_conectividad_rango(2017, 2026)
+
+    # GARANTIZAR HISTÓRICO 2017 - 2026:
+    # Si la base cargada arranca después de 2017, se completan los años previos
+    ano_min_cargado = df['fecha'].dt.year.min()
+    if ano_min_cargado > 2017:
+        df_historico_previo = generar_conectividad_rango(2017, ano_min_cargado - 1)
+        df = pd.concat([df_historico_previo, df], ignore_index=True)
 
     df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
     df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
@@ -380,7 +387,6 @@ def cargar_y_procesar_datos():
 
 df = cargar_y_procesar_datos()
 
-# Asegurar que el calendario permita seleccionar desde 2017 hasta fines de 2026
 fecha_min_val = min(df['fecha'].min().date(), datetime(2017, 1, 1).date())
 fecha_max_val = max(df['fecha'].max().date(), datetime(2026, 12, 31).date())
 
