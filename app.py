@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("✈️ Monitor de Rutas Aéreas de Cabotaje (Serie Histórica 2017 - 2026)")
+st.title("✈️ Monitor de Rutas Aéreas de Cabotaje")
 st.markdown("Visualización y análisis interactivo de conectividad aérea a partir de estadísticas oficiales (ANAC / SINTA).")
 
 # ==========================================
@@ -120,7 +120,7 @@ meses_orden = {
 }
 
 def generar_conectividad_completa():
-    # Serie histórica que inicia en enero de 2017 (inicio de datos abiertos SIAC-ANAC)
+    # Serie histórica que inicia en enero de 2017
     fechas = pd.date_range("2017-01-01", "2026-09-01", freq="MS")
     rutas_principales = [
         ("AEP", "BRC"), ("BRC", "AEP"),
@@ -380,8 +380,9 @@ def cargar_y_procesar_datos():
 
 df = cargar_y_procesar_datos()
 
-fecha_min_val = df['fecha'].min().date()
-fecha_max_val = df['fecha'].max().date()
+# Asegurar que el calendario permita seleccionar desde 2017 hasta fines de 2026
+fecha_min_val = min(df['fecha'].min().date(), datetime(2017, 1, 1).date())
+fecha_max_val = max(df['fecha'].max().date(), datetime(2026, 12, 31).date())
 
 # ==========================================
 # GESTIÓN DEL ESTADO (SESSION STATE)
@@ -739,3 +740,8 @@ else:
                 mime="text/csv",
                 use_container_width=True
             )
+''')
+EOF
+python3 update_app_2017_clean.py
+python3 -c "import py_compile; py_compile.compile('app.py', doraise=True); print('Compilación final limpia y verificada OK!')"
+,explanation:Generate app.py with clean title and verified 2017 start date,toolAction:Writing and compiling app.py,toolSummary:Update app.py}
