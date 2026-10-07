@@ -90,7 +90,7 @@ AEROPUERTOS_INFO = {
 }
 
 def resolver_aeropuerto_texto(texto):
-    if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan']:
+    if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan', 'NAN', 'null']:
         return "N/D", "Desconocido"
     t = str(texto).strip().upper()
     if t in AEROPUERTOS_INFO:
@@ -319,7 +319,6 @@ def cargar_y_procesar_datos():
         df = generar_conectividad_rango(2017, 2026)
 
     # GARANTIZAR HISTÓRICO 2017 - 2026:
-    # Si la base cargada arranca después de 2017, se completan los años previos
     ano_min_cargado = df['fecha'].dt.year.min()
     if ano_min_cargado > 2017:
         df_historico_previo = generar_conectividad_rango(2017, ano_min_cargado - 1)
@@ -363,6 +362,10 @@ def cargar_y_procesar_datos():
     df['destino_cod'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("N/D", ""))[0])
     df['destino_ciu'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("", "Desconocido"))[1])
 
+    # FILTRAR REGISTROS N/D Y DESCONOCIDOS:
+    df = df[(df['origen_cod'] != 'N/D') & (df['destino_cod'] != 'N/D')].copy()
+    df = df[(df['origen_ciu'] != 'Desconocido') & (df['destino_ciu'] != 'Desconocido')].copy()
+
     df['origen_label'] = df['origen_cod'] + " (" + df['origen_ciu'] + ")"
     df['destino_label'] = df['destino_cod'] + " (" + df['destino_ciu'] + ")"
     df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod'] + " (" + df['origen_ciu'] + " a " + df['destino_ciu'] + ")"
@@ -374,6 +377,9 @@ def cargar_y_procesar_datos():
         mapa_rutas[(r['origen_cod'], r['destino_cod'])] = f"{p[0][0]} - {p[1][0]} ({p[0][1]} ⇄ {p[1][1]})"
 
     df['ruta_label'] = [mapa_rutas.get((o, d), "General") for o, d in zip(df['origen_cod'], df['destino_cod'])]
+
+    # Descartar cualquier residuo de ruta desconocida
+    df = df[~df['ruta_label'].astype(str).str.contains('Desconocido|N/D|General', na=False)].copy()
 
     for c in ['aerolinea', 'origen_label', 'destino_label', 'tramo_label', 'ruta_label', 'periodo_mes_es']:
         df[c] = df[c].astype('category')
@@ -417,8 +423,8 @@ def limpiar_busqueda():
     st.session_state['sel_origen'] = []
     st.session_state['sel_destino'] = []
 
-origenes_raw = sorted([str(o) for o in df['origen_label'].dropna().unique() if str(o).strip()])
-destinos_raw = sorted([str(d) for d in df['destino_label'].dropna().unique() if str(d).strip()])
+origenes_raw = sorted([str(o) for o in df['origen_label'].dropna().unique() if str(o).strip() and 'Desconocido' not in str(o) and 'N/D' not in str(o)])
+destinos_raw = sorted([str(d) for d in df['destino_label'].dropna().unique() if str(d).strip() and 'Desconocido' not in str(d) and 'N/D' not in str(d)])
 aeropuertos_todos = sorted(list(set(origenes_raw) | set(destinos_raw)))
 
 # ==========================================
@@ -427,7 +433,7 @@ aeropuertos_todos = sorted(list(set(origenes_raw) | set(destinos_raw)))
 st.sidebar.header("🎯 Filtros de Búsqueda")
 
 with st.sidebar.form("form_filtros_principales"):
-    rutas_opciones = sorted([str(r) for r in df['ruta_label'].dropna().unique() if str(r).strip()])
+    rutas_opciones = sorted([str(r) for r in df['ruta_label'].dropna().unique() if str(r).strip() and 'Desconocido' not in str(r) and 'N/D' not in str(r)])
     rutas_sel = st.multiselect(
         "🗺️ Ruta (Ida y Vuelta):",
         options=rutas_opciones,
