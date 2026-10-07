@@ -1,0 +1,33 @@
+name: Actualizador Automatico SINTA
+
+on:
+  schedule:
+    # Se ejecuta solo todos los lunes a las 06:00 UTC (3:00 AM Argentina)
+    - cron: '0 6 * * 1'
+  workflow_dispatch: # También te deja apretar un botón en GitHub para ejecutarlo a mano cuando quieras
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Instalar librerías
+        run: pip install pandas requests
+
+      - name: Correr actualizador
+        run: python actualizar.py
+
+      - name: Guardar cambios en GitHub
+        run: |
+          git config --global user.name "Robot SINTA"
+          git config --global user.email "bot@github.com"
+          git add datos_actualizados.csv
+          git commit -m "Auto-update: Nuevos datos de SINTA" || exit 0
+          git push
