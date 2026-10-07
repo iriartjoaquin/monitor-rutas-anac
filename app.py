@@ -16,7 +16,7 @@ st.title("✈️ Monitor de Rutas")
 st.markdown("Visualización y análisis de conectividad aérea de cabotaje a partir de datos oficiales.")
 
 # ---------------------------------------------------------
-# FORMATEO ARGENTINO (Miles con punto, decimales con coma)
+# FORMATEO ARGENTINO
 # ---------------------------------------------------------
 def fmt_entero(val):
     try:
@@ -86,7 +86,7 @@ AEROPUERTOS_INFO = {
     'RSA': {'codigo': 'RSA', 'ciudad': 'Santa Rosa', 'keywords': ['SANTA ROSA', 'RSA', 'OSA']}
 }
 
-def resolver_aeropuerto(texto):
+def resolver_aeropuerto_texto(texto):
     if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan']:
         return "N/D", "Desconocido"
     t = str(texto).strip().upper()
@@ -114,37 +114,53 @@ meses_orden = {
     'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
 }
 
-def limpiar_numero(serie):
-    if serie.dtype == object:
-        serie = serie.astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-    return pd.to_numeric(serie, errors='coerce').fillna(0)
-
-@st.cache_data(ttl=3600)
+# ---------------------------------------------------------
+# PROCESAMIENTO ULTRA-LIVIANO DE DATOS
+# ---------------------------------------------------------
+@st.cache_data(max_entries=1)
 def procesar_datos(source):
+    # Detectar separador sin cargar archivo entero a memoria
+    sep = ';'
     try:
-        df = pd.read_csv(source, sep=None, engine='python', dtype=str)
+        if isinstance(source, str):
+            with open(source, 'r', encoding='utf-8', errors='ignore') as f:
+                line = f.readline()
+                if ',' in line and ';' not in line:
+                    sep = ','
+        df = pd.read_csv(source, sep=sep, engine='c', low_memory=False)
     except Exception:
-        df = pd.read_csv(source, sep=';', dtype=str)
+        df = pd.read_csv(source, sep=None, engine='python', dtype=str)
 
     cols_map = {c: c.strip().lower() for c in df.columns}
     df.rename(columns=cols_map, inplace=True)
 
-    # 1. Aerolínea
+    # 1. Aerolínea compacta
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'empresa', 'operador', 'linea', 'compania'])]
     if cand_aero:
         df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip()
     else:
         df['aerolinea'] = 'Todas las Aerolíneas (Total)'
 
-    # 2. Pasajeros, Vuelos y Asientos
+    # 2. Números en enteros compactos (int32 / int16)
     cand_pax = [c for c in df.columns if 'pasajero' in c or 'pax' in c]
-    df['pasajeros'] = limpiar_numero(df[cand_pax[0]]) if cand_pax else 0
+    if cand_pax:
+        s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        df['pasajeros'] = pd.to_numeric(s_pax, errors='coerce').fillna(0).astype(np.int32)
+    else:
+        df['pasajeros'] = np.int32(0)
 
     cand_vue = [c for c in df.columns if 'vuelo' in c or 'movimiento' in c]
-    df['vuelos'] = limpiar_numero(df[cand_vue[0]]) if cand_vue else 1
+    if cand_vue:
+        df['vuelos'] = pd.to_numeric(df[cand_vue[0]], errors='coerce').fillna(1).astype(np.int16)
+    else:
+        df['vuelos'] = np.int16(1)
 
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
-    df['asientos'] = limpiar_numero(df[cand_asi[0]]) if cand_asi else 0
+    if cand_asi:
+        s_asi = df[cand_asi[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        df['asientos'] = pd.to_numeric(s_asi, errors='coerce').fillna(0).astype(np.int32)
+    else:
+        df['asientos'] = np.int32(0)
 
     # 3. Fechas
     col_dia = next((c for c in df.columns if 'dia' in c or 'día' in c), None)
@@ -166,12 +182,12 @@ def procesar_datos(source):
         df['fecha'] = pd.to_datetime(datetime.now())
 
     df['fecha'] = df['fecha'].fillna(pd.to_datetime(datetime.now()))
-    df['mes_num'] = df['fecha'].dt.month
-    df['ano_num'] = df['fecha'].dt.year
-    df['periodo_orden'] = df['ano_num'] * 100 + df['mes_num']
+    df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
+    df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
+    df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + " " + df['ano_num'].astype(str)
 
-    # 4. Origen, Destino y Ruta
+    # 4. Mapeo instantáneo de aeropuertos con diccionario de únicos
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c), None)
@@ -191,27 +207,41 @@ def procesar_datos(source):
         origen_raw = pd.Series(["AEP"] * len(df))
         destino_raw = pd.Series(["BRC"] * len(df))
 
-    res_orig = [resolver_aeropuerto(x) for x in origen_raw]
-    res_dest = [resolver_aeropuerto(x) for x in destino_raw]
+    # Optimización: resolver solo los textos únicos (50 aeropuertos en vez de 500.000 filas)
+    textos_unicos = pd.Series(pd.concat([origen_raw, destino_raw]).unique()).dropna()
+    mapa_rapido = {t: resolver_aeropuerto_texto(t) for t in textos_unicos}
 
-    df['origen_cod'] = [r[0] for r in res_orig]
-    df['origen_ciu'] = [r[1] for r in res_orig]
-    df['destino_cod'] = [r[0] for r in res_dest]
-    df['destino_ciu'] = [r[1] for r in res_dest]
+    df['origen_cod'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("N/D", ""))[0])
+    df['origen_ciu'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("", "Desconocido"))[1])
+    df['destino_cod'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("N/D", ""))[0])
+    df['destino_ciu'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("", "Desconocido"))[1])
 
     df['origen_label'] = df['origen_cod'] + " (" + df['origen_ciu'] + ")"
     df['destino_label'] = df['destino_cod'] + " (" + df['destino_ciu'] + ")"
-    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod']
+    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod'] + " (" + df['origen_ciu'] + " a " + df['destino_ciu'] + ")"
 
-    def armar_ruta_bidireccional(row):
-        pares = sorted([(row['origen_cod'], row['origen_ciu']), (row['destino_cod'], row['destino_ciu'])], key=lambda x: x[0])
-        return f"{pares[0][0]} - {pares[1][0]} ({pares[0][1]} ⇄ {pares[1][1]})"
+    # Rutas únicas
+    pares_unicos = df[['origen_cod', 'origen_ciu', 'destino_cod', 'destino_ciu']].drop_duplicates()
+    mapa_rutas = {}
+    for _, r in pares_unicos.iterrows():
+        p = sorted([(r['origen_cod'], r['origen_ciu']), (r['destino_cod'], r['destino_ciu'])], key=lambda x: x[0])
+        mapa_rutas[(r['origen_cod'], r['destino_cod'])] = f"{p[0][0]} - {p[1][0]} ({p[0][1]} ⇄ {p[1][1]})"
 
-    df['ruta_label'] = df.apply(armar_ruta_bidireccional, axis=1)
-    return df
+    df['ruta_label'] = [mapa_rutas.get((o, d), "General") for o, d in zip(df['origen_cod'], df['destino_cod'])]
+
+    # Compactar a tipos categóricos
+    for c in ['aerolinea', 'origen_label', 'destino_label', 'tramo_label', 'ruta_label', 'periodo_mes_es']:
+        df[c] = df[c].astype('category')
+
+    columnas_finales = [
+        'fecha', 'ano_num', 'mes_num', 'periodo_orden', 'periodo_mes_es',
+        'origen_label', 'destino_label', 'tramo_label', 'ruta_label',
+        'aerolinea', 'pasajeros', 'vuelos', 'asientos'
+    ]
+    return df[columnas_finales]
 
 # ---------------------------------------------------------
-# INTERFAZ Y DETECCIÓN AUTOMÁTICA DE DATOS
+# INTERFAZ Y FUENTE DE DATOS
 # ---------------------------------------------------------
 st.sidebar.header("📁 Fuente de Datos")
 
@@ -229,7 +259,6 @@ st.sidebar.link_button(
 
 st.sidebar.divider()
 
-# Busca automáticamente si existe el archivo comprimido (.csv.gz) o el normal (.csv)
 archivo_local_auto = None
 if os.path.exists("datos_actualizados.csv.gz"):
     archivo_local_auto = "datos_actualizados.csv.gz"
@@ -253,14 +282,14 @@ else:
 if archivo_a_procesar is None:
     st.info("👆 Por favor, subí tu archivo CSV desde el panel de la izquierda para comenzar.")
 else:
-    with st.spinner("Procesando datos y calendarios..."):
+    with st.spinner("Cargando y optimizando datos..."):
         try:
             datos = procesar_datos(archivo_a_procesar)
 
             st.sidebar.divider()
             st.sidebar.header("🔍 Filtros de Vuelo")
 
-            # 1. RUTA (Ida y Vuelta)
+            # 1. RUTA
             rutas_disp = sorted(datos['ruta_label'].dropna().unique().tolist())
             rutas_sel = st.sidebar.multiselect(
                 "🗺️ Ruta (Ida y Vuelta):",
@@ -328,17 +357,17 @@ else:
                 # KPIs principales
                 st.divider()
                 k1, k2, k3, k4, k5 = st.columns(5)
-                tot_pax = df_filtro['pasajeros'].sum()
-                tot_vue = df_filtro['vuelos'].sum()
-                tot_asi = df_filtro['asientos'].sum()
+                tot_pax = int(df_filtro['pasajeros'].sum())
+                tot_vue = int(df_filtro['vuelos'].sum())
+                tot_asi = int(df_filtro['asientos'].sum())
                 prom_pax = round(tot_pax / tot_vue, 1) if tot_vue > 0 else 0
                 
                 lf_global = fmt_porcentaje(round((tot_pax / tot_asi) * 100, 1)) if tot_asi > 0 else "N/D"
 
                 if df_filtro['aerolinea'].nunique() > 1:
-                    lider = df_filtro.groupby('aerolinea')['pasajeros'].sum().idxmax()
+                    lider = str(df_filtro.groupby('aerolinea', observed=False)['pasajeros'].sum().idxmax())
                 else:
-                    lider = df_filtro['aerolinea'].iloc[0]
+                    lider = str(df_filtro['aerolinea'].iloc[0])
 
                 k1.metric("Pasajeros Totales", fmt_entero(tot_pax))
                 k2.metric("Vuelos Totales", fmt_entero(tot_vue))
@@ -355,7 +384,7 @@ else:
                 # 1. GRÁFICOS
                 # -------------------------------------------------------------
                 with tab_graficos:
-                    agrup_grafico = df_filtro.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], as_index=False).agg(
+                    agrup_grafico = df_filtro.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], as_index=False, observed=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
                         asientos=('asientos', 'sum')
@@ -405,7 +434,7 @@ else:
                     with c_g1:
                         if df_filtro['tramo_label'].nunique() > 1:
                             st.subheader("🛫 Pasajeros por Tramo (Sentido)")
-                            comp_tramos = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
+                            comp_tramos = df_filtro.groupby('tramo_label', as_index=False, observed=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
                             fig_tramos = px.bar(
                                 comp_tramos, x="tramo_label", y="pasajeros", color="tramo_label",
                                 labels={"tramo_label": "Tramo", "pasajeros": "Pasajeros"},
@@ -429,7 +458,8 @@ else:
                         columns='aerolinea',
                         values='pasajeros',
                         aggfunc='sum',
-                        fill_value=0
+                        fill_value=0,
+                        observed=False
                     ).reset_index()
 
                     pivot_sorted = pivot_raw.sort_values(by='periodo_orden').drop(columns=['periodo_orden']).set_index('periodo_mes_es')
@@ -446,7 +476,7 @@ else:
                     st.divider()
 
                     st.subheader("🏢 Cuadro 2: Resumen por Aerolínea")
-                    res_aero = df_filtro.groupby('aerolinea', as_index=False).agg(
+                    res_aero = df_filtro.groupby('aerolinea', as_index=False, observed=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
                         asientos=('asientos', 'sum')
@@ -470,7 +500,7 @@ else:
                     st.divider()
 
                     st.subheader("🛫 Cuadro 3: Resumen por Tramo (Sentido del Vuelo)")
-                    res_tramo = df_filtro.groupby('tramo_label', as_index=False).agg(
+                    res_tramo = df_filtro.groupby('tramo_label', as_index=False, observed=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
                         asientos=('asientos', 'sum')
