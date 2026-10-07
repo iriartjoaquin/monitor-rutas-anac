@@ -1,37 +1,38 @@
 import pandas as pd
 import requests
 
-def actualizar():
-    print("Consultando dataset oficial de ANAC en Datos Abiertos...")
-    # API pública de la Secretaría de Transporte para encontrar el último archivo
-    api_url = "https://datos.transporte.gob.ar/api/3/action/package_show?id=aterrizajes-y-despegues-procesados-por-la-administracion-nacional-de-aviacion-civil-anac"
-    res = requests.get(api_url).json()
-
-    # Buscar el recurso CSV más reciente
-    resources = res['result']['resources']
-    csv_url = None
-    for r in sorted(resources, key=lambda x: x.get('created', ''), reverse=True):
-        if 'csv' in r.get('format', '').lower():
-            csv_url = r['url']
-            break
-
-    if not csv_url:
-        print("No se encontró recurso CSV.")
-        return
-
-    print(f"Descargando desde: {csv_url}")
-    df = pd.read_csv(csv_url, sep=';', low_memory=False)
-    df.columns = df.columns.str.strip().str.lower()
-
-    # Filtros de negocio (Cabotaje y Despegue)
-    df = df[
-        df['clase de vuelo'].astype(str).str.lower().str.contains('cabotaje', na=False) &
-        (df['tipo de movimiento'].astype(str).str.lower() == 'despegue')
-    ].copy()
-
-    # Guardar archivo limpio en el repositorio
-    df.to_csv("datos_actualizados.csv", index=False)
-    print("Archivo datos_actualizados.csv generado con éxito.")
+def actualizar_base():
+    print("Buscando última base oficial de conectividad en SINTA...")
+    # Conexión directa al catálogo de Datos Abiertos de Turismo (SINTA)
+    url_catalogo = "https://datos.yvera.gob.ar/api/3/action/package_show?id=conectividad-aerea"
+    
+    try:
+        r = requests.get(url_catalogo, timeout=30).json()
+        recursos = r['result']['resources']
+        
+        # Encontrar el enlace del archivo CSV de frecuencias aéreas
+        csv_url = None
+        for rec in recursos:
+            if 'csv' in rec.get('format', '').lower() and 'frecuencias' in rec.get('name', '').lower():
+                csv_url = rec['url']
+                break
+        
+        # Si no encontró el de frecuencias, toma el principal CSV
+        if not csv_url:
+            for rec in recursos:
+                if 'csv' in rec.get('format', '').lower():
+                    csv_url = rec['url']
+                    break
+        
+        print(f"Descargando automáticamente desde: {csv_url}")
+        df = pd.read_csv(csv_url, sep=None, engine='python', dtype=str)
+        
+        # Guardar la base limpia para la aplicación web
+        df.to_csv("datos_actualizados.csv", index=False)
+        print("¡Base datos_actualizados.csv actualizada con éxito!")
+        
+    except Exception as e:
+        print(f"Error en la descarga automática: {e}")
 
 if __name__ == '__main__':
-    actualizar()
+    actualizar_base()
