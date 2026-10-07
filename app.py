@@ -1171,8 +1171,6 @@ else:
         with col_d_csv:
             csv_descarga = df_final.to_csv(index=False).encode('utf-8')
             st.download_button(
-                label_csv(index=False).encode('utf-8')
-            st.download_button(
                 label="📥 Descargar Datos Crudos Filtrados (CSV)",
                 data=csv_descarga,
                 file_name=f"vuelos_cabotaje_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
