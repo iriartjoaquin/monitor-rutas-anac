@@ -44,7 +44,49 @@ def fmt_decimal(val):
     except Exception:
         return str(val)
 
-# Mapeo exhaustivo de aeropuertos argentinos
+# Traductor OACI (4 letras) a IATA (3 letras) y Ciudad
+OACI_A_IATA = {
+    'SABE': ('AEP', 'Aeroparque'),
+    'SAEZ': ('EZE', 'Ezeiza'),
+    'SADP': ('EPA', 'El Palomar'),
+    'SADF': ('FDO', 'San Fernando'),
+    'SAZS': ('BRC', 'Bariloche'),
+    'SASA': ('SLA', 'Salta'),
+    'SACO': ('COR', 'Córdoba'),
+    'SAME': ('MDZ', 'Mendoza'),
+    'SARI': ('IGR', 'Iguazú'),
+    'SASJ': ('JUJ', 'Jujuy'),
+    'SAZN': ('NQN', 'Neuquén'),
+    'SANT': ('TUC', 'Tucumán'),
+    'SAWC': ('FTE', 'El Calafate'),
+    'SAWH': ('USH', 'Ushuaia'),
+    'SAVC': ('CRD', 'Comodoro Rivadavia'),
+    'SAVT': ('REL', 'Trelew'),
+    'SAVY': ('PMY', 'Puerto Madryn'),
+    'SAZM': ('MDQ', 'Mar del Plata'),
+    'SAZB': ('BHI', 'Bahía Blanca'),
+    'SAAR': ('ROS', 'Rosario'),
+    'SAAV': ('SFN', 'Santa Fe'),
+    'SAAP': ('PRA', 'Paraná'),
+    'SARP': ('PSS', 'Posadas'),
+    'SARE': ('RES', 'Resistencia'),
+    'SARC': ('CNQ', 'Corrientes'),
+    'SANE': ('SDE', 'Santiago del Estero'),
+    'SANH': ('RHD', 'Termas de Río Hondo'),
+    'SANU': ('UAQ', 'San Juan'),
+    'SAOU': ('LUQ', 'San Luis'),
+    'SAMR': ('AFA', 'San Rafael'),
+    'SANR': ('IRJ', 'La Rioja'),
+    'SANC': ('CTC', 'Catamarca'),
+    'SARF': ('FMA', 'Formosa'),
+    'SAWG': ('RGL', 'Río Gallegos'),
+    'SAWE': ('RGA', 'Río Grande'),
+    'SAVS': ('EQS', 'Esquel'),
+    'SAVV': ('VDM', 'Viedma'),
+    'SAZR': ('RSA', 'Santa Rosa'),
+    'EGYP': ('MPN', 'Malvinas')
+}
+
 AEROPUERTOS_INFO = {
     'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
@@ -90,17 +132,27 @@ def resolver_aeropuerto_texto(texto):
     if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan']:
         return "N/D", "Desconocido"
     t = str(texto).strip().upper()
+
+    # 1. Si es código OACI de 4 letras (SABE, SAEZ, etc.)
+    if t in OACI_A_IATA:
+        return OACI_A_IATA[t]
+
+    # 2. Si es código IATA de 3 letras
     if t in AEROPUERTOS_INFO:
         info = AEROPUERTOS_INFO[t]
         return info['codigo'], info['ciudad']
+
+    # 3. Búsqueda por palabras clave en nombres largos
     for code, info in AEROPUERTOS_INFO.items():
         for kw in info['keywords']:
             if len(kw) > 3 and kw in t:
                 return info['codigo'], info['ciudad']
             if len(kw) <= 3 and re.search(r'\b' + re.escape(kw) + r'\b', t):
                 return info['codigo'], info['ciudad']
+
     if len(t) == 3 and t.isalpha():
         return t, t
+
     limpio = t.replace('AEROPUERTO', '').replace('INT.', '').strip().title()
     return t[:4], limpio[:15]
 
@@ -115,7 +167,7 @@ meses_orden = {
 }
 
 # ---------------------------------------------------------
-# CARGA DE DATOS: FILTRADO ESTRICTO DE CABOTAJE
+# CARGA DE DATOS (CABOTAJE ESTRICTO)
 # ---------------------------------------------------------
 @st.cache_data(max_entries=1)
 def procesar_datos(source):
@@ -144,7 +196,7 @@ def procesar_datos(source):
     cols_map = {c: str(c).strip().lower() for c in df.columns}
     df.rename(columns=cols_map, inplace=True)
 
-    # 1. FILTRO ESTRICTO DE CABOTAJE (Descarta vuelos internacionales y no regulares)
+    # Filtro estricto de Cabotaje
     col_clase = next((c for c in df.columns if any(k in c for k in ['clase', 'clasificacion'])), None)
     if col_clase:
         df = df[df[col_clase].astype(str).str.lower().str.contains('cabotaje', na=False)].copy()
@@ -154,14 +206,14 @@ def procesar_datos(source):
     if col_mov:
         df = df[df[col_mov].astype(str).str.lower().str.contains('despegue', na=False)].copy()
 
-    # 2. Aerolínea
+    # 1. Aerolínea
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'empresa', 'operador', 'compania']) and 'fecha' not in c and 'tiempo' not in c]
     if cand_aero:
         df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip()
     else:
         df['aerolinea'] = 'Todas las Aerolíneas (Total)'
 
-    # 3. Números
+    # 2. Pasajeros, Vuelos y Asientos
     cand_pax = [c for c in df.columns if ('pasajero' in c or 'pax' in c) and 'promedio' not in c]
     if cand_pax:
         s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
@@ -183,7 +235,7 @@ def procesar_datos(source):
     else:
         df['asientos'] = np.int32(0)
 
-    # 4. Fechas
+    # 3. Fechas
     col_dia = next((c for c in df.columns if c in ['dia', 'día']), None)
     col_mes = next((c for c in df.columns if c == 'mes'), None)
     col_ano = next((c for c in df.columns if c in ['año', 'anio', 'year']), None)
@@ -209,7 +261,7 @@ def procesar_datos(source):
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + " " + df['ano_num'].astype(str)
 
-    # 5. Aeropuertos
+    # 4. Aeropuertos (traduce tanto OACI como IATA)
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if c in ['ruta', 'trayecto']), None)
@@ -303,7 +355,7 @@ else:
             st.sidebar.divider()
             st.sidebar.header("🔍 Filtros de Vuelo")
 
-            # 1. RUTA (ARRANCA VACÍO EN 0)
+            # 1. RUTA (Arranca vacío en 0)
             rutas_disp = sorted(datos['ruta_label'].dropna().unique().tolist())
             rutas_sel = st.sidebar.multiselect(
                 "🗺️ Ruta (Ida y Vuelta):",
@@ -311,7 +363,7 @@ else:
                 default=[]
             )
 
-            # 2. SALIDA (ARRANCA VACÍO EN 0)
+            # 2. SALIDA (Arranca vacío en 0)
             origenes_disp = sorted(datos['origen_label'].dropna().unique().tolist())
             origenes_sel = st.sidebar.multiselect(
                 "🛫 Aeropuerto de Salida (Origen):",
@@ -319,7 +371,7 @@ else:
                 default=[]
             )
 
-            # 3. LLEGADA (ARRANCA VACÍO EN 0)
+            # 3. LLEGADA (Arranca vacío en 0)
             destinos_disp = sorted(datos['destino_label'].dropna().unique().tolist())
             destinos_sel = st.sidebar.multiselect(
                 "🛬 Aeropuerto de Llegada (Destino):",
@@ -327,7 +379,7 @@ else:
                 default=[]
             )
 
-            # 4. FECHAS (OPCIONAL: Solo si el usuario quiere recortar)
+            # 4. FECHAS (Opcional)
             st.sidebar.divider()
             st.sidebar.subheader("📅 Fechas")
             fecha_min = datos['fecha'].min().date()
@@ -353,18 +405,18 @@ else:
 
             with st.sidebar.expander("ℹ️ Guía de Códigos IATA"):
                 st.caption(
-                    "**AEP:** Aeroparque (Bs. As.) | **EZE:** Ezeiza\n\n"
+                    "**AEP:** Aeroparque | **EZE:** Ezeiza\n\n"
                     "**BRC:** Bariloche | **SLA:** Salta | **JUJ:** Jujuy\n\n"
                     "**COR:** Córdoba | **MDZ:** Mendoza | **IGR:** Iguazú\n\n"
                     "**TUC:** Tucumán | **NQN:** Neuquén | **FTE:** El Calafate"
                 )
 
-            # COMPROBAR SI EL USUARIO YA ELIGIÓ ALGUNA RUTA O AEROPUERTO
+            # Comprobar si el usuario seleccionó algo
             hay_seleccion = bool(rutas_sel or origenes_sel or destinos_sel)
 
             if not hay_seleccion:
                 # -------------------------------------------------------------
-                # ESTADO INICIAL: TODO EN 0 Y SIN CARGAS PESADAS
+                # ESTADO DE REPOSO: TODO EN 0
                 # -------------------------------------------------------------
                 st.divider()
                 k1, k2, k3, k4, k5 = st.columns(5)
@@ -375,11 +427,11 @@ else:
                 k5.metric("Aerolínea Líder", "-")
 
                 st.divider()
-                st.info("👈 **Para comenzar:** Seleccioná una **Ruta** o un **Aeropuerto** en el panel izquierdo.")
+                st.info("👈 **Para comenzar:** Seleccioná una **Ruta** o un **Aeropuerto** en el panel de la izquierda.")
 
             else:
                 # -------------------------------------------------------------
-                # MODO ACTIVO: FILTRAR Y RENDERIZAR SOLO LA RUTA ELEGIDA
+                # MODO ACTIVO: FILTRA SOLO LO QUE ELEGISTE
                 # -------------------------------------------------------------
                 cond_ruta = datos['ruta_label'].isin(rutas_sel) if rutas_sel else True
                 cond_orig = datos['origen_label'].isin(origenes_sel) if origenes_sel else True
@@ -394,7 +446,6 @@ else:
                 if df_filtro.empty:
                     st.warning("No se encontraron registros para los filtros seleccionados.")
                 else:
-                    # KPIs reales de la selección
                     st.divider()
                     k1, k2, k3, k4, k5 = st.columns(5)
                     tot_pax = int(df_filtro['pasajeros'].sum())
@@ -417,7 +468,6 @@ else:
 
                     st.divider()
 
-                    # Pestañas
                     tab_graficos, tab_cuadros = st.tabs(["📊 Gráficos Visuales", "📋 Cuadros Estadísticos"])
 
                     with tab_graficos:
@@ -574,7 +624,7 @@ else:
                         
                         csv_descarga = df_filtro.to_csv(index=False).encode('utf-8')
                         st.download_button(
-                            label="📥 Descargar datos filtrados (CSV)",
+                            label="📥 Descargar datos filtrados completos (CSV)",
                             data=csv_descarga,
                             file_name="rutas_filtradas.csv",
                             mime="text/csv"
