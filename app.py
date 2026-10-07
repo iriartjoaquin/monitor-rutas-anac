@@ -15,7 +15,36 @@ st.set_page_config(
 st.title("✈️ Monitor de Rutas")
 st.markdown("Visualización y análisis de conectividad aérea de cabotaje a partir de datos oficiales.")
 
-# Mapeo exhaustivo de nombres de aeropuertos a código IATA y ciudad
+# ---------------------------------------------------------
+# FUNCIONES DE FORMATEO (Estilo Argentino)
+# ---------------------------------------------------------
+def fmt_entero(val):
+    try:
+        if pd.isna(val):
+            return "0"
+        return f"{int(round(float(val))):,}".replace(",", ".")
+    except Exception:
+        return str(val)
+
+def fmt_porcentaje(val):
+    try:
+        if pd.isna(val) or float(val) == 0:
+            return "0,0%"
+        num_str = f"{float(val):.1f}"
+        return f"{num_str.replace('.', ',')}%"
+    except Exception:
+        return str(val)
+
+def fmt_decimal(val):
+    try:
+        if pd.isna(val):
+            return "0,0"
+        num_str = f"{float(val):.1f}"
+        return num_str.replace('.', ',')
+    except Exception:
+        return str(val)
+
+# Mapeo exhaustivo de aeropuertos argentinos
 AEROPUERTOS_INFO = {
     'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
@@ -117,7 +146,7 @@ def procesar_datos(source):
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
     df['asientos'] = limpiar_numero(df[cand_asi[0]]) if cand_asi else 0
 
-    # 3. Fecha y Período ordenado en español
+    # 3. Fecha y Período cronológico en español
     col_dia = next((c for c in df.columns if 'dia' in c or 'día' in c), None)
     col_mes = next((c for c in df.columns if 'mes' in c), None)
     col_ano = next((c for c in df.columns if 'año' in c or 'anio' in c or 'year' in c), None)
@@ -137,8 +166,6 @@ def procesar_datos(source):
         df['fecha'] = pd.to_datetime(datetime.now())
 
     df['fecha'] = df['fecha'].fillna(pd.to_datetime(datetime.now()))
-    
-    # Período en español y orden cronológico
     df['mes_num'] = df['fecha'].dt.month
     df['ano_num'] = df['fecha'].dt.year
     df['periodo_orden'] = df['ano_num'] * 100 + df['mes_num']
@@ -220,7 +247,7 @@ else:
 if archivo_a_procesar is None:
     st.info("👆 Por favor, subí tu archivo CSV desde el panel de la izquierda para comenzar.")
 else:
-    with st.spinner("Procesando datos y calendarios..."):
+    with st.spinner("Procesando información y formateando cuadros..."):
         try:
             datos = procesar_datos(archivo_a_procesar)
 
@@ -300,17 +327,17 @@ else:
                 tot_asi = df_filtro['asientos'].sum()
                 prom_pax = round(tot_pax / tot_vue, 1) if tot_vue > 0 else 0
                 
-                lf_global = f"{round((tot_pax / tot_asi) * 100, 1)}%" if tot_asi > 0 else "N/D"
+                lf_global = fmt_porcentaje(round((tot_pax / tot_asi) * 100, 1)) if tot_asi > 0 else "N/D"
 
                 if df_filtro['aerolinea'].nunique() > 1:
                     lider = df_filtro.groupby('aerolinea')['pasajeros'].sum().idxmax()
                 else:
                     lider = df_filtro['aerolinea'].iloc[0]
 
-                k1.metric("Pasajeros Totales", f"{tot_pax:,.0f}".replace(",", "."))
-                k2.metric("Vuelos Totales", f"{tot_vue:,.0f}".replace(",", "."))
+                k1.metric("Pasajeros Totales", fmt_entero(tot_pax))
+                k2.metric("Vuelos Totales", fmt_entero(tot_vue))
                 k3.metric("Load Factor", lf_global)
-                k4.metric("Promedio Pax/Vuelo", f"{prom_pax}")
+                k4.metric("Promedio Pax/Vuelo", fmt_decimal(prom_pax))
                 k5.metric("Aerolínea Líder", lider)
 
                 st.divider()
@@ -319,10 +346,9 @@ else:
                 tab_graficos, tab_cuadros = st.tabs(["📊 Gráficos Visuales", "📋 Cuadros Estadísticos"])
 
                 # -------------------------------------------------------------
-                # 1. GRÁFICOS
+                # 1. PESTAÑA DE GRÁFICOS
                 # -------------------------------------------------------------
                 with tab_graficos:
-                    # Agrupar para gráfico y asegurar orden cronológico
                     agrup_grafico = df_filtro.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
@@ -345,8 +371,6 @@ else:
 
                     st.subheader(f"📈 Evolución de {metrica}")
                     barmode_val = "group" if tipo_grafico == "Barras agrupadas" else "stack"
-
-                    # Lista estricta de meses en español para que no se coma ninguno
                     meses_eje = agrup_grafico['periodo_mes_es'].unique().tolist()
 
                     if tipo_grafico == "Líneas":
@@ -362,7 +386,6 @@ else:
                             template="plotly_white"
                         )
                     
-                    # Forzar categoría y rotación a -45° para que aparezcan TODOS los meses en español
                     fig_main.update_xaxes(
                         type='category',
                         categoryorder='array',
@@ -372,19 +395,18 @@ else:
                     )
                     st.plotly_chart(fig_main, use_container_width=True)
 
-                    # Gráficos secundarios
                     c_g1, c_g2 = st.columns(2)
                     with c_g1:
-                        st.subheader("🛫 Pasajeros por Tramo (Sentido)")
-                        comp_tramos = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
-                        fig_tramos = px.bar(
-                            comp_tramos, x="tramo_label", y="pasajeros", color="tramo_label",
-                            labels={"tramo_label": "Tramo", "pasajeros": "Pasajeros"},
-                            template="plotly_white"
-                        )
-                        fig_tramos.update_xaxes(tickangle=-30)
-                        st.plotly_chart(fig_tramos, use_container_width=True)
-
+                        if df_filtro['tramo_label'].nunique() > 1:
+                            st.subheader("🛫 Pasajeros por Tramo (Sentido)")
+                            comp_tramos = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
+                            fig_tramos = px.bar(
+                                comp_tramos, x="tramo_label", y="pasajeros", color="tramo_label",
+                                labels={"tramo_label": "Tramo", "pasajeros": "Pasajeros"},
+                                template="plotly_white"
+                            )
+                            fig_tramos.update_xaxes(tickangle=-30)
+                            st.plotly_chart(fig_tramos, use_container_width=True)
                     with c_g2:
                         if df_filtro['aerolinea'].nunique() > 1:
                             st.subheader("🥧 Cuota de Mercado (% Pasajeros)")
@@ -392,24 +414,34 @@ else:
                             st.plotly_chart(fig_pie, use_container_width=True)
 
                 # -------------------------------------------------------------
-                # 2. CUADROS ESTADÍSTICOS (A ancho completo para que no se corten)
+                # 2. PESTAÑA DE CUADROS ESTADÍSTICOS (Formato Argentino y Títulos en Mayúscula)
                 # -------------------------------------------------------------
                 with tab_cuadros:
+                    # CUADRO 1: MATRIZ MENSUAL
                     st.subheader("📋 Cuadro 1: Matriz Mensual de Pasajeros por Aerolínea")
-                    # Matriz pivot con orden cronológico
-                    pivot_mes = df_filtro.pivot_table(
+                    pivot_raw = df_filtro.pivot_table(
                         index=['periodo_orden', 'periodo_mes_es'],
                         columns='aerolinea',
                         values='pasajeros',
                         aggfunc='sum',
                         fill_value=0
                     ).reset_index()
-                    pivot_mes = pivot_mes.sort_values(by='periodo_orden').drop(columns=['periodo_orden']).set_index('periodo_mes_es')
-                    pivot_mes['TOTAL MES'] = pivot_mes.sum(axis=1)
-                    st.dataframe(pivot_mes.style.format("{:,.0f}"), use_container_width=True)
+
+                    pivot_sorted = pivot_raw.sort_values(by='periodo_orden').drop(columns=['periodo_orden']).set_index('periodo_mes_es')
+                    pivot_sorted.index.name = "Mes"
+                    pivot_sorted.columns.name = None
+                    pivot_sorted['Total Mes'] = pivot_sorted.sum(axis=1)
+
+                    # Aplicar formato de miles con punto
+                    pivot_formateada = pivot_sorted.copy()
+                    for col in pivot_formateada.columns:
+                        pivot_formateada[col] = pivot_formateada[col].apply(fmt_entero)
+
+                    st.dataframe(pivot_formateada, use_container_width=True)
 
                     st.divider()
 
+                    # CUADRO 2: RESUMEN AEROLÍNEA (Ancho completo)
                     st.subheader("🏢 Cuadro 2: Resumen por Aerolínea")
                     res_aero = df_filtro.groupby('aerolinea', as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
@@ -420,11 +452,23 @@ else:
                     res_aero['load_factor_%'] = np.where(res_aero['asientos'] > 0, 
                                                         (res_aero['pasajeros'] / res_aero['asientos']) * 100, 
                                                         0).round(1)
-                    st.dataframe(res_aero.style.format({"pasajeros": "{:,.0f}", "vuelos": "{:,.0f}", "asientos": "{:,.0f}"}), use_container_width=True)
+                    res_aero = res_aero.sort_values(by='pasajeros', ascending=False)
+
+                    # Formato amigable en mayúsculas
+                    res_aero_view = pd.DataFrame({
+                        'Aerolínea': res_aero['aerolinea'],
+                        'Pasajeros': res_aero['pasajeros'].apply(fmt_entero),
+                        'Vuelos': res_aero['vuelos'].apply(fmt_entero),
+                        'Asientos': res_aero['asientos'].apply(fmt_entero),
+                        'Cuota de Mercado (%)': res_aero['market_share_%'].apply(fmt_porcentaje),
+                        'Load Factor (%)': res_aero['load_factor_%'].apply(fmt_porcentaje)
+                    })
+                    st.dataframe(res_aero_view, use_container_width=True, hide_index=True)
 
                     st.divider()
 
-                    st.subheader("🔄 Cuadro 3: Resumen por Tramo (Sentido del Vuelo)")
+                    # CUADRO 3: RESUMEN POR TRAMO (Ancho completo)
+                    st.subheader("🛫 Cuadro 3: Resumen por Tramo (Sentido del Vuelo)")
                     res_tramo = df_filtro.groupby('tramo_label', as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
@@ -433,13 +477,35 @@ else:
                     res_tramo['load_factor_%'] = np.where(res_tramo['asientos'] > 0, 
                                                           (res_tramo['pasajeros'] / res_tramo['asientos']) * 100, 
                                                           0).round(1)
-                    st.dataframe(res_tramo.style.format({"pasajeros": "{:,.0f}", "vuelos": "{:,.0f}", "asientos": "{:,.0f}"}), use_container_width=True)
+                    res_tramo = res_tramo.sort_values(by='pasajeros', ascending=False)
+
+                    res_tramo_view = pd.DataFrame({
+                        'Tramo': res_tramo['tramo_label'],
+                        'Pasajeros': res_tramo['pasajeros'].apply(fmt_entero),
+                        'Vuelos': res_tramo['vuelos'].apply(fmt_entero),
+                        'Asientos': res_tramo['asientos'].apply(fmt_entero),
+                        'Load Factor (%)': res_tramo['load_factor_%'].apply(fmt_porcentaje)
+                    })
+                    st.dataframe(res_tramo_view, use_container_width=True, hide_index=True)
 
                     st.divider()
 
+                    # CUADRO 4: REGISTROS DETALLADOS
                     st.subheader("📄 Registros Detallados")
-                    columnas_ver = [c for c in ['fecha', 'tramo_label', 'aerolinea', 'pasajeros', 'asientos', 'vuelos', 'load_factor'] if c in df_filtro.columns]
-                    st.dataframe(df_filtro[columnas_ver].sort_values(by='fecha', ascending=False), use_container_width=True, height=300)
+                    df_det = df_filtro.sort_values(by='fecha', ascending=False).copy()
+                    
+                    df_det_view = pd.DataFrame({
+                        'Fecha': df_det['fecha'].dt.strftime('%d/%m/%Y'),
+                        'Ruta': df_det['ruta_label'],
+                        'Tramo': df_det['tramo_label'],
+                        'Aerolínea': df_det['aerolinea'],
+                        'Pasajeros': df_det['pasajeros'].apply(fmt_entero),
+                        'Vuelos': df_det['vuelos'].apply(fmt_entero),
+                        'Asientos': df_det['asientos'].apply(fmt_entero),
+                        'Load Factor (%)': df_det['load_factor'].apply(fmt_porcentaje),
+                        'Promedio Pax / Vuelo': df_det['pax_por_vuelo'].apply(fmt_decimal)
+                    })
+                    st.dataframe(df_det_view, use_container_width=True, height=350, hide_index=True)
                     
                     csv_descarga = df_filtro.to_csv(index=False).encode('utf-8')
                     st.download_button(
