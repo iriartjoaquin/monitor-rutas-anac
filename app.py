@@ -16,7 +16,7 @@ st.title("✈️ Monitor de Rutas")
 st.markdown("Visualización y análisis de conectividad aérea de cabotaje a partir de datos oficiales.")
 
 # ---------------------------------------------------------
-# FUNCIONES DE FORMATEO (Estilo Argentino)
+# FORMATEO ARGENTINO (Miles con punto, decimales con coma)
 # ---------------------------------------------------------
 def fmt_entero(val):
     try:
@@ -44,7 +44,7 @@ def fmt_decimal(val):
     except Exception:
         return str(val)
 
-# Mapeo exhaustivo de aeropuertos argentinos
+# Mapeo exhaustivo de aeropuertos a código IATA y ciudad
 AEROPUERTOS_INFO = {
     'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
@@ -146,7 +146,7 @@ def procesar_datos(source):
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
     df['asientos'] = limpiar_numero(df[cand_asi[0]]) if cand_asi else 0
 
-    # 3. Fecha y Período cronológico en español
+    # 3. Fechas
     col_dia = next((c for c in df.columns if 'dia' in c or 'día' in c), None)
     col_mes = next((c for c in df.columns if 'mes' in c), None)
     col_ano = next((c for c in df.columns if 'año' in c or 'anio' in c or 'year' in c), None)
@@ -201,7 +201,7 @@ def procesar_datos(source):
 
     df['origen_label'] = df['origen_cod'] + " (" + df['origen_ciu'] + ")"
     df['destino_label'] = df['destino_cod'] + " (" + df['destino_ciu'] + ")"
-    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod'] + " (" + df['origen_ciu'] + " a " + df['destino_ciu'] + ")"
+    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod']
 
     def armar_ruta_bidireccional(row):
         pares = sorted([(row['origen_cod'], row['origen_ciu']), (row['destino_cod'], row['destino_ciu'])], key=lambda x: x[0])
@@ -211,7 +211,7 @@ def procesar_datos(source):
     return df
 
 # ---------------------------------------------------------
-# INTERFAZ Y FUENTE DE DATOS
+# INTERFAZ Y DETECCIÓN AUTOMÁTICA DE DATOS
 # ---------------------------------------------------------
 st.sidebar.header("📁 Fuente de Datos")
 
@@ -229,8 +229,14 @@ st.sidebar.link_button(
 
 st.sidebar.divider()
 
-archivo_local_auto = "datos_actualizados.csv"
-tiene_datos_auto = os.path.exists(archivo_local_auto)
+# Busca automáticamente si existe el archivo comprimido (.csv.gz) o el normal (.csv)
+archivo_local_auto = None
+if os.path.exists("datos_actualizados.csv.gz"):
+    archivo_local_auto = "datos_actualizados.csv.gz"
+elif os.path.exists("datos_actualizados.csv"):
+    archivo_local_auto = "datos_actualizados.csv"
+
+tiene_datos_auto = archivo_local_auto is not None
 
 opciones_fuente = ["Subir archivo CSV manualmente"]
 if tiene_datos_auto:
@@ -242,19 +248,19 @@ archivo_a_procesar = None
 if metodo_carga == "Datos automáticos en la nube":
     archivo_a_procesar = archivo_local_auto
 else:
-    archivo_a_procesar = st.sidebar.file_uploader("Subí tu archivo CSV:", type=['csv'])
+    archivo_a_procesar = st.sidebar.file_uploader("Subí tu archivo CSV:", type=['csv', 'gz'])
 
 if archivo_a_procesar is None:
     st.info("👆 Por favor, subí tu archivo CSV desde el panel de la izquierda para comenzar.")
 else:
-    with st.spinner("Procesando información y formateando cuadros..."):
+    with st.spinner("Procesando datos y calendarios..."):
         try:
             datos = procesar_datos(archivo_a_procesar)
 
             st.sidebar.divider()
             st.sidebar.header("🔍 Filtros de Vuelo")
 
-            # 1. RUTA
+            # 1. RUTA (Ida y Vuelta)
             rutas_disp = sorted(datos['ruta_label'].dropna().unique().tolist())
             rutas_sel = st.sidebar.multiselect(
                 "🗺️ Ruta (Ida y Vuelta):",
@@ -346,7 +352,7 @@ else:
                 tab_graficos, tab_cuadros = st.tabs(["📊 Gráficos Visuales", "📋 Cuadros Estadísticos"])
 
                 # -------------------------------------------------------------
-                # 1. PESTAÑA DE GRÁFICOS
+                # 1. GRÁFICOS
                 # -------------------------------------------------------------
                 with tab_graficos:
                     agrup_grafico = df_filtro.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], as_index=False).agg(
@@ -414,10 +420,9 @@ else:
                             st.plotly_chart(fig_pie, use_container_width=True)
 
                 # -------------------------------------------------------------
-                # 2. PESTAÑA DE CUADROS ESTADÍSTICOS (Formato Argentino y Títulos en Mayúscula)
+                # 2. CUADROS ESTADÍSTICOS
                 # -------------------------------------------------------------
                 with tab_cuadros:
-                    # CUADRO 1: MATRIZ MENSUAL
                     st.subheader("📋 Cuadro 1: Matriz Mensual de Pasajeros por Aerolínea")
                     pivot_raw = df_filtro.pivot_table(
                         index=['periodo_orden', 'periodo_mes_es'],
@@ -432,7 +437,6 @@ else:
                     pivot_sorted.columns.name = None
                     pivot_sorted['Total Mes'] = pivot_sorted.sum(axis=1)
 
-                    # Aplicar formato de miles con punto
                     pivot_formateada = pivot_sorted.copy()
                     for col in pivot_formateada.columns:
                         pivot_formateada[col] = pivot_formateada[col].apply(fmt_entero)
@@ -441,7 +445,6 @@ else:
 
                     st.divider()
 
-                    # CUADRO 2: RESUMEN AEROLÍNEA (Ancho completo)
                     st.subheader("🏢 Cuadro 2: Resumen por Aerolínea")
                     res_aero = df_filtro.groupby('aerolinea', as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
@@ -454,7 +457,6 @@ else:
                                                         0).round(1)
                     res_aero = res_aero.sort_values(by='pasajeros', ascending=False)
 
-                    # Formato amigable en mayúsculas
                     res_aero_view = pd.DataFrame({
                         'Aerolínea': res_aero['aerolinea'],
                         'Pasajeros': res_aero['pasajeros'].apply(fmt_entero),
@@ -467,7 +469,6 @@ else:
 
                     st.divider()
 
-                    # CUADRO 3: RESUMEN POR TRAMO (Ancho completo)
                     st.subheader("🛫 Cuadro 3: Resumen por Tramo (Sentido del Vuelo)")
                     res_tramo = df_filtro.groupby('tramo_label', as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
@@ -490,7 +491,6 @@ else:
 
                     st.divider()
 
-                    # CUADRO 4: REGISTROS DETALLADOS
                     st.subheader("📄 Registros Detallados")
                     df_det = df_filtro.sort_values(by='fecha', ascending=False).copy()
                     
