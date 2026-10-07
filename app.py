@@ -423,6 +423,7 @@ def limpiar_busqueda():
     st.session_state['sel_origen'] = []
     st.session_state['sel_destino'] = []
 
+# Filtrar listas de opciones para que jamás aparezcan 'Desconocido' o 'N/D'
 origenes_raw = sorted([str(o) for o in df['origen_label'].dropna().unique() if str(o).strip() and 'Desconocido' not in str(o) and 'N/D' not in str(o)])
 destinos_raw = sorted([str(d) for d in df['destino_label'].dropna().unique() if str(d).strip() and 'Desconocido' not in str(d) and 'N/D' not in str(d)])
 aeropuertos_todos = sorted(list(set(origenes_raw) | set(destinos_raw)))
@@ -661,44 +662,54 @@ else:
             )
             st.plotly_chart(fig_evol, use_container_width=True)
 
-            col_g1, col_g2 = st.columns(2)
-            with col_g1:
-                st.subheader("Distribución por Aerolínea")
-                fig_pie = px.pie(
-                    df_mostrar,
-                    names='aerolinea',
-                    values=col_metrica if col_metrica != 'load_factor_%' else 'pasajeros',
-                    hole=0.4
-                )
-                fig_pie.update_traces(textposition='inside', textinfo='percent+label')
-                fig_pie.update_layout(margin=dict(t=20, b=20, l=20, r=20))
-                st.plotly_chart(fig_pie, use_container_width=True)
+            # Sección de gráficos en vertical (uno arriba del otro)
+            st.markdown("---")
+            st.subheader("Distribución por Aerolínea")
+            fig_pie = px.pie(
+                df_mostrar,
+                names='aerolinea',
+                values=col_metrica if col_metrica != 'load_factor_%' else 'pasajeros',
+                hole=0.4
+            )
+            fig_pie.update_traces(textposition='inside', textinfo='percent+label')
+            fig_pie.update_layout(
+                margin=dict(t=20, b=20, l=20, r=20),
+                legend_title="Aerolínea"
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
 
-            with col_g2:
-                st.subheader("Tráfico por Sentido (Tramo)")
-                df_tramo = df_mostrar.groupby('tramo_label', as_index=False, observed=True).agg({
-                    'pasajeros': 'sum',
-                    'vuelos': 'sum',
-                    'asientos': 'sum'
-                })
-                df_tramo['load_factor_%'] = np.where(
-                    df_tramo['asientos'] > 0,
-                    (df_tramo['pasajeros'] / df_tramo['asientos'] * 100).round(1),
-                    0.0
-                )
-                fig_tramo = px.bar(
-                    df_tramo,
-                    x='tramo_label',
-                    y=col_metrica,
-                    color='tramo_label',
-                    labels={'tramo_label': 'Tramo', col_metrica: metrica_sel}
-                )
-                fig_tramo.update_layout(
-                    showlegend=False,
-                    xaxis_tickangle=-25,
-                    margin=dict(t=20, b=60, l=40, r=20)
-                )
-                st.plotly_chart(fig_tramo, use_container_width=True)
+            st.markdown("---")
+            st.subheader("Tráfico por Sentido (Tramo)")
+            df_tramo = df_mostrar.groupby('tramo_label', as_index=False, observed=True).agg({
+                'pasajeros': 'sum',
+                'vuelos': 'sum',
+                'asientos': 'sum'
+            })
+            df_tramo['load_factor_%'] = np.where(
+                df_tramo['asientos'] > 0,
+                (df_tramo['pasajeros'] / df_tramo['asientos'] * 100).round(1),
+                0.0
+            )
+
+            # Barras horizontales ordenadas de mayor a menor volumen
+            df_tramo_sorted = df_tramo.sort_values(by=col_metrica, ascending=False)
+            altura_calc = max(420, len(df_tramo_sorted) * 32)
+
+            fig_tramo = px.bar(
+                df_tramo_sorted,
+                y='tramo_label',
+                x=col_metrica,
+                color='tramo_label',
+                orientation='h',
+                labels={'tramo_label': 'Sentido de Vuelo (Tramo)', col_metrica: metrica_sel}
+            )
+            fig_tramo.update_layout(
+                showlegend=False,
+                height=altura_calc,
+                yaxis=dict(autorange="reversed"),
+                margin=dict(t=20, b=40, l=20, r=20)
+            )
+            st.plotly_chart(fig_tramo, use_container_width=True)
 
         with tab_tablas:
             st.subheader(f"Cuadro Mensual Detallado ({metrica_sel})")
@@ -716,7 +727,8 @@ else:
             else:
                 pivot_mostrar = pivot_mensual.map(fmt_entero)
 
-            st.dataframe(pivot_mostrar, use_container_width=True)
+            pivot_mostrar = pivot_mostrar.reset_index().rename(columns={'periodo_mes_es': 'Período'})
+            st.dataframe(pivot_mostrar, hide_index=True, use_container_width=True)
 
             st.subheader("Resumen por Sentido de Vuelo")
             df_tramo_view = df_mostrar.groupby('tramo_label', as_index=False, observed=True).agg({
@@ -742,7 +754,7 @@ else:
             df_tramo_fmt['Asientos Ofrecidos'] = df_tramo_fmt['Asientos Ofrecidos'].map(fmt_entero)
             df_tramo_fmt['Factor de Ocupación'] = df_tramo_fmt['Factor de Ocupación'].map(fmt_porcentaje)
 
-            st.dataframe(df_tramo_fmt, use_container_width=True)
+            st.dataframe(df_tramo_fmt, hide_index=True, use_container_width=True)
 
             csv_descarga = df_mostrar.to_csv(index=False, sep=';', encoding='utf-8-sig')
             st.download_button(
