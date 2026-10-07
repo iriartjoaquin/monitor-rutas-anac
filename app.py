@@ -50,66 +50,69 @@ def fmt_decimal(val):
         return str(val)
 
 # -------------------------------------------------------------
-# DICCIONARIO DE AEROPUERTOS DE ARGENTINA (FAA / IATA / CIUDADES)
+# DICCIONARIO EXHAUSTIVO DE AEROPUERTOS DE ARGENTINA (IATA, OACI, FAA)
 # -------------------------------------------------------------
-AEROPUERTOS_INFO = {
-    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
-    'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
-    'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'keywords': ['PALOMAR', 'EPA']},
-    'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'keywords': ['SAN FERNANDO', 'FDO']},
-    'BRC': {'codigo': 'BRC', 'ciudad': 'Bariloche', 'keywords': ['BARILOCHE', 'SAN CARLOS DE BARILOCHE', 'BRC', 'BAR', 'CANDELARIA']},
-    'SLA': {'codigo': 'SLA', 'ciudad': 'Salta', 'keywords': ['SALTA', 'GUEMES', 'GÜEMES', 'MARTIN MIGUEL', 'SLA', 'SAL']},
-    'COR': {'codigo': 'COR', 'ciudad': 'Córdoba', 'keywords': ['CORDOBA', 'CÓRDOBA', 'TARAVELLA', 'PAJAS BLANCAS', 'COR', 'CBA']},
-    'MDZ': {'codigo': 'MDZ', 'ciudad': 'Mendoza', 'keywords': ['MENDOZA', 'PLUMERILLO', 'GABRIELLI', 'MDZ', 'DOZ']},
-    'IGR': {'codigo': 'IGR', 'ciudad': 'Iguazú', 'keywords': ['IGUAZU', 'IGUAZÚ', 'CATARATAS', 'PUERTO IGUAZU', 'IGR', 'IGU']},
-    'JUJ': {'codigo': 'JUJ', 'ciudad': 'Jujuy', 'keywords': ['JUJUY', 'SAN SALVADOR DE JUJUY', 'HORACIO GUZMAN', 'HORACIO GUZMÁN', 'JUJ']},
-    'NQN': {'codigo': 'NQN', 'ciudad': 'Neuquén', 'keywords': ['NEUQUEN', 'NEUQUÉN', 'PRESIDENTE PERON', 'PRESIDENTE PERÓN', 'NQN', 'NEU']},
-    'TUC': {'codigo': 'TUC', 'ciudad': 'Tucumán', 'keywords': ['TUCUMAN', 'TUCUMÁN', 'BENJAMIN MATIENZO', 'BENJAMÍN MATIENZO', 'SAN MIGUEL DE TUCUMAN', 'TUC']},
-    'FTE': {'codigo': 'FTE', 'ciudad': 'El Calafate', 'keywords': ['CALAFATE', 'ARMANDO TOLA', 'TOLA', 'FTE', 'CAL']},
-    'USH': {'codigo': 'USH', 'ciudad': 'Ushuaia', 'keywords': ['USHUAIA', 'MALVINAS ARGENTINAS', 'USH', 'USU']},
-    'CRD': {'codigo': 'CRD', 'ciudad': 'Comodoro Rivadavia', 'keywords': ['COMODORO', 'COMODORO RIVADAVIA', 'ENRIQUE MOSCONI', 'GENERAL MOSCONI', 'CRD', 'CRV']},
-    'REL': {'codigo': 'REL', 'ciudad': 'Trelew', 'keywords': ['TRELEW', 'ALMIRANTE ZAR', 'REL', 'TRE']},
-    'PMY': {'codigo': 'PMY', 'ciudad': 'Puerto Madryn', 'keywords': ['MADRYN', 'PUERTO MADRYN', 'TEHUELCHE', 'PMY']},
-    'MDQ': {'codigo': 'MDQ', 'ciudad': 'Mar del Plata', 'keywords': ['MAR DEL PLATA', 'PIAZZOLLA', 'PIAZZOLA', 'ASTOR', 'MDQ', 'MDP']},
-    'BHI': {'codigo': 'BHI', 'ciudad': 'Bahía Blanca', 'keywords': ['BAHIA BLANCA', 'BAHÍA BLANCA', 'ESPORA', 'COMANDANTE ESPORA', 'BHI', 'BCA']},
-    'ROS': {'codigo': 'ROS', 'ciudad': 'Rosario', 'keywords': ['ROSARIO', 'ISLAS MALVINAS', 'ROS']},
-    'SFN': {'codigo': 'SFN', 'ciudad': 'Santa Fe', 'keywords': ['SANTA FE', 'SAUCE VIEJO', 'SFN']},
-    'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'keywords': ['PARANA', 'PARANÁ', 'URQUIZA', 'JUSTO JOSE', 'PRA', 'PAR']},
-    'PSS': {'codigo': 'PSS', 'ciudad': 'Posadas', 'keywords': ['POSADAS', 'JOSE DE SAN MARTIN', 'JOSÉ DE SAN MARTÍN', 'PSS', 'POS']},
-    'RES': {'codigo': 'RES', 'ciudad': 'Resistencia', 'keywords': ['RESISTENCIA', 'RES', 'SIS']},
-    'CNQ': {'codigo': 'CNQ', 'ciudad': 'Corrientes', 'keywords': ['CORRIENTES', 'PIRAGINE NIVEYRO', 'PIRAGINE', 'CNQ']},
-    'SDE': {'codigo': 'SDE', 'ciudad': 'Santiago del Estero', 'keywords': ['SANTIAGO DEL ESTERO', 'ARAGONES', 'ARAGONÉS', 'SDE']},
-    'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'keywords': ['TERMAS', 'RIO HONDO', 'RÍO HONDO', 'RHD', 'TRH']},
-    'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'keywords': ['SAN JUAN', 'DOMINGO FAUSTINO', 'SARMIENTO', 'UAQ', 'JUA']},
-    'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'keywords': ['SAN LUIS', 'CESAR RAUL OJEDA', 'CÉSAR RAÚL OJEDA', 'OJEDA', 'LUQ', 'UIS']},
-    'AFA': {'codigo': 'AFA', 'ciudad': 'San Rafael', 'keywords': ['SAN RAFAEL', 'GERMANO', 'GERMANÓ', 'AFA', 'SRA']},
-    'IRJ': {'codigo': 'IRJ', 'ciudad': 'La Rioja', 'keywords': ['LA RIOJA', 'ALMANDOS', 'VICENTE ALMANDOS', 'ALMONACID', 'IRJ', 'LAR']},
-    'CTC': {'codigo': 'CTC', 'ciudad': 'Catamarca', 'keywords': ['CATAMARCA', 'FELIPE VARELA', 'CORONEL FELIPE VARELA', 'CTC', 'CAT']},
-    'FMA': {'codigo': 'FMA', 'ciudad': 'Formosa', 'keywords': ['FORMOSA', 'EL PUCU', 'EL PUCÚ', 'FMA', 'FSA']},
-    'RGL': {'codigo': 'RGL', 'ciudad': 'Río Gallegos', 'keywords': ['RIO GALLEGOS', 'RÍO GALLEGOS', 'NORBERTO FERNANDEZ', 'NORBERTO FERNÁNDEZ', 'RGL', 'GAL']},
-    'RGA': {'codigo': 'RGA', 'ciudad': 'Río Grande', 'keywords': ['RIO GRANDE', 'RÍO GRANDE', 'HERMES QUIJADA', 'RAMON TREJO', 'RAMÓN TREJO', 'TREJO NOEL', 'RGA', 'GRA']},
-    'EQS': {'codigo': 'EQS', 'ciudad': 'Esquel', 'keywords': ['ESQUEL', 'PARODI', 'EQS']},
-    'VDM': {'codigo': 'VDM', 'ciudad': 'Viedma', 'keywords': ['VIEDMA', 'EDGARDO CASTELLO', 'VDM', 'VIE']},
-    'RSA': {'codigo': 'RSA', 'ciudad': 'Santa Rosa', 'keywords': ['SANTA ROSA', 'RSA', 'OSA']}
+AEROPUERTOS_EXHAUSTIVO = {
+    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'aliases': ['AEP', 'AER', 'SABE', 'AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'BUE']},
+    'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'aliases': ['EZE', 'SAEZ', 'EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI']},
+    'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'aliases': ['EPA', 'PAL', 'SADP', 'PALOMAR', 'EL PALOMAR']},
+    'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'aliases': ['FDO', 'SADF', 'SAN FERNANDO']},
+    'BRC': {'codigo': 'BRC', 'ciudad': 'Bariloche', 'aliases': ['BRC', 'BAR', 'SAZS', 'BARILOCHE', 'SAN CARLOS DE BARILOCHE', 'CANDELARIA']},
+    'COR': {'codigo': 'COR', 'ciudad': 'Córdoba', 'aliases': ['COR', 'CBA', 'SACO', 'CORDOBA', 'CÓRDOBA', 'TARAVELLA', 'PAJAS BLANCAS']},
+    'MDZ': {'codigo': 'MDZ', 'ciudad': 'Mendoza', 'aliases': ['MDZ', 'DOZ', 'SAME', 'MENDOZA', 'PLUMERILLO', 'EL PLUMERILLO', 'GABRIELLI']},
+    'SLA': {'codigo': 'SLA', 'ciudad': 'Salta', 'aliases': ['SLA', 'SAL', 'SASA', 'SALTA', 'GUEMES', 'GÜEMES', 'MARTIN MIGUEL']},
+    'IGR': {'codigo': 'IGR', 'ciudad': 'Iguazú', 'aliases': ['IGR', 'IGU', 'SARI', 'IGUAZU', 'IGUAZÚ', 'PUERTO IGUAZU', 'CATARATAS']},
+    'JUJ': {'codigo': 'JUJ', 'ciudad': 'Jujuy', 'aliases': ['JUJ', 'SASJ', 'JUJUY', 'SAN SALVADOR DE JUJUY', 'HORACIO GUZMAN', 'GUZMAN']},
+    'NQN': {'codigo': 'NQN', 'ciudad': 'Neuquén', 'aliases': ['NQN', 'NEU', 'SAZN', 'NEUQUEN', 'NEUQUÉN', 'PRESIDENTE PERON']},
+    'TUC': {'codigo': 'TUC', 'ciudad': 'Tucumán', 'aliases': ['TUC', 'SANT', 'TUCUMAN', 'TUCUMÁN', 'BENJAMIN MATIENZO', 'SAN MIGUEL DE TUCUMAN']},
+    'FTE': {'codigo': 'FTE', 'ciudad': 'El Calafate', 'aliases': ['FTE', 'CAL', 'SAWC', 'CALAFATE', 'EL CALAFATE', 'ARMANDO TOLA', 'TOLA']},
+    'USH': {'codigo': 'USH', 'ciudad': 'Ushuaia', 'aliases': ['USH', 'USU', 'SAWH', 'USHUAIA', 'MALVINAS ARGENTINAS']},
+    'CRD': {'codigo': 'CRD', 'ciudad': 'Comodoro Rivadavia', 'aliases': ['CRD', 'CRV', 'SAVC', 'COMODORO', 'COMODORO RIVADAVIA', 'ENRIQUE MOSCONI']},
+    'REL': {'codigo': 'REL', 'ciudad': 'Trelew', 'aliases': ['REL', 'TRE', 'SAVT', 'TRELEW', 'ALMIRANTE ZAR']},
+    'PMY': {'codigo': 'PMY', 'ciudad': 'Puerto Madryn', 'aliases': ['PMY', 'SAVY', 'MADRYN', 'PUERTO MADRYN', 'TEHUELCHE', 'EL TEHUELCHE']},
+    'MDQ': {'codigo': 'MDQ', 'ciudad': 'Mar del Plata', 'aliases': ['MDQ', 'MDP', 'SAZM', 'MAR DEL PLATA', 'PIAZZOLLA', 'ASTOR PIAZZOLLA']},
+    'BHI': {'codigo': 'BHI', 'ciudad': 'Bahía Blanca', 'aliases': ['BHI', 'BCA', 'SAZB', 'BAHIA BLANCA', 'BAHÍA BLANCA', 'ESPORA', 'COMANDANTE ESPORA']},
+    'ROS': {'codigo': 'ROS', 'ciudad': 'Rosario', 'aliases': ['ROS', 'SAAR', 'ROSARIO', 'ISLAS MALVINAS']},
+    'SFN': {'codigo': 'SFN', 'ciudad': 'Santa Fe', 'aliases': ['SFN', 'SAAV', 'SANTA FE', 'SAUCE VIEJO']},
+    'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'aliases': ['PRA', 'PAR', 'SAAP', 'PARANA', 'PARANÁ', 'URQUIZA', 'JUSTO JOSE']},
+    'PSS': {'codigo': 'PSS', 'ciudad': 'Posadas', 'aliases': ['PSS', 'POS', 'SARP', 'POSADAS', 'SAN MARTIN', 'JOSE DE SAN MARTIN']},
+    'RES': {'codigo': 'RES', 'ciudad': 'Resistencia', 'aliases': ['RES', 'SIS', 'SARE', 'RESISTENCIA']},
+    'CNQ': {'codigo': 'CNQ', 'ciudad': 'Corrientes', 'aliases': ['CNQ', 'SARC', 'CORRIENTES', 'PIRAGINE NIVEYRO', 'PIRAGINE']},
+    'SDE': {'codigo': 'SDE', 'ciudad': 'Santiago del Estero', 'aliases': ['SDE', 'SANE', 'SANTIAGO DEL ESTERO', 'ARAGONES']},
+    'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'aliases': ['RHD', 'TRH', 'SANR', 'TERMAS', 'RIO HONDO', 'RÍO HONDO', 'TERMAS DE RIO HONDO']},
+    'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'aliases': ['UAQ', 'JUA', 'SANU', 'SAN JUAN', 'SARMIENTO', 'DOMINGO FAUSTINO SARMIENTO']},
+    'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'aliases': ['LUQ', 'UIS', 'SAOU', 'SAN LUIS', 'OJEDA', 'CESAR RAUL OJEDA']},
+    'AFA': {'codigo': 'AFA', 'ciudad': 'San Rafael', 'aliases': ['AFA', 'SRA', 'SAMR', 'SAN RAFAEL', 'GERMANO', 'SANTIAGO GERMANO']},
+    'IRJ': {'codigo': 'IRJ', 'ciudad': 'La Rioja', 'aliases': ['IRJ', 'LAR', 'SANL', 'LA RIOJA', 'ALMONACID', 'VICENTE ALMANDOS ALMONACID']},
+    'CTC': {'codigo': 'CTC', 'ciudad': 'Catamarca', 'aliases': ['CTC', 'CAT', 'SANC', 'CATAMARCA', 'VARELA', 'FELIPE VARELA']},
+    'FMA': {'codigo': 'FMA', 'ciudad': 'Formosa', 'aliases': ['FMA', 'FSA', 'SARF', 'FORMOSA', 'EL PUCU', 'PUCU']},
+    'RGL': {'codigo': 'RGL', 'ciudad': 'Río Gallegos', 'aliases': ['RGL', 'GAL', 'SAWG', 'RIO GALLEGOS', 'RÍO GALLEGOS', 'NORBERTO FERNANDEZ']},
+    'RGA': {'codigo': 'RGA', 'ciudad': 'Río Grande', 'aliases': ['RGA', 'GRA', 'SAWE', 'RIO GRANDE', 'RÍO GRANDE', 'TREJO NOEL', 'HERMES QUIJADA']},
+    'EQS': {'codigo': 'EQS', 'ciudad': 'Esquel', 'aliases': ['EQS', 'SAVE', 'ESQUEL', 'PARODI', 'ANTONIO PARODI']},
+    'VDM': {'codigo': 'VDM', 'ciudad': 'Viedma', 'aliases': ['VDM', 'VIE', 'SAVV', 'VIEDMA', 'EDGARDO CASTELLO']},
+    'RSA': {'codigo': 'RSA', 'ciudad': 'Santa Rosa', 'aliases': ['RSA', 'OSA', 'SAZR', 'SANTA ROSA']}
 }
 
+# Mapa invertido para búsqueda ultra-rápida O(1)
+MAPA_EXACTO = {}
+for cod, info in AEROPUERTOS_EXHAUSTIVO.items():
+    for alias in info['aliases']:
+        MAPA_EXACTO[alias.upper()] = (info['codigo'], info['ciudad'])
+
 def resolver_aeropuerto_texto(texto):
-    if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan', 'DESCONOCIDO']:
+    if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan', 'DESCONOCIDO', 'NULL']:
         return "N/D", "Desconocido"
     t = str(texto).strip().upper()
-    if t in AEROPUERTOS_INFO:
-        info = AEROPUERTOS_INFO[t]
-        return info['codigo'], info['ciudad']
-    for code, info in AEROPUERTOS_INFO.items():
-        for kw in info['keywords']:
-            if len(kw) > 3 and kw in t:
-                return info['codigo'], info['ciudad']
-            if len(kw) <= 3 and re.search(r'\b' + re.escape(kw) + r'\b', t):
-                return info['codigo'], info['ciudad']
-    if len(t) == 3 and t.isalpha():
-        return t, t
-    limpio = t.replace('AEROPUERTO', '').replace('INT.', '').strip().title()
-    return t[:4], limpio[:15]
+    if t in MAPA_EXACTO:
+        return MAPA_EXACTO[t]
+    for cod, info in AEROPUERTOS_EXHAUSTIVO.items():
+        for alias in info['aliases']:
+            if len(alias) > 3 and alias in t:
+                return (info['codigo'], info['ciudad'])
+            if len(alias) <= 3 and re.search(r'\b' + re.escape(alias) + r'\b', t):
+                return (info['codigo'], info['ciudad'])
+    # Si no es un aeropuerto argentino conocido, se rechaza para evitar aeropuertos extranjeros en cabotaje
+    return "N/D", "Desconocido"
 
 meses_es = {
     1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
@@ -304,6 +307,13 @@ def cargar_datos():
     cols_map = {c: c.strip().lower() for c in df.columns}
     df.rename(columns=cols_map, inplace=True)
     
+    # Filtrar estrictamente solo vuelos de CABOTAJE si existe columna de clasificación
+    col_clasif = next((c for c in df.columns if any(k in c for k in ['clasif', 'tipo_vuelo', 'clase_vuelo', 'ambito'])), None)
+    if col_clasif:
+        mask_cabo = df[col_clasif].astype(str).str.lower().str.contains('cabo|domest|nac')
+        if mask_cabo.any():
+            df = df[mask_cabo].copy()
+
     # Aerolínea
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'empresa', 'operador', 'linea', 'compania'])]
     if cand_aero:
@@ -359,14 +369,27 @@ def cargar_datos():
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + " " + df['ano_num'].astype(str)
 
-    # Origen y Destino
+    # Origen y Destino: detección considerando despegues y aterrizajes
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
+    col_mov = next((c for c in df.columns if 'movimiento' in c or 'tipo_mov' in c), None)
+    col_aero = next((c for c in df.columns if c in ['aeropuerto', 'aerodromo'] or ('aeropuerto' in c and 'origen' not in c and 'destino' not in c and 'nombre' not in c)), None)
+    col_od = next((c for c in df.columns if any(k in c for k in ['origen / destino', 'origen/destino', 'origen_destino', 'orig_dest'])), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c), None)
 
     if col_orig and col_dest:
         origen_raw = df[col_orig].astype(str)
         destino_raw = df[col_dest].astype(str)
+    elif col_aero and col_od:
+        if col_mov:
+            es_aterrizaje = df[col_mov].astype(str).str.lower().str.contains('aterri')
+            origen_raw = np.where(es_aterrizaje, df[col_od].astype(str), df[col_aero].astype(str))
+            destino_raw = np.where(es_aterrizaje, df[col_aero].astype(str), df[col_od].astype(str))
+            origen_raw = pd.Series(origen_raw, index=df.index)
+            destino_raw = pd.Series(destino_raw, index=df.index)
+        else:
+            origen_raw = df[col_aero].astype(str)
+            destino_raw = df[col_od].astype(str)
     elif cand_ruta:
         partes = df[cand_ruta].astype(str).str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
@@ -382,15 +405,16 @@ def cargar_datos():
     textos_unicos = pd.Series(pd.concat([origen_raw, destino_raw]).unique()).dropna()
     mapa_rapido = {t: resolver_aeropuerto_texto(t) for t in textos_unicos}
 
-    df['origen_cod'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("N/D", ""))[0])
-    df['origen_ciu'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("", "Desconocido"))[1])
-    df['destino_cod'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("N/D", ""))[0])
-    df['destino_ciu'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("", "Desconocido"))[1])
+    df['origen_cod'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("N/D", "Desconocido"))[0])
+    df['origen_ciu'] = origen_raw.map(lambda x: mapa_rapido.get(x, ("N/D", "Desconocido"))[1])
+    df['destino_cod'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("N/D", "Desconocido"))[0])
+    df['destino_ciu'] = destino_raw.map(lambda x: mapa_rapido.get(x, ("N/D", "Desconocido"))[1])
 
-    # Filtrar aeropuertos desconocidos o N/D
+    # Filtrar aeropuertos desconocidos o extranjeros y vuelos dentro del mismo aeropuerto
     mascara_validos = (
         (df['origen_cod'] != 'N/D') & (df['destino_cod'] != 'N/D') &
-        (df['origen_ciu'] != 'Desconocido') & (df['destino_ciu'] != 'Desconocido')
+        (df['origen_ciu'] != 'Desconocido') & (df['destino_ciu'] != 'Desconocido') &
+        (df['origen_cod'] != df['destino_cod'])
     )
     df = df[mascara_validos].copy()
     if df.empty:
@@ -426,14 +450,10 @@ def cargar_datos():
 
 df_raw = cargar_datos()
 
-# Listas de opciones ordenadas sin N/D
+# Listas de opciones limpias
 rutas_disponibles = sorted([str(x) for x in df_raw['ruta_label'].dropna().unique() if 'N/D' not in str(x)])
 origenes_disponibles = sorted([str(x) for x in df_raw['origen_label'].dropna().unique() if 'N/D' not in str(x)])
 destinos_disponibles = sorted([str(x) for x in df_raw['destino_label'].dropna().unique() if 'N/D' not in str(x)])
-
-# Default para AEP - BRC
-default_ruta = [r for r in rutas_disponibles if 'AEP' in r and 'BRC' in r]
-default_ruta_sel = default_ruta if default_ruta else (rutas_disponibles[:1] if rutas_disponibles else [])
 
 # -------------------------------------------------------------
 # MANEJO DE ESTADO DE SESIÓN
@@ -461,8 +481,8 @@ with st.form("form_filtros"):
     sel_rutas = st.multiselect(
         "🗺️ Ruta (Ida y Vuelta):",
         options=rutas_disponibles,
-        default=default_ruta_sel,
-        help="Seleccione una o varias rutas bidireccionales completas (ej: AEP - BRC)."
+        default=[],
+        help="Opcional. Seleccione una o varias rutas bidireccionales completas (ej: AEP - BRC). Si prefiere buscar por salida y llegada específicas, utilice los campos inferiores."
     )
 
     col_orig, col_dest = st.columns(2)
@@ -471,14 +491,14 @@ with st.form("form_filtros"):
             "🛫 Aeropuerto de Salida (Origen):",
             options=origenes_disponibles,
             key='sel_origen',
-            help="Filtrar por aeropuerto(s) de salida específicos."
+            help="Opcional. Filtrar por aeropuerto(s) de salida específicos."
         )
     with col_dest:
         sel_dest = st.multiselect(
             "🛬 Aeropuerto de Llegada (Destino):",
             options=destinos_disponibles,
             key='sel_destino',
-            help="Filtrar por aeropuerto(s) de llegada específicos."
+            help="Opcional. Filtrar por aeropuerto(s) de llegada específicos."
         )
 
     col_d1, col_d2 = st.columns(2)
@@ -536,14 +556,31 @@ else:
     fh_act = st.session_state.get('f_hasta_guardada', fecha_hasta)
 
     cond_fecha = (df_raw['fecha'].dt.date >= fd_act) & (df_raw['fecha'].dt.date <= fh_act)
-    cond_ruta = df_raw['ruta_label'].isin(r_act) if r_act else True
-    cond_orig = df_raw['origen_label'].isin(o_act) if o_act else True
-    cond_dest = df_raw['destino_label'].isin(d_act) if d_act else True
 
-    df_filtrado_base = df_raw[cond_fecha & cond_ruta & cond_orig & cond_dest].copy()
+    # Lógica de filtrado geográfico inteligente (evita colisiones si se eligen origen/destino)
+    if o_act and d_act:
+        cond_geo = df_raw['origen_label'].isin(o_act) & df_raw['destino_label'].isin(d_act)
+        if r_act:
+            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
+    elif o_act:
+        cond_geo = df_raw['origen_label'].isin(o_act)
+        if r_act:
+            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
+    elif d_act:
+        cond_geo = df_raw['destino_label'].isin(d_act)
+        if r_act:
+            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
+    elif r_act:
+        cond_geo = df_raw['ruta_label'].isin(r_act)
+    else:
+        # Default de cortesía si se presiona buscar sin ningún filtro cargado: AEP - BRC
+        def_r = [r for r in rutas_disponibles if 'AEP' in r and 'BRC' in r]
+        cond_geo = df_raw['ruta_label'].isin(def_r) if def_r else df_raw['ruta_label'].isin(rutas_disponibles[:1])
+
+    df_filtrado_base = df_raw[cond_fecha & cond_geo].copy()
 
     if df_filtrado_base.empty:
-        st.warning("⚠️ No se encontraron vuelos para los criterios y rango de fechas seleccionados. Pruebe ampliando el período o las rutas.")
+        st.warning("⚠️ No se encontraron vuelos para los criterios y rango de fechas seleccionados. Pruebe ampliando el período o verificando que exista conexión directa entre los aeropuertos.")
     else:
         aero_disponibles = sorted([str(x) for x in df_filtrado_base['aerolinea'].dropna().unique()])
 
@@ -595,13 +632,10 @@ else:
 
         if hhi_global < 1500:
             hhi_cat = "Competitivo"
-            hhi_desc = "Baja concentración"
         elif hhi_global <= 2500:
             hhi_cat = "Concentración Moderada"
-            hhi_desc = "Oligopolio moderado"
         else:
             hhi_cat = "Alta Concentración"
-            hhi_desc = "Monopolio / Fuerte concentración"
 
         st.markdown("---")
         k1, k2, k3, k4, k5 = st.columns(5)
