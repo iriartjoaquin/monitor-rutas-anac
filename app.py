@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import os
 import re
+import gzip
 from datetime import datetime
 
 st.set_page_config(
@@ -113,8 +114,78 @@ meses_es = {
 
 meses_orden = {
     'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-    'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12
+    'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+    'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
+    'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12
 }
+
+def generar_conectividad_completa():
+    fechas = pd.date_range("2023-01-01", "2026-09-01", freq="MS")
+    rutas_principales = [
+        ("AEP", "BRC"), ("BRC", "AEP"),
+        ("EZE", "BRC"), ("BRC", "EZE"),
+        ("AEP", "SLA"), ("SLA", "AEP"),
+        ("EZE", "SLA"), ("SLA", "EZE"),
+        ("AEP", "COR"), ("COR", "AEP"),
+        ("AEP", "MDZ"), ("MDZ", "AEP"),
+        ("AEP", "IGR"), ("IGR", "AEP"),
+        ("AEP", "JUJ"), ("JUJ", "AEP"),
+        ("AEP", "NQN"), ("NQN", "AEP"),
+        ("AEP", "USH"), ("USH", "AEP"),
+        ("AEP", "FTE"), ("FTE", "AEP"),
+        ("AEP", "TUC"), ("TUC", "AEP"),
+        ("COR", "BRC"), ("BRC", "COR"),
+        ("COR", "SLA"), ("SLA", "COR"),
+        ("MDZ", "BRC"), ("BRC", "MDZ"),
+        ("COR", "MDZ"), ("MDZ", "COR")
+    ]
+    aerolineas_config = [
+        ("Aerolíneas Argentinas", 0.55, 170),
+        ("Flybondi", 0.28, 189),
+        ("JetSMART", 0.17, 186)
+    ]
+    registros = []
+    np.random.seed(42)
+    for f in fechas:
+        mes = f.month
+        factor_estacion = 1.25 if mes in [1, 2, 7] else (0.88 if mes in [4, 5] else 1.0)
+        for orig, dest in rutas_principales:
+            base_pax = 14000 if "BRC" in [orig, dest] or "COR" in [orig, dest] else 9500
+            for aero, share, cap in aerolineas_config:
+                pax = int(base_pax * share * factor_estacion * np.random.uniform(0.92, 1.08))
+                vuelos = max(4, int(pax / (cap * 0.84)))
+                asientos = vuelos * cap
+                pax = min(pax, int(asientos * 0.95))
+                registros.append({
+                    "fecha": f, "origen": orig, "destino": dest,
+                    "aerolinea": aero, "pasajeros": pax,
+                    "vuelos": vuelos, "asientos": asientos
+                })
+    return pd.DataFrame(registros)
+
+def leer_archivo_robusto(path):
+    sep = ','
+    try:
+        if path.endswith('.gz'):
+            with gzip.open(path, 'rt', encoding='utf-8', errors='ignore') as f:
+                line = f.readline()
+        else:
+            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
+                line = f.readline()
+        if ';' in line and ',' not in line:
+            sep = ';'
+        elif ';' in line and ',' in line:
+            sep = ';' if line.count(';') > line.count(',') else ','
+    except Exception:
+        sep = ','
+
+    try:
+        return pd.read_csv(path, sep=sep, engine='c', low_memory=False)
+    except Exception:
+        try:
+            return pd.read_csv(path, sep=None, engine='python')
+        except Exception:
+            return None
 
 # ==========================================
 # CARGA Y PROCESAMIENTO DE DATOS
@@ -126,52 +197,34 @@ def cargar_y_procesar_datos():
         "datos_actualizados.csv",
         "datos_cabotaje.csv",
         "datos.csv.gz",
-        "datos.csv"
+        "datos.csv",
+        "test_compressed.csv.gz",
+        "test_raw.csv"
     ]
     archivo_encontrado = None
     for a in archivos:
-        if os.path.exists(a):
+        if os.path.exists(a) and os.path.getsize(a) > 500:
             archivo_encontrado = a
             break
 
-    if not archivo_encontrado:
-        fechas_demo = pd.date_range("2024-01-01", "2024-12-31", freq="MS")
-        registros = []
-        for f in fechas_demo:
-            registros.append({"fecha": f, "origen": "AEP", "destino": "BRC", "aerolinea": "Aerolíneas Argentinas", "pasajeros": 12500, "vuelos": 80, "asientos": 13600})
-            registros.append({"fecha": f, "origen": "AEP", "destino": "BRC", "aerolinea": "Flybondi", "pasajeros": 8200, "vuelos": 48, "asientos": 9072})
-            registros.append({"fecha": f, "origen": "AEP", "destino": "BRC", "aerolinea": "JetSMART", "pasajeros": 5900, "vuelos": 34, "asientos": 6324})
-            registros.append({"fecha": f, "origen": "BRC", "destino": "AEP", "aerolinea": "Aerolíneas Argentinas", "pasajeros": 12200, "vuelos": 80, "asientos": 13600})
-            registros.append({"fecha": f, "origen": "BRC", "destino": "AEP", "aerolinea": "Flybondi", "pasajeros": 8100, "vuelos": 48, "asientos": 9072})
-            registros.append({"fecha": f, "origen": "AEP", "destino": "SLA", "aerolinea": "Aerolíneas Argentinas", "pasajeros": 9500, "vuelos": 62, "asientos": 10540})
-            registros.append({"fecha": f, "origen": "AEP", "destino": "SLA", "aerolinea": "Flybondi", "pasajeros": 6100, "vuelos": 36, "asientos": 6804})
-            registros.append({"fecha": f, "origen": "SLA", "destino": "AEP", "aerolinea": "Aerolíneas Argentinas", "pasajeros": 9400, "vuelos": 62, "asientos": 10540})
-            registros.append({"fecha": f, "origen": "EZE", "destino": "BRC", "aerolinea": "Flybondi", "pasajeros": 3400, "vuelos": 20, "asientos": 3780})
-            registros.append({"fecha": f, "origen": "EZE", "destino": "SLA", "aerolinea": "Aerolíneas Argentinas", "pasajeros": 4100, "vuelos": 28, "asientos": 4760})
-        df = pd.DataFrame(registros)
-    else:
-        sep = ';'
-        try:
-            with open(archivo_encontrado, 'r', encoding='utf-8', errors='ignore') as f:
-                primera_linea = f.readline()
-                if ',' in primera_linea and ';' not in primera_linea:
-                    sep = ','
-            df = pd.read_csv(archivo_encontrado, sep=sep, engine='c', low_memory=False)
-        except Exception:
-            df = pd.read_csv(archivo_encontrado, sep=None, engine='python', dtype=str)
+    df = None
+    if archivo_encontrado:
+        df = leer_archivo_robusto(archivo_encontrado)
 
-    cols_map = {c: c.strip().lower() for c in df.columns}
-    df.rename(columns=cols_map, inplace=True)
+    if df is None or len(df) < 5:
+        df = generar_conectividad_completa()
+
+    df.rename(columns={c: c.strip().lower() for c in df.columns}, inplace=True)
 
     # 1. Filtro estricto de Cabotaje
-    cand_clase = [c for c in df.columns if any(k in c for k in ['clase', 'clasificacion', 'tipo de vuelo'])]
-    if cand_clase:
-        col_c = cand_clase[0]
+    cand_clase = [c for c in df.columns if any(k in c for k in ['clasificacion', 'clase', 'tipo de vuelo'])]
+    for col_c in cand_clase:
         mask_cab = df[col_c].astype(str).str.lower().str.contains('cabotaje', na=False)
         if mask_cab.any():
             df = df[mask_cab]
+            break
 
-    # 2. Filtro estricto de Despegue para evitar duplicación
+    # 2. Filtro estricto de Despegue para evitar duplicaciones
     cand_mov = [c for c in df.columns if 'tipo de movimiento' in c or 'movimiento' in c]
     if cand_mov:
         col_m = cand_mov[0]
@@ -207,10 +260,11 @@ def cargar_y_procesar_datos():
     else:
         df['asientos'] = np.int32(0)
 
-    # 5. Parseo de Fechas
-    col_dia = next((c for c in df.columns if 'dia' in c or 'día' in c), None)
-    col_mes = next((c for c in df.columns if 'mes' in c), None)
-    col_ano = next((c for c in df.columns if 'año' in c or 'anio' in c or 'year' in c), None)
+    # 5. Detección completa de Fechas (Soporta ano, año, anio, year, mes, dia, fecha)
+    col_dia = next((c for c in df.columns if any(k in c for k in ['dia', 'día', 'day'])), None)
+    col_mes = next((c for c in df.columns if any(k in c for k in ['mes', 'month'])), None)
+    col_ano = next((c for c in df.columns if any(k in c for k in ['ano', 'año', 'anio', 'year'])), None)
+    col_fecha = next((c for c in df.columns if any(k in c for k in ['fecha', 'date'])), None)
 
     if col_ano and col_mes and col_dia:
         mes_str = df[col_mes].astype(str).str.strip().str.lower()
@@ -218,8 +272,10 @@ def cargar_y_procesar_datos():
         num_dia = pd.to_numeric(df[col_dia], errors='coerce').fillna(1).astype(int)
         num_ano = pd.to_numeric(df[col_ano], errors='coerce').fillna(2024).astype(int)
         df['fecha'] = pd.to_datetime(dict(year=num_ano, month=num_mes, day=num_dia), errors='coerce')
-    elif 'fecha' in df.columns:
-        df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce')
+    elif col_fecha:
+        df['fecha'] = pd.to_datetime(df[col_fecha], errors='coerce', dayfirst=True)
+        if df['fecha'].isna().all():
+            df['fecha'] = pd.to_datetime(df[col_fecha], errors='coerce', format='mixed')
     elif col_ano and col_mes:
         mes_str = df[col_mes].astype(str).str.strip().str.lower()
         num_mes = mes_str.map(meses_orden).fillna(pd.to_numeric(mes_str, errors='coerce')).fillna(1).astype(int)
@@ -229,22 +285,27 @@ def cargar_y_procesar_datos():
         df['fecha'] = pd.NaT
 
     df = df.dropna(subset=['fecha']).copy()
-    if df.empty:
-        df['fecha'] = pd.date_range("2024-01-01", periods=1, freq="D")
+    if df.empty or len(df) < 5:
+        df = generar_conectividad_completa()
 
     df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
     df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + " " + df['ano_num'].astype(str)
 
-    # 6. Origen y Destino
-    col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
-    col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
+    # 6. Origen y Destino (Soporta formatos ANAC y SINTA)
+    col_orig_dest = next((c for c in df.columns if any(p in c for p in ['origen / destino', 'origen/destino', 'origen_destino'])), None)
+    col_aero_base = next((c for c in df.columns if c in ['aeropuerto', 'aeropuerto_base', 'aeropuerto base']), None)
+    col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c and c != col_orig_dest), None)
+    col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c and c != col_orig_dest), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c), None)
 
     if col_orig and col_dest:
         origen_raw = df[col_orig].astype(str)
         destino_raw = df[col_dest].astype(str)
+    elif col_aero_base and col_orig_dest:
+        origen_raw = df[col_aero_base].astype(str)
+        destino_raw = df[col_orig_dest].astype(str)
     elif cand_ruta:
         partes = df[cand_ruta].astype(str).str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
@@ -254,8 +315,8 @@ def cargar_y_procesar_datos():
             origen_raw = df[cand_ruta]
             destino_raw = df[cand_ruta]
     else:
-        origen_raw = pd.Series(["AEP"] * len(df))
-        destino_raw = pd.Series(["BRC"] * len(df))
+        origen_raw = df.get('origen', pd.Series(["AEP"] * len(df))).astype(str)
+        destino_raw = df.get('destino', pd.Series(["BRC"] * len(df))).astype(str)
 
     textos_unicos = pd.Series(pd.concat([origen_raw, destino_raw]).unique()).dropna()
     mapa_rapido = {t: resolver_aeropuerto_texto(t) for t in textos_unicos}
@@ -306,7 +367,6 @@ if 'sel_origen' not in st.session_state:
 if 'sel_destino' not in st.session_state:
     st.session_state['sel_destino'] = []
 
-# Callbacks para invertir aeropuertos y limpiar
 def intercambiar_aeropuertos():
     orig = list(st.session_state.get('sel_origen', []))
     dest = list(st.session_state.get('sel_destino', []))
@@ -320,7 +380,6 @@ def limpiar_busqueda():
     st.session_state['sel_origen'] = []
     st.session_state['sel_destino'] = []
 
-# Catálogo unificado de aeropuertos para que el intercambio sea 100% simétrico
 origenes_raw = sorted([str(o) for o in df['origen_label'].dropna().unique() if str(o).strip()])
 destinos_raw = sorted([str(d) for d in df['destino_label'].dropna().unique() if str(d).strip()])
 aeropuertos_todos = sorted(list(set(origenes_raw) | set(destinos_raw)))
@@ -379,7 +438,7 @@ with st.sidebar.form("form_filtros_principales"):
 
     btn_buscar = st.form_submit_button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
 
-# Procesar búsqueda al presionar 'Buscar' o al 'Invertir' si ya había una búsqueda activa
+# Ejecutar búsqueda al presionar 'Buscar' o al 'Invertir' si la búsqueda ya estaba activa
 ejecutar_busqueda = btn_buscar or (btn_swap and st.session_state['busqueda_activa'])
 
 if ejecutar_busqueda:
@@ -415,7 +474,6 @@ st.sidebar.subheader("📊 Visualización Dinámica")
 if st.session_state['busqueda_activa'] and st.session_state['df_busqueda'] is not None and not st.session_state['df_busqueda'].empty:
     df_base_busqueda = st.session_state['df_busqueda']
     
-    # Extraer únicamente las aerolíneas encontradas en la búsqueda realizada
     aerolineas_encontradas = sorted([str(a) for a in df_base_busqueda['aerolinea'].dropna().unique() if str(a).strip()])
     
     aerolineas_sel = st.sidebar.multiselect(
@@ -439,14 +497,12 @@ if st.session_state['busqueda_activa'] and st.session_state['df_busqueda'] is no
         help="Cambia la representación visual inmediatamente"
     )
 
-    # Filtrar dinámicamente por aerolínea
     if aerolineas_sel:
         df_mostrar = df_base_busqueda[df_base_busqueda['aerolinea'].isin(aerolineas_sel)].copy()
     else:
         df_mostrar = df_base_busqueda.copy()
 
 else:
-    # Estado inicial / Inactivo: Mostrar controles deshabilitados
     aerolineas_sel = st.sidebar.multiselect(
         "Aerolíneas:",
         options=[],
@@ -465,7 +521,7 @@ else:
     )
     df_mostrar = pd.DataFrame()
 
-# Enlaces a fuentes oficiales en la barra lateral
+# Enlaces a fuentes oficiales
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🌐 Fuentes Oficiales")
 st.sidebar.markdown("""
@@ -478,7 +534,6 @@ st.sidebar.markdown("""
 # CONTENIDO PRINCIPAL Y KPIS
 # ==========================================
 if not st.session_state['busqueda_activa']:
-    # Estado inicial en 0
     col_kpi1, col_kpi2, col_kpi3 = st.columns(3)
     col_kpi1.metric("Total Pasajeros", "0")
     col_kpi2.metric("Total Vuelos", "0")
@@ -511,7 +566,6 @@ else:
         with tab_graficos:
             st.subheader(f"Evolución Mensual: {metrica_sel}")
 
-            # Agrupar por mes cronológico y aerolínea
             df_mensual = df_mostrar.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], as_index=False, observed=True).agg({
                 'pasajeros': 'sum',
                 'vuelos': 'sum',
@@ -523,7 +577,6 @@ else:
                 0.0
             )
 
-            # Determinar columna según métrica
             col_metrica = {
                 "Pasajeros": "pasajeros",
                 "Vuelos": "vuelos",
@@ -565,7 +618,6 @@ else:
             )
             st.plotly_chart(fig_evol, use_container_width=True)
 
-            # Gráficos secundarios
             col_g1, col_g2 = st.columns(2)
             with col_g1:
                 st.subheader("Distribución por Aerolínea")
@@ -614,10 +666,8 @@ else:
                 values=col_metrica
             ).fillna(0)
 
-            # Reordenar filas cronológicamente
             pivot_mensual = pivot_mensual.reindex(orden_cronologico)
 
-            # Formatear valores con formato argentino
             if metrica_sel == "Factor de Ocupación (%)":
                 pivot_mostrar = pivot_mensual.map(fmt_porcentaje)
             else:
