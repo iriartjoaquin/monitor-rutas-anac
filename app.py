@@ -15,62 +15,65 @@ st.set_page_config(
 st.title("✈️ Monitor de Rutas")
 st.markdown("Visualización y análisis de conectividad aérea de cabotaje a partir de datos oficiales.")
 
-# Diccionario completo de aeropuertos de Argentina (Nombres y Códigos -> Abreviatura IATA)
-MAPA_IATA = {
-    'AEROPARQUE': 'AEP', 'AEP': 'AEP', 'AER': 'AEP', 'JORGE NEWBERY': 'AEP',
-    'EZEIZA': 'EZE', 'EZE': 'EZE', 'PISTARINI': 'EZE',
-    'CIUDAD DE BUENOS AIRES': 'AEP', 'BUENOS AIRES': 'AEP', 'CABA': 'AEP', 'BUE': 'AEP',
-    'EL PALOMAR': 'EPA', 'EPA': 'EPA', 'PAL': 'EPA',
-    'BARILOCHE': 'BRC', 'SAN CARLOS DE BARILOCHE': 'BRC', 'BRC': 'BRC', 'BAR': 'BRC',
-    'SALTA': 'SLA', 'SLA': 'SLA', 'SAL': 'SLA', 'GUEMES': 'SLA', 'GÜEMES': 'SLA',
-    'JUJUY': 'JUJ', 'SAN SALVADOR DE JUJUY': 'JUJ', 'JUJ': 'JUJ', 'HORACIO GUZMAN': 'JUJ',
-    'CORDOBA': 'COR', 'CÓRDOBA': 'COR', 'COR': 'COR', 'CBA': 'COR', 'TARAVELLA': 'COR',
-    'MENDOZA': 'MDZ', 'MDZ': 'MDZ', 'DOZ': 'MDZ', 'EL PLUMERILLO': 'MDZ',
-    'IGUAZU': 'IGR', 'IGUAZÚ': 'IGR', 'PUERTO IGUAZU': 'IGR', 'PUERTO IGUAZÚ': 'IGR', 'IGR': 'IGR', 'IGU': 'IGR',
-    'NEUQUEN': 'NQN', 'NEUQUÉN': 'NQN', 'NQN': 'NQN', 'NEU': 'NQN',
-    'TUCUMAN': 'TUC', 'TUCUMÁN': 'TUC', 'SAN MIGUEL DE TUCUMAN': 'TUC', 'SAN MIGUEL DE TUCUMÁN': 'TUC', 'TUC': 'TUC',
-    'CALAFATE': 'FTE', 'EL CALAFATE': 'FTE', 'FTE': 'FTE', 'CAL': 'FTE',
-    'USHUAIA': 'USH', 'USH': 'USH', 'USU': 'USH',
-    'COMODORO RIVADAVIA': 'CRD', 'COMODORO': 'CRD', 'CRD': 'CRD', 'CRV': 'CRD',
-    'TRELEW': 'REL', 'REL': 'REL', 'TRE': 'REL',
-    'PUERTO MADRYN': 'PMY', 'PMY': 'PMY',
-    'MAR DEL PLATA': 'MDQ', 'MDQ': 'MDQ', 'MDP': 'MDQ',
-    'BAHIA BLANCA': 'BHI', 'BAHÍA BLANCA': 'BHI', 'BHI': 'BHI', 'BCA': 'BHI',
-    'ROSARIO': 'ROS', 'ROS': 'ROS',
-    'SANTA FE': 'SFN', 'SFN': 'SFN',
-    'PARANA': 'PRA', 'PARANÁ': 'PRA', 'PRA': 'PRA', 'PAR': 'PRA',
-    'POSADAS': 'PSS', 'PSS': 'PSS', 'POS': 'PSS',
-    'RESISTENCIA': 'RES', 'RES': 'RES', 'SIS': 'RES',
-    'CORRIENTES': 'CNQ', 'CNQ': 'CNQ',
-    'SANTIAGO DEL ESTERO': 'SDE', 'SDE': 'SDE',
-    'TERMAS DE RIO HONDO': 'RHD', 'TERMAS DE RÍO HONDO': 'RHD', 'RHD': 'RHD',
-    'SAN JUAN': 'UAQ', 'UAQ': 'UAQ', 'JUA': 'UAQ',
-    'SAN LUIS': 'LUQ', 'LUQ': 'LUQ', 'UIS': 'LUQ',
-    'SAN RAFAEL': 'AFA', 'AFA': 'AFA', 'SRA': 'AFA',
-    'LA RIOJA': 'IRJ', 'IRJ': 'IRJ', 'LAR': 'IRJ',
-    'CATAMARCA': 'CTC', 'CTC': 'CTC', 'CAT': 'CTC',
-    'FORMOSA': 'FMA', 'FMA': 'FMA', 'FSA': 'FMA',
-    'RIO GALLEGOS': 'RGL', 'RÍO GALLEGOS': 'RGL', 'RGL': 'RGL', 'GAL': 'RGL',
-    'RIO GRANDE': 'RGA', 'RÍO GRANDE': 'RGA', 'RGA': 'RGA',
-    'ESQUEL': 'EQS', 'EQS': 'EQS',
-    'VIEDMA': 'VDM', 'VDM': 'VDM',
-    'SANTA ROSA': 'RSA', 'RSA': 'RSA'
+# Mapeo exhaustivo de nombres de aeropuertos argentinos a código oficial IATA y ciudad
+AEROPUERTOS_INFO = {
+    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
+    'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
+    'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'keywords': ['PALOMAR', 'EPA']},
+    'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'keywords': ['SAN FERNANDO', 'FDO']},
+    'BRC': {'codigo': 'BRC', 'ciudad': 'Bariloche', 'keywords': ['BARILOCHE', 'SAN CARLOS DE BARILOCHE', 'BRC', 'BAR', 'CANDELARIA']},
+    'SLA': {'codigo': 'SLA', 'ciudad': 'Salta', 'keywords': ['SALTA', 'GUEMES', 'GÜEMES', 'MARTIN MIGUEL', 'SLA', 'SAL']},
+    'COR': {'codigo': 'COR', 'ciudad': 'Córdoba', 'keywords': ['CORDOBA', 'CÓRDOBA', 'TARAVELLA', 'PAJAS BLANCAS', 'COR', 'CBA']},
+    'MDZ': {'codigo': 'MDZ', 'ciudad': 'Mendoza', 'keywords': ['MENDOZA', 'PLUMERILLO', 'GABRIELLI', 'MDZ', 'DOZ']},
+    'IGR': {'codigo': 'IGR', 'ciudad': 'Iguazú', 'keywords': ['IGUAZU', 'IGUAZÚ', 'CATARATAS', 'PUERTO IGUAZU', 'IGR', 'IGU']},
+    'JUJ': {'codigo': 'JUJ', 'ciudad': 'Jujuy', 'keywords': ['JUJUY', 'SAN SALVADOR DE JUJUY', 'HORACIO GUZMAN', 'HORACIO GUZMÁN', 'JUJ']},
+    'NQN': {'codigo': 'NQN', 'ciudad': 'Neuquén', 'keywords': ['NEUQUEN', 'NEUQUÉN', 'PRESIDENTE PERON', 'PRESIDENTE PERÓN', 'NQN', 'NEU']},
+    'TUC': {'codigo': 'TUC', 'ciudad': 'Tucumán', 'keywords': ['TUCUMAN', 'TUCUMÁN', 'BENJAMIN MATIENZO', 'BENJAMÍN MATIENZO', 'SAN MIGUEL DE TUCUMAN', 'TUC']},
+    'FTE': {'codigo': 'FTE', 'ciudad': 'El Calafate', 'keywords': ['CALAFATE', 'ARMANDO TOLA', 'TOLA', 'FTE', 'CAL']},
+    'USH': {'codigo': 'USH', 'ciudad': 'Ushuaia', 'keywords': ['USHUAIA', 'MALVINAS ARGENTINAS', 'USH', 'USU']},
+    'CRD': {'codigo': 'CRD', 'ciudad': 'Comodoro Rivadavia', 'keywords': ['COMODORO', 'COMODORO RIVADAVIA', 'ENRIQUE MOSCONI', 'GENERAL MOSCONI', 'CRD', 'CRV']},
+    'REL': {'codigo': 'REL', 'ciudad': 'Trelew', 'keywords': ['TRELEW', 'ALMIRANTE ZAR', 'REL', 'TRE']},
+    'PMY': {'codigo': 'PMY', 'ciudad': 'Puerto Madryn', 'keywords': ['MADRYN', 'PUERTO MADRYN', 'TEHUELCHE', 'PMY']},
+    'MDQ': {'codigo': 'MDQ', 'ciudad': 'Mar del Plata', 'keywords': ['MAR DEL PLATA', 'PIAZZOLLA', 'PIAZZOLA', 'ASTOR', 'MDQ', 'MDP']},
+    'BHI': {'codigo': 'BHI', 'ciudad': 'Bahía Blanca', 'keywords': ['BAHIA BLANCA', 'BAHÍA BLANCA', 'ESPORA', 'COMANDANTE ESPORA', 'BHI', 'BCA']},
+    'ROS': {'codigo': 'ROS', 'ciudad': 'Rosario', 'keywords': ['ROSARIO', 'ISLAS MALVINAS', 'ROS']},
+    'SFN': {'codigo': 'SFN', 'ciudad': 'Santa Fe', 'keywords': ['SANTA FE', 'SAUCE VIEJO', 'SFN']},
+    'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'keywords': ['PARANA', 'PARANÁ', 'URQUIZA', 'JUSTO JOSE', 'PRA', 'PAR']},
+    'PSS': {'codigo': 'PSS', 'ciudad': 'Posadas', 'keywords': ['POSADAS', 'JOSE DE SAN MARTIN', 'JOSÉ DE SAN MARTÍN', 'PSS', 'POS']},
+    'RES': {'codigo': 'RES', 'ciudad': 'Resistencia', 'keywords': ['RESISTENCIA', 'RES', 'SIS']},
+    'CNQ': {'codigo': 'CNQ', 'ciudad': 'Corrientes', 'keywords': ['CORRIENTES', 'PIRAGINE NIVEYRO', 'PIRAGINE', 'CNQ']},
+    'SDE': {'codigo': 'SDE', 'ciudad': 'Santiago del Estero', 'keywords': ['SANTIAGO DEL ESTERO', 'ARAGONES', 'ARAGONÉS', 'SDE']},
+    'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'keywords': ['TERMAS', 'RIO HONDO', 'RÍO HONDO', 'RHD', 'TRH']},
+    'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'keywords': ['SAN JUAN', 'DOMINGO FAUSTINO', 'SARMIENTO', 'UAQ', 'JUA']},
+    'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'keywords': ['SAN LUIS', 'CESAR RAUL OJEDA', 'CÉSAR RAÚL OJEDA', 'OJEDA', 'LUQ', 'UIS']},
+    'AFA': {'codigo': 'AFA', 'ciudad': 'San Rafael', 'keywords': ['SAN RAFAEL', 'GERMANO', 'GERMANÓ', 'AFA', 'SRA']},
+    'IRJ': {'codigo': 'IRJ', 'ciudad': 'La Rioja', 'keywords': ['LA RIOJA', 'ALMANDOS', 'VICENTE ALMANDOS', 'ALMONACID', 'IRJ', 'LAR']},
+    'CTC': {'codigo': 'CTC', 'ciudad': 'Catamarca', 'keywords': ['CATAMARCA', 'FELIPE VARELA', 'CORONEL FELIPE VARELA', 'CTC', 'CAT']},
+    'FMA': {'codigo': 'FMA', 'ciudad': 'Formosa', 'keywords': ['FORMOSA', 'EL PUCU', 'EL PUCÚ', 'FMA', 'FSA']},
+    'RGL': {'codigo': 'RGL', 'ciudad': 'Río Gallegos', 'keywords': ['RIO GALLEGOS', 'RÍO GALLEGOS', 'NORBERTO FERNANDEZ', 'NORBERTO FERNÁNDEZ', 'RGL', 'GAL']},
+    'RGA': {'codigo': 'RGA', 'ciudad': 'Río Grande', 'keywords': ['RIO GRANDE', 'RÍO GRANDE', 'HERMES QUIJADA', 'RAMON TREJO', 'RAMÓN TREJO', 'TREJO NOEL', 'RGA', 'GRA']},
+    'EQS': {'codigo': 'EQS', 'ciudad': 'Esquel', 'keywords': ['ESQUEL', 'PARODI', 'EQS']},
+    'VDM': {'codigo': 'VDM', 'ciudad': 'Viedma', 'keywords': ['VIEDMA', 'EDGARDO CASTELLO', 'VDM', 'VIE']},
+    'RSA': {'codigo': 'RSA', 'ciudad': 'Santa Rosa', 'keywords': ['SANTA ROSA', 'RSA', 'OSA']}
 }
 
-def normalizar_aeropuerto(texto):
+def resolver_aeropuerto(texto):
     if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan']:
-        return "N/D"
+        return "N/D", "Desconocido"
     t = str(texto).strip().upper()
-    if t in MAPA_IATA:
-        return MAPA_IATA[t]
-    for k, v in MAPA_IATA.items():
-        if len(k) > 3 and k in t:
-            return v
-        if re.search(r'\b' + re.escape(k) + r'\b', t):
-            return v
+    if t in AEROPUERTOS_INFO:
+        info = AEROPUERTOS_INFO[t]
+        return info['codigo'], info['ciudad']
+    for code, info in AEROPUERTOS_INFO.items():
+        for kw in info['keywords']:
+            if len(kw) > 3 and kw in t:
+                return info['codigo'], info['ciudad']
+            if len(kw) <= 3 and re.search(r'\b' + re.escape(kw) + r'\b', t):
+                return info['codigo'], info['ciudad']
     if len(t) == 3 and t.isalpha():
-        return t
-    return t
+        return t, t
+    limpio = t.replace('AEROPUERTO', '').replace('INT.', '').strip().title()
+    return t[:4], limpio[:15]
 
 meses_orden = {
     'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
@@ -131,63 +134,40 @@ def procesar_datos(source):
     df['fecha'] = df['fecha'].fillna(pd.to_datetime(datetime.now()))
     df['periodo_mes'] = df['fecha'].dt.strftime('%Y-%m')
 
-    # 4. Origen, Destino y Tramo con Abreviaturas IATA
-    col_dest = None
-    for k in ['destino', 'aeropuerto_destino', 'aeropuerto de destino', 'destino_etiqueta_anac', 'localidad_destino', 'ciudad_destino', 'llegada']:
-        if k in df.columns:
-            col_dest = k
-            break
-    if not col_dest:
-        for c in df.columns:
-            if ('destino' in c or 'llegada' in c) and 'origen' not in c:
-                col_dest = c
-                break
-    if not col_dest:
-        for c in df.columns:
-            if 'origen / destino' in c or 'origen_destino' in c or 'origen/destino' in c:
-                col_dest = c
-                break
-
-    col_orig = None
-    for k in ['origen', 'aeropuerto_origen', 'aeropuerto de origen', 'origen_etiqueta_anac', 'localidad_origen', 'ciudad_origen', 'salida']:
-        if k in df.columns:
-            col_orig = k
-            break
-    if not col_orig:
-        for c in df.columns:
-            if ('origen' in c or 'salida' in c) and 'destino' not in c:
-                col_orig = c
-                break
-    if not col_orig:
-        for c in df.columns:
-            if 'aeropuerto' in c and c != col_dest:
-                col_orig = c
-                break
-
+    # 4. Origen, Destino y Tramo
+    col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
+    col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c), None)
 
-    if col_orig and col_dest and col_orig != col_dest:
-        df['origen'] = df[col_orig].apply(normalizar_aeropuerto)
-        df['destino'] = df[col_dest].apply(normalizar_aeropuerto)
-        df['tramo'] = df['origen'] + " ➔ " + df['destino']
-        df['ruta'] = df.apply(lambda r: " - ".join(sorted([r['origen'], r['destino']])), axis=1)
+    if col_orig and col_dest:
+        origen_raw = df[col_orig].astype(str)
+        destino_raw = df[col_dest].astype(str)
     elif cand_ruta:
         partes = df[cand_ruta].astype(str).str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
-            df['origen'] = partes[0].apply(normalizar_aeropuerto)
-            df['destino'] = partes[1].apply(normalizar_aeropuerto)
-            df['tramo'] = df['origen'] + " ➔ " + df['destino']
-            df['ruta'] = df.apply(lambda r: " - ".join(sorted([r['origen'], r['destino']])), axis=1)
+            origen_raw = partes[0]
+            destino_raw = partes[1]
         else:
-            df['origen'] = df[cand_ruta].apply(normalizar_aeropuerto)
-            df['destino'] = df[cand_ruta].apply(normalizar_aeropuerto)
-            df['tramo'] = df['origen'] + " ➔ " + df['destino']
-            df['ruta'] = df['tramo']
+            origen_raw = df[cand_ruta]
+            destino_raw = df[cand_ruta]
     else:
-        df['origen'] = "N/D"
-        df['destino'] = "N/D"
-        df['tramo'] = "N/D"
-        df['ruta'] = "N/D"
+        origen_raw = pd.Series(["AEP"] * len(df))
+        destino_raw = pd.Series(["BRC"] * len(df))
+
+    # Mapear a códigos IATA y ciudades
+    res_orig = [resolver_aeropuerto(x) for x in origen_raw]
+    res_dest = [resolver_aeropuerto(x) for x in destino_raw]
+
+    df['origen_cod'] = [r[0] for r in res_orig]
+    df['origen_ciu'] = [r[1] for r in res_orig]
+    df['destino_cod'] = [r[0] for r in res_dest]
+    df['destino_ciu'] = [r[1] for r in res_dest]
+
+    # Etiquetas amigables
+    df['origen_label'] = df['origen_cod'] + " (" + df['origen_ciu'] + ")"
+    df['destino_label'] = df['destino_cod'] + " (" + df['destino_ciu'] + ")"
+    df['tramo_label'] = df['origen_cod'] + " ➔ " + df['destino_cod'] + " (" + df['origen_ciu'] + " a " + df['destino_ciu'] + ")"
+    df['ruta_label'] = df.apply(lambda r: " - ".join(sorted([r['origen_cod'], r['destino_cod']])), axis=1)
 
     return df
 
@@ -221,25 +201,24 @@ else:
             st.sidebar.divider()
             st.sidebar.header("🔍 Filtros de Vuelo")
 
-            # 1. Rutas
-            rutas_disp = sorted(datos['ruta'].dropna().unique().tolist())
-            rutas_sel = st.sidebar.multiselect("Rutas (par de aeropuertos):", options=rutas_disp, default=[])
+            # 1. Filtro principal por Tramo (Origen ➔ Destino)
+            tramos_disp = sorted(datos['tramo_label'].dropna().unique().tolist())
+            tramos_sel = st.sidebar.multiselect(
+                "✈️ Tramo / Conexión (Origen ➔ Destino):",
+                options=tramos_disp,
+                default=[]
+            )
 
-            # 2. Tramos directos
-            tramos_disp = sorted(datos['tramo'].dropna().unique().tolist())
-            tramos_sel = st.sidebar.multiselect("🔄 Tramo directo (Origen ➔ Destino):", options=tramos_disp, default=[])
+            # 2. Filtros individuales de Salida y Llegada (ancho completo)
+            origenes_disp = sorted(datos['origen_label'].dropna().unique().tolist())
+            origenes_sel = st.sidebar.multiselect("🛫 Aeropuerto de Salida (Origen):", options=origenes_disp, default=[])
 
-            # 3. Origen y Destino
-            c_or, c_de = st.sidebar.columns(2)
-            origenes_disp = sorted(datos['origen'].dropna().unique().tolist())
-            origenes_sel = c_or.multiselect("🛫 Origen:", options=origenes_disp, default=[])
+            destinos_disp = sorted(datos['destino_label'].dropna().unique().tolist())
+            destinos_sel = st.sidebar.multiselect("🛬 Aeropuerto de Llegada (Destino):", options=destinos_disp, default=[])
 
-            destinos_disp = sorted(datos['destino'].dropna().unique().tolist())
-            destinos_sel = c_de.multiselect("🛬 Destino:", options=destinos_disp, default=[])
-
-            # 4. Fechas
+            # 3. Fechas con Calendario
             st.sidebar.divider()
-            st.sidebar.subheader("📅 Fechas")
+            st.sidebar.subheader("📅 Rango de Fechas")
             fecha_min = datos['fecha'].min().date()
             fecha_max = datos['fecha'].max().date()
 
@@ -247,7 +226,7 @@ else:
             f_desde = c_f1.date_input("Desde:", value=fecha_min, min_value=fecha_min, max_value=fecha_max)
             f_hasta = c_f2.date_input("Hasta:", value=fecha_max, min_value=fecha_min, max_value=fecha_max)
 
-            # 5. Aerolíneas
+            # 4. Aerolíneas
             aerolineas_disp = sorted(datos['aerolinea'].dropna().unique().tolist())
             aerolineas_sel = st.sidebar.multiselect("Aerolíneas:", options=aerolineas_disp, default=[])
 
@@ -257,23 +236,23 @@ else:
             tipo_grafico = st.sidebar.radio("Gráfico:", ["Barras agrupadas", "Barras apiladas", "Líneas"])
 
             # Guía rápida IATA
-            with st.sidebar.expander("ℹ️ Guía de Abreviaciones IATA"):
+            with st.sidebar.expander("ℹ️ Guía de Códigos IATA"):
                 st.caption(
                     "**AEP:** Aeroparque (Bs. As.) | **EZE:** Ezeiza\n\n"
                     "**BRC:** Bariloche | **SLA:** Salta | **JUJ:** Jujuy\n\n"
                     "**COR:** Córdoba | **MDZ:** Mendoza | **IGR:** Iguazú\n\n"
-                    "**TUC:** Tucumán | **NQN:** Neuquén | **FTE:** El Calafate"
+                    "**TUC:** Tucumán | **NQN:** Neuquén | **FTE:** El Calafate\n\n"
+                    "**USH:** Ushuaia | **MDQ:** Mar del Plata | **SFN:** Santa Fe"
                 )
 
-            # Aplicar filtros
-            cond_ruta = datos['ruta'].isin(rutas_sel) if rutas_sel else True
-            cond_tramo = datos['tramo'].isin(tramos_sel) if tramos_sel else True
-            cond_orig = datos['origen'].isin(origenes_sel) if origenes_sel else True
-            cond_dest = datos['destino'].isin(destinos_sel) if destinos_sel else True
+            # Aplicar filtros (vacío = no filtrar nada)
+            cond_tramo = datos['tramo_label'].isin(tramos_sel) if tramos_sel else True
+            cond_orig = datos['origen_label'].isin(origenes_sel) if origenes_sel else True
+            cond_dest = datos['destino_label'].isin(destinos_sel) if destinos_sel else True
             cond_aero = datos['aerolinea'].isin(aerolineas_sel) if aerolineas_sel else True
             cond_fecha = (datos['fecha'].dt.date >= f_desde) & (datos['fecha'].dt.date <= f_hasta)
 
-            df_filtro = datos[cond_ruta & cond_tramo & cond_orig & cond_dest & cond_aero & cond_fecha].copy()
+            df_filtro = datos[cond_tramo & cond_orig & cond_dest & cond_aero & cond_fecha].copy()
             df_filtro['pax_por_vuelo'] = (df_filtro['pasajeros'] / df_filtro['vuelos']).replace([np.inf, -np.inf], 0).round(1)
             df_filtro['load_factor'] = np.where(df_filtro['asientos'] > 0, (df_filtro['pasajeros'] / df_filtro['asientos']) * 100, 0).round(1)
 
@@ -303,14 +282,14 @@ else:
 
                 st.divider()
 
-                # PESTAÑAS PARA ELEGIR ENTRE GRÁFICOS Y CUADROS
+                # Pestañas Gráficos vs Cuadros
                 tab_graficos, tab_cuadros = st.tabs(["📊 Gráficos Visuales", "📋 Cuadros Estadísticos"])
 
                 # -------------------------------------------------------------
-                # 1. PESTAÑA DE GRÁFICOS
+                # 1. GRÁFICOS
                 # -------------------------------------------------------------
                 with tab_graficos:
-                    agrup_grafico = df_filtro.groupby(['periodo_mes', 'aerolinea', 'tramo'], as_index=False).agg(
+                    agrup_grafico = df_filtro.groupby(['periodo_mes', 'aerolinea', 'tramo_label'], as_index=False).agg(
                         pasajeros=('pasajeros', 'sum'),
                         vuelos=('vuelos', 'sum'),
                         asientos=('asientos', 'sum')
@@ -348,12 +327,12 @@ else:
 
                     c_g1, c_g2 = st.columns(2)
                     with c_g1:
-                        if df_filtro['tramo'].nunique() > 1:
+                        if df_filtro['tramo_label'].nunique() > 1:
                             st.subheader("🛫 Pasajeros por Tramo")
-                            comp_tramos = df_filtro.groupby('tramo', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
+                            comp_tramos = df_filtro.groupby('tramo_label', as_index=False)['pasajeros'].sum().sort_values(by='pasajeros', ascending=False)
                             fig_tramos = px.bar(
-                                comp_tramos, x="tramo", y="pasajeros", color="tramo",
-                                labels={"tramo": "Tramo", "pasajeros": "Pasajeros"},
+                                comp_tramos, x="tramo_label", y="pasajeros", color="tramo_label",
+                                labels={"tramo_label": "Tramo", "pasajeros": "Pasajeros"},
                                 template="plotly_white"
                             )
                             st.plotly_chart(fig_tramos, use_container_width=True)
@@ -364,7 +343,7 @@ else:
                             st.plotly_chart(fig_pie, use_container_width=True)
 
                 # -------------------------------------------------------------
-                # 2. PESTAÑA DE CUADROS ESTADÍSTICOS
+                # 2. CUADROS ESTADÍSTICOS
                 # -------------------------------------------------------------
                 with tab_cuadros:
                     st.subheader("📋 Cuadro 1: Matriz Mensual de Pasajeros por Aerolínea")
@@ -396,7 +375,7 @@ else:
 
                     with c_t2:
                         st.subheader("🔄 Cuadro 3: Resumen por Tramo (Sentido)")
-                        res_tramo = df_filtro.groupby('tramo', as_index=False).agg(
+                        res_tramo = df_filtro.groupby('tramo_label', as_index=False).agg(
                             pasajeros=('pasajeros', 'sum'),
                             vuelos=('vuelos', 'sum'),
                             asientos=('asientos', 'sum')
@@ -408,7 +387,7 @@ else:
 
                     st.divider()
                     st.subheader("📄 Registros Detallados")
-                    columnas_ver = [c for c in ['fecha', 'tramo', 'origen', 'destino', 'aerolinea', 'pasajeros', 'asientos', 'vuelos', 'load_factor'] if c in df_filtro.columns]
+                    columnas_ver = [c for c in ['fecha', 'tramo_label', 'aerolinea', 'pasajeros', 'asientos', 'vuelos', 'load_factor'] if c in df_filtro.columns]
                     st.dataframe(df_filtro[columnas_ver].sort_values(by='fecha', ascending=False), use_container_width=True, height=300)
                     
                     csv_descarga = df_filtro.to_csv(index=False).encode('utf-8')
