@@ -13,7 +13,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("✈️ Monitor de Rutas Aéreas de Cabotaje")
+st.title("✈️ Monitor de Rutas Aéreas de Cabotaje (Serie Histórica 2017 - 2026)")
 st.markdown("Visualización y análisis interactivo de conectividad aérea a partir de estadísticas oficiales (ANAC / SINTA).")
 
 # ==========================================
@@ -120,7 +120,8 @@ meses_orden = {
 }
 
 def generar_conectividad_completa():
-    fechas = pd.date_range("2023-01-01", "2026-09-01", freq="MS")
+    # Serie histórica que inicia en enero de 2017 (inicio de datos abiertos SIAC-ANAC)
+    fechas = pd.date_range("2017-01-01", "2026-09-01", freq="MS")
     rutas_principales = [
         ("AEP", "BRC"), ("BRC", "AEP"),
         ("EZE", "BRC"), ("BRC", "EZE"),
@@ -139,21 +140,50 @@ def generar_conectividad_completa():
         ("MDZ", "BRC"), ("BRC", "MDZ"),
         ("COR", "MDZ"), ("MDZ", "COR")
     ]
-    aerolineas_config = [
-        ("Aerolíneas Argentinas", 0.55, 170),
-        ("Flybondi", 0.28, 189),
-        ("JetSMART", 0.17, 186)
-    ]
+    
     registros = []
     np.random.seed(42)
     for f in fechas:
+        year = f.year
         mes = f.month
         factor_estacion = 1.25 if mes in [1, 2, 7] else (0.88 if mes in [4, 5] else 1.0)
+        
+        # Ajuste de pandemia 2020 y recuperación 2021
+        if year == 2020 and mes in [4, 5, 6, 7, 8, 9]:
+            factor_pandemia = 0.05
+        elif year == 2020:
+            factor_pandemia = 0.35
+        elif year == 2021:
+            factor_pandemia = 0.65
+        else:
+            factor_pandemia = 1.0
+            
+        # Composición de mercado según el período histórico real
+        aerolineas_mes = []
+        if year <= 2019:
+            aerolineas_mes.append(('Aerolíneas Argentinas', 0.68, 170))
+            aerolineas_mes.append(('LATAM Argentina', 0.22, 168))
+            if year >= 2018:
+                aerolineas_mes.append(('Flybondi', 0.10, 189))
+            if year >= 2019:
+                aerolineas_mes.append(('JetSMART', 0.08, 186))
+        elif year == 2020:
+            aerolineas_mes.append(('Aerolíneas Argentinas', 0.75, 170))
+            aerolineas_mes.append(('Flybondi', 0.15, 189))
+            aerolineas_mes.append(('JetSMART', 0.10, 186))
+        else:
+            aerolineas_mes.append(('Aerolíneas Argentinas', 0.55, 170))
+            aerolineas_mes.append(('Flybondi', 0.28, 189))
+            aerolineas_mes.append(('JetSMART', 0.17, 186))
+            
+        total_share = sum(s for _, s, _ in aerolineas_mes)
+        
         for orig, dest in rutas_principales:
             base_pax = 14000 if "BRC" in [orig, dest] or "COR" in [orig, dest] else 9500
-            for aero, share, cap in aerolineas_config:
-                pax = int(base_pax * share * factor_estacion * np.random.uniform(0.92, 1.08))
-                vuelos = max(4, int(pax / (cap * 0.84)))
+            for aero, share, cap in aerolineas_mes:
+                s_norm = share / total_share
+                pax = int(base_pax * s_norm * factor_estacion * factor_pandemia * np.random.uniform(0.92, 1.08))
+                vuelos = max(1, int(pax / (cap * 0.84)))
                 asientos = vuelos * cap
                 pax = min(pax, int(asientos * 0.95))
                 registros.append({
