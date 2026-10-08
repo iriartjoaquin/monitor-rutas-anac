@@ -150,13 +150,15 @@ def extraer_bytes_fuente(fuente):
 def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     """
     Procesa un buffer de bytes crudos de SINTA / ANAC.
+    Prioriza UTF-8 para evitar transformar 'Año' en 'AÃ±o'.
     Garantiza lectura sin inventar datos y con tolerancia a encodings y separadores.
     """
     if not raw_bytes or len(raw_bytes) == 0:
         return pd.DataFrame()
 
-    encodings = ['latin-1', 'utf-8-sig', 'utf-8', 'cp1252']
-    separadores = [';', ',', '\t', '|']
+    # Prioridad estricta: utf-8 primero para no degradar UTF-8 a mojibake con latin-1
+    encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
+    separadores = [',', ';', '\t', '|']
     df = None
 
     for enc in encodings:
@@ -188,15 +190,18 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     if df is None or df.empty:
         return pd.DataFrame()
 
-    cols_map = {c.strip(' "\'').lower(): c for c in df.columns}
+    # Normalizar nombres de columnas limpiando comillas, espacios y posibles rezagos de mojibake
+    cols_map = {c.strip(' "\'').lower().replace('ã±', 'ñ'): c for c in df.columns}
     df.rename(columns={v: k for k, v in cols_map.items()}, inplace=True)
 
+    # Identificar columna aerolínea
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'aerolínea', 'empresa', 'operador', 'linea', 'compania', 'compañía'])]
     if cand_aero:
         df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip(' "\'')
     else:
         df['aerolinea'] = 'Todas las Aerolíneas (Total)'
 
+    # Identificar pasajeros
     cand_pax = [c for c in df.columns if 'pasajero' in c or 'pax' in c]
     if cand_pax:
         s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -204,6 +209,7 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['pasajeros'] = np.int32(0)
 
+    # Identificar vuelos
     cand_vue = [c for c in df.columns if 'vuelo' in c or 'movimiento' in c or 'operacion' in c]
     if cand_vue:
         s_vue = df[cand_vue[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -211,6 +217,7 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['vuelos'] = np.int16(1)
 
+    # Identificar asientos
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
     if cand_asi:
         s_asi = df[cand_asi[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -218,16 +225,19 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['asientos'] = np.int32(0)
 
+    # Identificación y construcción robusta de Fechas
     col_dia = next((c for c in df.columns if any(k in c for k in ['dia', 'día', 'day', 'da']) and 'diario' not in c), None)
     col_mes = next((c for c in df.columns if 'mes' in c or 'month' in c), None)
-    col_ano = next((c for c in df.columns if any(k in c for k in ['año', 'anio', 'year', 'ano', 'ao'])), None)
+    col_ano = next((c for c in df.columns if any(k in c for k in ['año', 'aã±o', 'anio', 'year', 'ano', 'ao'])), None)
     col_fecha = next((c for c in df.columns if any(k in c for k in ['fecha', 'date', 'indice_tiempo', 'periodo'])), None)
 
     if col_ano and col_mes:
+        # Extraer año tolerando puntos de miles ("2.024"), float ("2024.0") o texto ("2024")
         s_ano_clean = df[col_ano].astype(str).str.strip(' "\'').str.replace(r'\.0$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '', regex=False)
         s_ano_ext = s_ano_clean.str.extract(r'(20\d{2}|19\d{2})')[0]
         num_ano = pd.to_numeric(s_ano_ext, errors='coerce')
 
+        # Extraer mes numérico o texto (Julio, jul, 7, 07)
         s_mes_str = df[col_mes].astype(str).str.strip(' "\'').str.lower()
         num_mes = s_mes_str.map(meses_map).fillna(pd.to_numeric(s_mes_str, errors='coerce')).fillna(1).clip(1, 12).astype(int)
 
@@ -252,6 +262,7 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + ' ' + df['ano_num'].astype(str)
 
+    # Procesar Origen y Destino / Rutas
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c or 'puente' in c), None)
@@ -341,7 +352,7 @@ if archivo_subido is not None:
         else:
             st.sidebar.error(f"⚠️ El archivo '{archivo_subido.name}' ({len(raw_b):,} bytes) no pudo ser procesado.")
             try:
-                preview = raw_b[:300].decode('latin-1', errors='replace')
+                preview = raw_b[:300].decode('utf-8', errors='replace')
                 st.sidebar.caption("Primeros caracteres del archivo recibido:")
                 st.sidebar.code(preview)
             except Exception:
@@ -367,7 +378,7 @@ if df_raw.empty:
                 df_cand = procesar_dataset_bytes(raw_b, nom)
                 if not df_cand.empty:
                     df_raw = df_cand
-                    fuente_activa = f"Archivo local en repositorio: '{nom}'"
+                    fuente_activa = f"Archivo en repositorio: '{nom}'"
                     break
 
 # -------------------------------------------------------------
@@ -416,7 +427,7 @@ with col_f1:
     sel_rutas = st.multiselect(
         "🗺️ Ruta (Ida y Vuelta):",
         options=rutas_disponibles,
-        help="Agrupa ambos sentidos de vuelo (ej. Aeroparque ⇄ Jujuy)."
+        help="Agrupa ambos sentidos de vuelo (ej. Bariloche ⇄ Ezeiza)."
     )
 
 with col_f2:
