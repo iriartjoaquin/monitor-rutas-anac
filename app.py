@@ -96,6 +96,7 @@ def normalizar_texto_aeropuerto(texto):
     if not isinstance(texto, str):
         return ""
     txt = texto.upper().strip()
+    txt = txt.replace('Ã±', 'N').replace('Ã‘', 'N').replace('ñ', 'N').replace('Ñ', 'N')
     txt = re.sub(r'[ÁÀÄÂ]', 'A', txt)
     txt = re.sub(r'[ÉÈËÊ]', 'E', txt)
     txt = re.sub(r'[ÍÌÏÎ]', 'I', txt)
@@ -134,91 +135,147 @@ fmt_entero = lambda x: f"{int(round(x)):,}".replace(",", ".")
 fmt_decimal = lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
 fmt_porcentaje = lambda x: f"{x:.1f}%".replace(".", ",")
 
+def limpiar_encabezado(col):
+    txt = str(col).strip()
+    txt = txt.replace('Ã±', 'n').replace('Ã‘', 'N').replace('ã±', 'n').replace('ñ', 'n').replace('Ñ', 'N')
+    txt = txt.replace('Ã¡', 'a').replace('Ã©', 'e').replace('Ã­', 'i').replace('Ã³', 'o').replace('Ãº', 'u')
+    txt = txt.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+    txt = txt.upper()
+    txt = re.sub(r'[^A-Z0-9]', ' ', txt)
+    return ' '.join(txt.split())
+
+def parsear_mes(val):
+    if val is None or pd.isna(val):
+        return 1
+    s = str(val).strip().lower().replace('.0', '')
+    if s.isdigit():
+        return max(1, min(int(s), 12))
+    s = s.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
+    s = re.sub(r'[^a-z]', '', s)
+    return meses_map.get(s, 1)
+
+def parsear_dia(val):
+    if val is None or pd.isna(val):
+        return 1
+    s = str(val).strip()
+    try:
+        n = int(float(s))
+        return max(1, min(n, 31))
+    except Exception:
+        return 1
+
+def parsear_ano(val):
+    if val is None or pd.isna(val):
+        return None
+    s = str(val).strip()
+    try:
+        n = int(float(s))
+        if 1950 <= n <= 2100:
+            return n
+    except Exception:
+        pass
+    m = re.search(r'(19\d{2}|20\d{2})', s)
+    if m:
+        return int(m.group(1))
+    return None
+
+def limpiar_mojibake_texto(val):
+    if not isinstance(val, str):
+        return val
+    txt = val
+    reemplazos = {
+        'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
+        'Ã': 'Á', 'Ã‰': 'É', 'Ã': 'Í', 'Ã“': 'Ó', 'Ãš': 'Ú',
+        'Ã±': 'ñ', 'Ã‘': 'Ñ'
+    }
+    for k, v in reemplazos.items():
+        txt = txt.replace(k, v)
+    return txt.strip()
+
 # -------------------------------------------------------------
-# DETECCIÓN Y CARGA ESTRICTA DE DATOS REALES
+# DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES
 # -------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def procesar_dataframe_oficial(df_in):
+    if df_in is None or df_in.empty:
+        return None, "El archivo proporcionado está vacío."
+
     df = df_in.copy()
     
     col_map = {}
     for c in df.columns:
-        c_norm = normalizar_texto_aeropuerto(str(c))
-        if 'ANO' in c_norm or 'YEAR' in c_norm or c_norm == 'A':
+        norm = limpiar_encabezado(c)
+        if any(k in norm for k in ['ANO', 'ANIO', 'YEAR']) or norm == 'A':
             col_map[c] = 'ano_raw'
-        elif 'MES' in c_norm or 'MONTH' in c_norm:
+        elif 'MES' in norm or 'MONTH' in norm:
             col_map[c] = 'mes_raw'
-        elif 'DIA' in c_norm or 'DAY' in c_norm:
+        elif 'DIA' in norm or 'DAY' in norm or norm == 'D':
             col_map[c] = 'dia_raw'
-        elif 'FECHA' in c_norm or 'DATE' in c_norm:
+        elif 'FECHA' in norm or 'DATE' in norm:
             col_map[c] = 'fecha_raw'
-        elif 'ORIGEN' in c_norm or 'ORIG' in c_norm:
+        elif 'ORIGEN' in norm or 'ORIG' in norm or 'DESDE' in norm:
             col_map[c] = 'origen_raw'
-        elif 'DESTINO' in c_norm or 'DEST' in c_norm:
+        elif 'DESTINO' in norm or 'DEST' in norm or 'HACIA' in norm:
             col_map[c] = 'destino_raw'
-        elif 'EMPRESA' in c_norm or 'AEROLINEA' in c_norm or 'OPERADOR' in c_norm:
+        elif any(k in norm for k in ['EMPRESA', 'AEROLINEA', 'OPERADOR', 'LINEA', 'COMPANIA']):
             col_map[c] = 'aerolinea_raw'
-        elif 'PASAJERO' in c_norm or 'PAX' in c_norm:
+        elif 'PASAJERO' in norm or 'PAX' in norm:
             col_map[c] = 'pasajeros_raw'
-        elif 'VUELO' in c_norm or 'FLIGHT' in c_norm or 'ETAPAS' in c_norm:
+        elif 'VUELO' in norm or 'FLIGHT' in norm or 'ETAPA' in norm or 'OPERACION' in norm or 'MOVIMIENTO' in norm:
             col_map[c] = 'vuelos_raw'
-        elif 'ASIENTO' in c_norm or 'SEAT' in c_norm or 'CAPACIDAD' in c_norm:
+        elif 'ASIENTO' in norm or 'SEAT' in norm or 'CAPACIDAD' in norm or 'PLAZA' in norm:
             col_map[c] = 'asientos_raw'
 
     df.rename(columns=col_map, inplace=True)
 
-    cols_esenciales = ['origen_raw', 'destino_raw']
-    for req in cols_esenciales:
-        if req not in df.columns:
-            return None, f"El archivo no contiene la columna esencial de '{req}'."
+    # Validar aeropuertos origen y destino
+    if 'origen_raw' not in df.columns or 'destino_raw' not in df.columns:
+        return None, "El archivo debe contener columnas que indiquen el origen y destino de cada vuelo."
 
     # Aerolínea
     if 'aerolinea_raw' in df.columns:
-        df['aerolinea'] = df['aerolinea_raw'].astype(str).str.strip().replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
+        df['aerolinea'] = df['aerolinea_raw'].astype(str).apply(limpiar_mojibake_texto).replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
     else:
         df['aerolinea'] = 'Línea Regular'
 
     # Métricas numéricas
     for col_met, col_dest in [('pasajeros_raw', 'pasajeros'), ('vuelos_raw', 'vuelos'), ('asientos_raw', 'asientos')]:
         if col_met in df.columns:
-            df[col_dest] = pd.to_numeric(df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(), errors='coerce').fillna(0)
+            s_clean = df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
+            df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0)
         else:
             df[col_dest] = 0
 
-    # Fechas
+    # Construcción de Fechas
     if 'fecha_raw' in df.columns:
-        df['fecha'] = pd.to_datetime(df['fecha_raw'], errors='coerce')
+        df['fecha'] = pd.to_datetime(df['fecha_raw'], errors='coerce', dayfirst=True)
     else:
         df['fecha'] = pd.NaT
 
-    filas_nat = df['fecha'].isna()
-    if filas_nat.any() and 'ano_raw' in df.columns and 'mes_raw' in df.columns:
-        def armar_fecha(row):
-            try:
-                y = int(float(str(row['ano_raw']).strip()))
-                m_val = str(row['mes_raw']).strip().lower()
-                if m_val.isdigit():
-                    m = int(m_val)
-                else:
-                    m = meses_map.get(m_val, 1)
-                
-                d = 1
-                if 'dia_raw' in row and pd.notna(row['dia_raw']):
-                    d_str = str(row['dia_raw']).strip()
-                    if d_str.isdigit():
-                        d = max(1, min(int(d_str), 28))
-                return datetime(y, m, d)
-            except Exception:
-                return pd.NaT
+    if df['fecha'].isna().any() and 'ano_raw' in df.columns and 'mes_raw' in df.columns:
+        anos = df['ano_raw'].apply(parsear_ano)
+        meses = df['mes_raw'].apply(parsear_mes)
+        dias = df['dia_raw'].apply(parsear_dia) if 'dia_raw' in df.columns else pd.Series(1, index=df.index)
 
-        df.loc[filas_nat, 'fecha'] = df[filas_nat].apply(armar_fecha, axis=1)
+        def armar_fecha(y, m, d):
+            if pd.isna(y) or y is None:
+                return pd.NaT
+            try:
+                return datetime(int(y), int(m), int(d))
+            except ValueError:
+                try:
+                    return datetime(int(y), int(m), 28)
+                except Exception:
+                    return pd.NaT
+
+        df['fecha'] = [armar_fecha(y, m, d) for y, m, d in zip(anos, meses, dias)]
 
     df = df[df['fecha'].notna()].copy()
     if df.empty:
         return None, "No se pudieron construir fechas válidas a partir de los datos."
 
-    df['ano_num'] = df['fecha'].dt.year
-    df['mes_num'] = df['fecha'].dt.month
+    df['ano_num'] = df['fecha'].dt.year.astype(int)
+    df['mes_num'] = df['fecha'].dt.month.astype(int)
     df['periodo_orden'] = df['fecha'].dt.strftime('%Y-%m')
     df['periodo_mes_es'] = df['fecha'].apply(lambda d: f"{meses_es.get(d.month, '')}-{str(d.year)[2:]}")
 
@@ -243,19 +300,19 @@ def procesar_dataframe_oficial(df_in):
     return df, None
 
 def cargar_archivo_en_memoria(archivo_bytes_o_path):
-    encodings = ['utf-8', 'utf-8-sig', 'latin1', 'iso-8859-1', 'cp1252']
+    encodings = ['utf-8-sig', 'utf-8', 'latin1', 'iso-8859-1', 'cp1252']
     separadores = [',', ';', '\t']
 
     for enc in encodings:
         for sep in separadores:
             try:
                 if isinstance(archivo_bytes_o_path, str):
-                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=100)
+                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
                 else:
                     archivo_bytes_o_path.seek(0)
-                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=100)
+                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
 
-                if len(df.columns) >= 4:
+                if len(df.columns) >= 3:
                     if isinstance(archivo_bytes_o_path, str):
                         df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
                     else:
@@ -265,7 +322,7 @@ def cargar_archivo_en_memoria(archivo_bytes_o_path):
             except Exception:
                 continue
 
-    return None, "No se pudo interpretar el archivo CSV con los codificadores habituales."
+    return None, "No se pudo interpretar el archivo CSV con las codificaciones habituales."
 
 # -------------------------------------------------------------
 # BARRA LATERAL: FUENTES DE DATOS
@@ -279,8 +336,8 @@ fuente_activa = None
 
 subido = st.sidebar.file_uploader(
     "📂 Cargar microdatos (CSV oficial)",
-    type=['csv', 'txt'],
-    help="Suba la base oficial descargada de ANAC o del repositorio."
+    type=['csv', 'txt', 'gz', 'parquet'],
+    help="Suba la base oficial descargada de ANAC o de su repositorio."
 )
 
 if subido is not None:
@@ -297,11 +354,19 @@ if subido is not None:
 else:
     posibles_rutas = [
         "conectividad_aerea.csv",
+        "conectividad-aerea.csv",
         "data/conectividad_aerea.csv",
         "datos/conectividad_aerea.csv",
         "base_anac.csv",
         "cabotaje.csv"
     ]
+    try:
+        for f in os.listdir('.'):
+            if f.lower().endswith('.csv') and f not in posibles_rutas:
+                posibles_rutas.append(f)
+    except Exception:
+        pass
+
     for ruta in posibles_rutas:
         if os.path.exists(ruta):
             df_leido, err = cargar_archivo_en_memoria(ruta)
@@ -884,6 +949,8 @@ with tab_descargas:
     
     csv_bytes = df_filtrado.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     with col_exp1:
+        st.download_button(
+            label="📥 Descargar Microdatos Oficiales col_exp1:
         st.download_button(
             label="📥 Descargar Microdatos Oficiales (CSV)",
             data=csv_bytes,
