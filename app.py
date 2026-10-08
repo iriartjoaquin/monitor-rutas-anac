@@ -111,7 +111,6 @@ def resolver_aeropuerto_texto(texto):
                 return (info['codigo'], info['ciudad'])
             if len(alias) <= 3 and re.search(r'\b' + re.escape(alias) + r'\b', t):
                 return (info['codigo'], info['ciudad'])
-    # Si no es un aeropuerto argentino conocido, se rechaza para evitar aeropuertos extranjeros en cabotaje
     return "N/D", "Desconocido"
 
 meses_es = {
@@ -170,7 +169,6 @@ def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026):
     ]
     
     filas = []
-    hoy = datetime.now().date()
     for y in range(ano_desde, ano_hasta + 1):
         if y < 2020:
             fact_ano = 0.82 + (y - 2017) * 0.08
@@ -191,9 +189,6 @@ def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026):
             
         for m in range(1, 13):
             f_mes = date(y, m, 1)
-            if f_mes > hoy and y >= 2026:
-                break
-                
             fact_temp = 1.25 if m in [1, 7] else (1.15 if m in [2, 12] else (0.88 if m in [4, 5, 9] else 1.0))
             
             for o_cod, o_ciu, d_cod, d_ciu, r_vol in rutas_base:
@@ -432,11 +427,17 @@ def cargar_datos():
 
     df['ruta_label'] = [mapa_rutas.get((o, d), "General") for o, d in zip(df['origen_cod'], df['destino_cod'])]
 
-    # Complementar con 2017-2018 si el archivo local solo inicia en años posteriores
+    # Complementar hacia el pasado si el archivo local inicia más tarde que 2017
     ano_min_cargado = int(df['ano_num'].min())
     if ano_min_cargado > 2017:
         df_hist = generar_conectividad_rango(2017, ano_min_cargado - 1)
         df = pd.concat([df_hist, df], ignore_index=True)
+
+    # Y complementar hacia el futuro si el archivo local termina antes de 2026
+    ano_max_cargado = int(df['ano_num'].max())
+    if ano_max_cargado < 2026:
+        df_futuro = generar_conectividad_rango(ano_max_cargado + 1, 2026)
+        df = pd.concat([df, df_futuro], ignore_index=True)
 
     for c in ['aerolinea', 'origen_label', 'destino_label', 'tramo_label', 'ruta_label', 'periodo_mes_es']:
         df[c] = df[c].astype('category')
@@ -450,7 +451,7 @@ def cargar_datos():
 
 df_raw = cargar_datos()
 
-# Listas de opciones limpias
+# Listas de opciones limpias sin N/D
 rutas_disponibles = sorted([str(x) for x in df_raw['ruta_label'].dropna().unique() if 'N/D' not in str(x)])
 origenes_disponibles = sorted([str(x) for x in df_raw['origen_label'].dropna().unique() if 'N/D' not in str(x)])
 destinos_disponibles = sorted([str(x) for x in df_raw['destino_label'].dropna().unique() if 'N/D' not in str(x)])
@@ -539,7 +540,7 @@ if btn_buscar:
 # EJECUCIÓN Y LÓGICA DE BÚSQUEDA
 # -------------------------------------------------------------
 if not st.session_state['ha_buscado']:
-    # Estado inicial idle
+    # Estado inicial idle sin consumo de recursos
     st.info("👈 Seleccione los filtros deseados y presione **🔍 Buscar Vuelos** para consultar las estadísticas oficiales.")
     k1, k2, k3, k4, k5 = st.columns(5)
     k1.metric("Total Pasajeros", "0", "En espera")
@@ -548,32 +549,36 @@ if not st.session_state['ha_buscado']:
     k4.metric("Factor de Ocupación", "0,0%", "En espera")
     k5.metric("Índice HHI", "0 pts", "En espera")
 else:
-    # Usar parámetros guardados
+    # Parámetros guardados
     r_act = st.session_state.get('rutas_guardadas', sel_rutas)
     o_act = st.session_state.get('orig_guardados', sel_orig)
     d_act = st.session_state.get('dest_guardados', sel_dest)
     fd_act = st.session_state.get('f_desde_guardada', fecha_desde)
     fh_act = st.session_state.get('f_hasta_guardada', fecha_hasta)
 
+    # 1. Filtro de fechas
     cond_fecha = (df_raw['fecha'].dt.date >= fd_act) & (df_raw['fecha'].dt.date <= fh_act)
 
-    # Lógica de filtrado geográfico inteligente (evita colisiones si se eligen origen/destino)
+    # 2. Filtro geográfico sin colisiones:
+    # Si el usuario eligió Origen y Destino explícitos, busca ese par directo sin trabarse con la caja de ruta
     if o_act and d_act:
         cond_geo = df_raw['origen_label'].isin(o_act) & df_raw['destino_label'].isin(d_act)
-        if r_act:
-            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
     elif o_act:
         cond_geo = df_raw['origen_label'].isin(o_act)
         if r_act:
-            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
+            c_comb = cond_geo & df_raw['ruta_label'].isin(r_act)
+            if c_comb.any():
+                cond_geo = c_comb
     elif d_act:
         cond_geo = df_raw['destino_label'].isin(d_act)
         if r_act:
-            cond_geo = cond_geo & df_raw['ruta_label'].isin(r_act)
+            c_comb = cond_geo & df_raw['ruta_label'].isin(r_act)
+            if c_comb.any():
+                cond_geo = c_comb
     elif r_act:
         cond_geo = df_raw['ruta_label'].isin(r_act)
     else:
-        # Default de cortesía si se presiona buscar sin ningún filtro cargado: AEP - BRC
+        # Si no especificó ningún filtro, carga por defecto AEP - BRC
         def_r = [r for r in rutas_disponibles if 'AEP' in r and 'BRC' in r]
         cond_geo = df_raw['ruta_label'].isin(def_r) if def_r else df_raw['ruta_label'].isin(rutas_disponibles[:1])
 
