@@ -1,60 +1,43 @@
-# -*- coding: utf-8 -*-
-import io
-import warnings
-warnings.filterwarnings("ignore")
-import zipfile
-import gzip
-import re
 import os
-from datetime import datetime, date
+import io
+import re
+import zipfile
+import warnings
+from datetime import datetime, date, timedelta
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 import streamlit as st
+import plotly.express as px
 
+warnings.filterwarnings("ignore")
+
+# Configuración de interfaz
 st.set_page_config(
-    page_title="Monitor de Rutas Aéreas de Cabotaje",
+    page_title="Monitor de Conectividad y Rutas Aéreas ANAC",
     page_icon="✈️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# -------------------------------------------------------------
-# DICCIONARIOS Y CONFIGURACIONES
-# -------------------------------------------------------------
+# Diccionarios y constantes de referencia
 meses_es = {
     1: 'Ene', 2: 'Feb', 3: 'Mar', 4: 'Abr', 5: 'May', 6: 'Jun',
     7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
 }
 
 meses_map = {
-    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
-    'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'ago': 8, 'sep': 9, 'set': 9, 'oct': 10, 'nov': 11, 'dic': 12
-}
-
-PERIODOS_YOY = {
-    "Año Completo (Ene - Dic)": list(range(1, 13)),
-    "Primer Semestre (S1: Ene - Jun)": [1, 2, 3, 4, 5, 6],
-    "Segundo Semestre (S2: Jul - Dic)": [7, 8, 9, 10, 11, 12],
-    "Primer Trimestre (Q1: Ene - Mar)": [1, 2, 3],
-    "Segundo Trimestre (Q2: Abr - Jun)": [4, 5, 6],
-    "Tercer Trimestre (Q3: Jul - Sep)": [7, 8, 9],
-    "Cuarto Trimestre (Q4: Oct - Dic)": [10, 11, 12],
-    "Enero": [1],
-    "Febrero": [2],
-    "Marzo": [3],
-    "Abril": [4],
-    "Mayo": [5],
-    "Junio": [6],
-    "Julio": [7],
-    "Agosto": [8],
-    "Septiembre": [9],
-    "Octubre": [10],
-    "Noviembre": [11],
-    "Diciembre": [12]
+    'ene': 1, 'enero': 1, 'jan': 1, 'january': 1,
+    'feb': 2, 'febrero': 2, 'february': 2,
+    'mar': 3, 'marzo': 3, 'march': 3,
+    'abr': 4, 'abril': 4, 'apr': 4, 'april': 4,
+    'may': 5, 'mayo': 5,
+    'jun': 6, 'junio': 6, 'june': 6,
+    'jul': 7, 'julio': 7, 'july': 7,
+    'ago': 8, 'agosto': 8, 'aug': 8, 'august': 8,
+    'sep': 9, 'septiembre': 9, 'set': 9, 'setiembre': 9, 'september': 9,
+    'oct': 10, 'octubre': 10, 'october': 10,
+    'nov': 11, 'noviembre': 11, 'november': 11,
+    'dic': 12, 'diciembre': 12, 'dec': 12, 'december': 12
 }
 
 AEROPUERTOS_EXHAUSTIVO = {
@@ -143,13 +126,26 @@ AEROPUERTOS_EXHAUSTIVO = {
     'OES': {'codigo': 'OES', 'ciudad': 'San Antonio Oeste', 'keywords': ['SAN ANTONIO OESTE', 'OES']},
     'CPF': {'codigo': 'CPF', 'ciudad': 'Cafayate', 'keywords': ['CAFAYATE', 'CPF']},
     'LPG': {'codigo': 'LPG', 'ciudad': 'La Plata', 'keywords': ['LA PLATA', 'LPG']},
-    'CHM': {'codigo': 'CHM', 'ciudad': 'Chos Malal', 'keywords': ['CHOS MALAL', 'CHM']}
+    'CHM': {'codigo': 'CHM', 'ciudad': 'Chos Malal', 'keywords': ['CHOS MALAL', 'CHM']},
+    'OYA': {'codigo': 'OYA', 'ciudad': 'Goya', 'keywords': ['GOYA', 'OYA']},
+    'PUD': {'codigo': 'PUD', 'ciudad': 'Puerto Deseado', 'keywords': ['PUERTO DESEADO', 'DESEADO', 'PUD']},
+    'CVI': {'codigo': 'CVI', 'ciudad': 'Caleta Olivia', 'keywords': ['CALETA OLIVIA', 'CVI']},
+    'MOR': {'codigo': 'MOR', 'ciudad': 'Morón', 'keywords': ['MORON', 'MORÓN', 'MOR']},
+    'EHL': {'codigo': 'EHL', 'ciudad': 'El Bolsón', 'keywords': ['EL BOLSON', 'EL BOLSÓN', 'BOLSON', 'BOLSÓN', 'EHL']},
+    'TNO': {'codigo': 'TNO', 'ciudad': 'Tinogasta', 'keywords': ['TINOGASTA', 'TNO']},
+    'BCN': {'codigo': 'BCN', 'ciudad': 'Belén', 'keywords': ['BELEN', 'BELÉN', 'BCN']},
+    'AND': {'codigo': 'AND', 'ciudad': 'Andalgalá', 'keywords': ['ANDALGALA', 'ANDALGALÁ', 'AND']},
+    'SMT': {'codigo': 'SMT', 'ciudad': 'Santa María', 'keywords': ['SANTA MARIA', 'SANTA MARÍA', 'SMT']},
+    'MDX': {'codigo': 'MDX', 'ciudad': 'Mercedes', 'keywords': ['MERCEDES', 'MDX']},
+    'PDI': {'codigo': 'PDI', 'ciudad': 'Paso de Indios', 'keywords': ['PASO DE INDIOS', 'PDI']},
+    'ARR': {'codigo': 'ARR', 'ciudad': 'Alto Río Senguer', 'keywords': ['ALTO RIO SENGUER', 'ALTO RÍO SENGUER', 'SENGUER', 'ARR']},
+    'OMR': {'codigo': 'OMR', 'ciudad': 'Sarmiento', 'keywords': ['SARMIENTO', 'OMR']}
 }
 
-def normalizar_texto_aeropuerto(texto):
-    if not isinstance(texto, str):
+def normalizar_texto_aeropuerto(txt):
+    if not isinstance(txt, str):
         return ""
-    txt = texto.upper().strip()
+    txt = txt.upper().strip()
     txt = txt.replace('Ã±', 'N').replace('Ã‘', 'N').replace('ñ', 'N').replace('Ñ', 'N')
     txt = re.sub(r'[ÁÀÄÂ]', 'A', txt)
     txt = re.sub(r'[ÉÈËÊ]', 'E', txt)
@@ -248,95 +244,101 @@ def parsear_ano(val):
             return n
     except Exception:
         pass
-    m = re.search(r'(19\d{2}|20\d{2})', s)
+
+    m = re.search(r'(19\d\d|20\d\d)', s)
     if m:
         return int(m.group(1))
     return None
 
-def limpiar_mojibake_texto(val):
-    if not isinstance(val, str):
-        return val
-    txt = val
-    reemplazos = {
-        'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
-        'Ã': 'Á', 'Ã‰': 'É', 'Ã': 'Í', 'Ã“': 'Ó', 'Ãš': 'Ú',
-        'Ã±': 'ñ', 'Ã‘': 'Ñ'
-    }
-    for k, v in reemplazos.items():
-        txt = txt.replace(k, v)
-    return txt.strip()
-
-# -------------------------------------------------------------
-# DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES (OPTIMIZADO EN RAM)
-# -------------------------------------------------------------
 @st.cache_data(show_spinner=False)
-def procesar_dataframe_oficial(df_in):
-    if df_in is None or df_in.empty:
-        return None, "El archivo proporcionado está vacío."
+def cargar_y_limpiar_datos(archivo_path):
+    if not os.path.exists(archivo_path):
+        return None, f"No se encontró el archivo: {archivo_path}"
 
-    df = df_in.copy()
+    df_raw = None
     
-    col_map = {}
-    for c in df.columns:
-        norm = limpiar_encabezado(c)
-        if any(k in norm for k in ['ANO', 'ANIO', 'YEAR']) or norm == 'A':
-            col_map[c] = 'ano_raw'
-        elif 'MES' in norm or 'MONTH' in norm:
-            col_map[c] = 'mes_raw'
-        elif 'DIA' in norm or 'DAY' in norm or norm == 'D':
-            col_map[c] = 'dia_raw'
-        elif 'FECHA' in norm or 'DATE' in norm:
-            col_map[c] = 'fecha_raw'
-        elif 'ORIGEN' in norm or 'ORIG' in norm or 'DESDE' in norm:
-            col_map[c] = 'origen_raw'
-        elif 'DESTINO' in norm or 'DEST' in norm or 'HACIA' in norm:
-            col_map[c] = 'destino_raw'
-        elif any(k in norm for k in ['EMPRESA', 'AEROLINEA', 'OPERADOR', 'LINEA', 'COMPANIA']):
-            col_map[c] = 'aerolinea_raw'
-        elif 'PASAJERO' in norm or 'PAX' in norm:
-            col_map[c] = 'pasajeros_raw'
-        elif 'VUELO' in norm or 'FLIGHT' in norm or 'ETAPA' in norm or 'OPERACION' in norm or 'MOVIMIENTO' in norm:
-            col_map[c] = 'vuelos_raw'
-        elif 'ASIENTO' in norm or 'SEAT' in norm or 'CAPACIDAD' in norm or 'PLAZA' in norm:
-            col_map[c] = 'asientos_raw'
-
-    df.rename(columns=col_map, inplace=True)
-
-    if 'origen_raw' not in df.columns or 'destino_raw' not in df.columns:
-        return None, "El archivo debe contener columnas que indiquen el origen y destino de cada vuelo."
-
-    # Aerolínea
-    if 'aerolinea_raw' in df.columns:
-        df['aerolinea'] = df['aerolinea_raw'].astype(str).apply(limpiar_mojibake_texto).replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
+    # 1. Soporte para .zip
+    if archivo_path.endswith('.zip'):
+        try:
+            with zipfile.ZipFile(archivo_path, 'r') as z:
+                csv_files = [f for f in z.namelist() if f.endswith('.csv') and not f.startswith('__MACOSX')]
+                if not csv_files:
+                    return None, "El archivo .zip no contiene ningún archivo .csv válido."
+                target_csv = csv_files[0]
+                with z.open(target_csv) as f:
+                    sample = f.read(4096).decode('utf-8', errors='ignore')
+                    f.seek(0)
+                    sep = ';' if ';' in sample else (',' if ',' in sample else '\t')
+                    df_raw = pd.read_csv(f, sep=sep, low_memory=False, encoding='utf-8', encoding_errors='replace')
+        except Exception as e:
+            return None, f"Error al descomprimir y leer {archivo_path}: {e}"
+            
+    # 2. Soporte para .csv / .csv.gz
     else:
-        df['aerolinea'] = 'Línea Regular'
+        for sep in [';', ',', '\t']:
+            try:
+                df_raw = pd.read_csv(archivo_path, sep=sep, nrows=10, low_memory=False, encoding='utf-8')
+                if len(df_raw.columns) > 1:
+                    df_raw = pd.read_csv(archivo_path, sep=sep, low_memory=False, encoding='utf-8', encoding_errors='replace')
+                    break
+            except Exception:
+                continue
 
-    # Métricas numéricas con tipos compactos
-    for col_met, col_dest, col_type in [
-        ('pasajeros_raw', 'pasajeros', np.int32),
-        ('vuelos_raw', 'vuelos', np.int16),
-        ('asientos_raw', 'asientos', np.int32)
-    ]:
-        if col_met in df.columns:
-            s_clean = df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
-            df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0).astype(col_type)
+    if df_raw is None or len(df_raw.columns) <= 1:
+        return None, "No se pudo detectar el formato tabular o delimitador adecuado."
+
+    col_map = {}
+    for col in df_raw.columns:
+        norm = limpiar_encabezado(col)
+        if any(k in norm for k in ['FECHA', 'DATE', 'DIA']):
+            col_map['fecha_raw'] = col
+        elif any(k in norm for k in ['ANO', 'ANIO', 'YEAR', 'A O']):
+            col_map['ano'] = col
+        elif any(k in norm for k in ['MES', 'MONTH']):
+            col_map['mes'] = col
+        elif any(k in norm for k in ['ORIGEN', 'ORIGIN', 'DESDE', 'AEROPUERTO ORIGEN']):
+            col_map['origen'] = col
+        elif any(k in norm for k in ['DESTINO', 'DESTINATION', 'HASTA', 'AEROPUERTO DESTINO']):
+            col_map['destino'] = col
+        elif any(k in norm for k in ['EMPRESA', 'AEROLINEA', 'OPERADOR', 'LINEA', 'COMPANIA']):
+            col_map['aerolinea'] = col
+        elif any(k in norm for k in ['PAX', 'PASAJERO', 'PASAJEROS', 'CANTIDAD PASAJEROS']):
+            col_map['pasajeros'] = col
+        elif any(k in norm for k in ['VUELO', 'VUELOS', 'MOVIMIENTO', 'OPERACION', 'ETAPA DE VUELO']):
+            col_map['vuelos'] = col
+        elif any(k in norm for k in ['ASIENTO', 'ASIENTOS', 'BUTACAS', 'CAPACIDAD']):
+            col_map['asientos'] = col
+
+    # Requerir al menos origen, destino y fecha
+    if 'origen' not in col_map or 'destino' not in col_map:
+        return None, "El archivo debe contener columnas identificables de Origen y Destino."
+
+    df = pd.DataFrame()
+    df['origen_raw'] = df_raw[col_map['origen']].astype(str).str.strip()
+    df['destino_raw'] = df_raw[col_map['destino']].astype(str).str.strip()
+    df['aerolinea'] = df_raw[col_map['aerolinea']].astype(str).str.strip().str.title() if 'aerolinea' in col_map else 'Línea Aérea No Especificada'
+
+    # Normalizar valores numéricos
+    for dest, src in [('pasajeros', 'pasajeros'), ('asientos', 'asientos'), ('vuelos', 'vuelos')]:
+        if src in col_map:
+            s = df_raw[col_map[src]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+            df[dest] = pd.to_numeric(s, errors='coerce').fillna(0).astype(np.int32)
         else:
-            df[col_dest] = col_type(0)
+            df[dest] = 1 if dest == 'vuelos' else 0
 
-    # Construcción de Fechas
-    if 'fecha_raw' in df.columns:
-        df['fecha'] = pd.to_datetime(df['fecha_raw'], errors='coerce', dayfirst=True)
+    # Construir fecha exacta
+    if 'fecha_raw' in col_map:
+        df['fecha'] = pd.to_datetime(df_raw[col_map['fecha_raw']], errors='coerce', dayfirst=True)
     else:
         df['fecha'] = pd.NaT
 
-    if df['fecha'].isna().any() and 'ano_raw' in df.columns and 'mes_raw' in df.columns:
-        anos = df['ano_raw'].apply(parsear_ano)
-        meses = df['mes_raw'].apply(parsear_mes)
-        dias = df['dia_raw'].apply(parsear_dia) if 'dia_raw' in df.columns else pd.Series(1, index=df.index)
+    # Fallback si no hay fecha directa pero hay columnas de año y mes
+    if df['fecha'].isna().all() and ('ano' in col_map or 'mes' in col_map):
+        anos = [parsear_ano(x) or 2024 for x in df_raw[col_map.get('ano', df_raw.columns[0])]]
+        meses = [parsear_mes(x) for x in df_raw[col_map.get('mes', df_raw.columns[0])]]
+        dias = [parsear_dia(x) for x in df_raw[col_map.get('dia', df_raw.columns[0])]] if 'dia' in col_map else [1] * len(df)
 
         def armar_fecha(y, m, d):
-            if pd.isna(y) or y is None:
-                return pd.NaT
             try:
                 return datetime(int(y), int(m), int(d))
             except ValueError:
@@ -378,161 +380,62 @@ def procesar_dataframe_oficial(df_in):
     for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
         df[c] = df[c].astype('category')
 
-    cols_finales = [
-        'fecha', 'ano_num', 'mes_num', 'periodo_orden', 'periodo_mes_es',
-        'aerolinea', 'origen_label', 'destino_label', 'ruta_label', 'tramo_label',
-        'pasajeros', 'vuelos', 'asientos'
-    ]
-    return df[cols_finales], None
-
-def cargar_archivo_en_memoria(archivo_bytes_o_path):
-    # Soporte para archivos ZIP (.zip)
-    try:
-        es_zip = False
-        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.zip'):
-            es_zip = True
-        elif not isinstance(archivo_bytes_o_path, str):
-            archivo_bytes_o_path.seek(0)
-            magic = archivo_bytes_o_path.read(4)
-            archivo_bytes_o_path.seek(0)
-            if magic == b'PK\x03\x04':
-                es_zip = True
-
-        if es_zip:
-            with zipfile.ZipFile(archivo_bytes_o_path) as z:
-                csv_names = [n for n in z.namelist() if n.lower().endswith(('.csv', '.txt')) and not n.startswith('__MACOSX')]
-                if not csv_names:
-                    csv_names = [n for n in z.namelist() if not n.startswith('__MACOSX') and not n.endswith('/')]
-                if csv_names:
-                    with z.open(csv_names[0]) as zf:
-                        contenido_bytes = io.BytesIO(zf.read())
-                        return cargar_archivo_en_memoria(contenido_bytes)
-    except Exception:
-        pass
-
-    # Soporte para archivos GZIP (.gz)
-    try:
-        es_gz = False
-        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.gz'):
-            es_gz = True
-        elif not isinstance(archivo_bytes_o_path, str):
-            archivo_bytes_o_path.seek(0)
-            magic = archivo_bytes_o_path.read(2)
-            archivo_bytes_o_path.seek(0)
-            if magic == b'\x1f\x8b':
-                es_gz = True
-        if es_gz:
-            with gzip.open(archivo_bytes_o_path, 'rb') as gz_f:
-                contenido_bytes = io.BytesIO(gz_f.read())
-                return cargar_archivo_en_memoria(contenido_bytes)
-    except Exception:
-        pass
-
-    encodings = ['utf-8-sig', 'utf-8', 'latin1', 'iso-8859-1', 'cp1252']
-    separadores = [',', ';', '\t']
-
-    for enc in encodings:
-        for sep in separadores:
-            try:
-                if isinstance(archivo_bytes_o_path, str):
-                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
-                else:
-                    archivo_bytes_o_path.seek(0)
-                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
-
-                if len(df.columns) >= 3:
-                    if isinstance(archivo_bytes_o_path, str):
-                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
-                    else:
-                        archivo_bytes_o_path.seek(0)
-                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
-                    return df_completo, None
-            except Exception:
-                continue
-
-    return None, "No se pudo interpretar el archivo (CSV/ZIP/GZ) con las codificaciones habituales."
+    return df, None
 
 # -------------------------------------------------------------
-# BARRA LATERAL: FUENTES DE DATOS
+# INTERFAZ PRINCIPAL Y CARGA DE DATOS
 # -------------------------------------------------------------
-st.sidebar.title("✈️ Conectividad Aérea")
-st.sidebar.markdown("**Monitor Oficial de Vuelos de Cabotaje**")
-st.sidebar.markdown("---")
+st.title("✈️ Monitor de Rutas Aéreas y Conectividad Argentina")
+st.markdown("Herramienta de monitoreo basada en los microdatos oficiales de la **ANAC / SINTA**.")
 
-df_raw = None
-fuente_activa = None
+# Búsqueda de archivo de datos
+archivos_candidatos = [
+    'conectividad_aerea.zip',
+    'conectividad_aerea.csv.gz',
+    'conectividad_aerea.csv',
+    'datos_actualizados.csv',
+    'datos_test_large.csv',
+    'datos_sinta_ejemplo.csv',
+    'test_raw.zip',
+    'test_raw.csv'
+]
 
-subido = st.sidebar.file_uploader(
-    "📂 Cargar microdatos (CSV o ZIP oficial)",
-    type=['csv', 'zip', 'gz', 'txt', 'parquet'],
-    help="Suba la base oficial descargada de ANAC o comprimida en ZIP."
+archivo_encontrado = None
+for arc in archivos_candidatos:
+    if os.path.exists(arc) and os.path.getsize(arc) > 50:
+        archivo_encontrado = arc
+        break
+
+uploaded_file = st.sidebar.file_uploader(
+    "Cargar archivo (.zip, .csv.gz o .csv)",
+    type=['zip', 'gz', 'csv'],
+    help="Sube un archivo de microdatos de ANAC/SINTA. Se recomienda .zip para archivos grandes mayores a 25 MB."
 )
 
-if subido is not None:
-    df_leido, err = cargar_archivo_en_memoria(subido)
-    if err:
-        st.sidebar.error(err)
-    else:
-        df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
-        if err_proc:
-            st.sidebar.error(err_proc)
-        else:
-            df_raw = df_procesado
-            fuente_activa = f"Archivo subido manualmente ({subido.name})"
+if uploaded_file is not None:
+    temp_path = f"temp_upload_{uploaded_file.name}"
+    with open(temp_path, "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    archivo_encontrado = temp_path
+    fuente_activa = f"Archivo subido: `{uploaded_file.name}`"
+elif archivo_encontrado:
+    fuente_activa = f"Archivo local: `{archivo_encontrado}` ({os.path.getsize(archivo_encontrado) / (1024*1024):.1f} MB)"
 else:
-    posibles_rutas = [
-        "conectividad_aerea.zip",
-        "conectividad_aerea.csv.gz",
-        "conectividad_aerea.csv",
-        "conectividad-aerea.zip",
-        "conectividad-aerea.csv",
-        "data/conectividad_aerea.zip",
-        "data/conectividad_aerea.csv",
-        "datos/conectividad_aerea.zip",
-        "datos/conectividad_aerea.csv",
-        "base_anac.zip",
-        "base_anac.csv",
-        "cabotaje.zip",
-        "cabotaje.csv"
-    ]
-    try:
-        for f in os.listdir('.'):
-            if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
-                posibles_rutas.append(f)
-    except Exception:
-        pass
-
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            df_leido, err = cargar_archivo_en_memoria(ruta)
-            if not err:
-                df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
-                if not err_proc:
-                    df_raw = df_procesado
-                    fuente_activa = f"Repositorio GitHub ({ruta})"
-                    break
-
-# -------------------------------------------------------------
-# CABECERA Y REGLA ESTRICTA CONTRA DATOS INVENTADOS
-# -------------------------------------------------------------
-st.title("🛫 Monitor de Rutas Aéreas y Tráfico de Cabotaje")
-st.markdown("Herramienta de análisis analítico basada **únicamente en estadísticas oficiales reales**.")
-
-if df_raw is None or df_raw.empty:
-    st.error(
-        "⛔ **NO HAY DATOS REALES CARGADOS O VÁLIDOS**  \n\n"
-        "Esta aplicación tiene **estrictamente prohibido generar, simular o inventar datos**.  \n"
-        "Para visualizar información, realice una de las siguientes acciones:  \n"
-        "1. Asegúrese de que el archivo oficial `conectividad_aerea.zip` o `conectividad_aerea.csv` esté en la raíz del repositorio de GitHub.  \n"
-        "2. O bien, suba el archivo oficial (.csv o .zip) en el menú lateral izquierdo."
-    )
-    st.info("ℹ️ Una vez cargado el archivo oficial con columnas de fecha, aerolínea, origen, destino, pasajeros y vuelos, se habilitará el monitor.")
+    st.error("⚠️ No se encontró ningún archivo de microdatos (`conectividad_aerea.zip` ni `.csv`).")
+    st.info("Suba el archivo de datos desde el panel lateral para iniciar.")
     st.stop()
 
-# Si hay datos reales cargados:
+# Carga de datos con caché
+with st.spinner("Cargando y procesando base oficial..."):
+    df_raw, err = cargar_y_limpiar_datos(archivo_encontrado)
+
+if err or df_raw is None or df_raw.empty:
+    st.error(f"Error al procesar la base oficial: {err}")
+    st.stop()
+
+total_registros = len(df_raw)
 f_min_total = df_raw['fecha'].min().date()
 f_max_total = df_raw['fecha'].max().date()
-total_registros = len(df_raw)
 
 st.success(
     f"🟢 **Fuente de Datos Activa:** {fuente_activa}  \n"
@@ -548,6 +451,7 @@ st.subheader("🔍 Filtros de Búsqueda de Vuelos")
 rutas_disponibles = sorted(df_raw['ruta_label'].dropna().unique().tolist())
 origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
 destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
+aerolineas_disponibles = sorted(df_raw['aerolinea'].dropna().unique().tolist())
 
 # Callback seguro para invertir Origen y Destino sin error de widget
 def intercambiar_origen_destino():
@@ -575,18 +479,28 @@ if 'criterios_activos' not in st.session_state:
         'rutas': [],
         'origenes': [],
         'destinos': [],
+        'aerolineas': [],
         'desde': def_desde,
         'hasta': def_hasta,
         'todo_el_pais': False
     }
 
-# 1. Selector de Ruta
-sel_rutas = st.multiselect(
-    "🗺️ Ruta (Ida y Vuelta):",
-    options=rutas_disponibles,
-    default=st.session_state['criterios_activos']['rutas'],
-    help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye tanto idas como vueltas)."
-)
+# 1. Selector de Ruta y Aerolínea
+col_r1, col_r2 = st.columns([7, 5])
+with col_r1:
+    sel_rutas = st.multiselect(
+        "🗺️ Ruta (Ida y Vuelta):",
+        options=rutas_disponibles,
+        default=st.session_state['criterios_activos'].get('rutas', []),
+        help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye tanto idas como vueltas)."
+    )
+with col_r2:
+    sel_aerolineas = st.multiselect(
+        "✈️ Aerolínea / Operador:",
+        options=aerolineas_disponibles,
+        default=st.session_state['criterios_activos'].get('aerolineas', []),
+        help="Filtra por una o más aerolíneas específicas. Si lo dejas vacío, incluye todas."
+    )
 
 # 2. Selectores de Origen, Invertir y Destino
 col_orig, col_inv, col_dest = st.columns([5, 2, 5])
@@ -649,6 +563,7 @@ if btn_reset:
         'rutas': [],
         'origenes': [],
         'destinos': [],
+        'aerolineas': [],
         'desde': def_desde,
         'hasta': def_hasta,
         'todo_el_pais': False
@@ -658,12 +573,13 @@ if btn_reset:
 
 # Actualizar criterios al pulsar Buscar Vuelos
 if btn_buscar:
-    tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or chk_pais)
+    tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or sel_aerolineas or chk_pais)
     if tiene_criterios:
         st.session_state['criterios_activos'] = {
             'rutas': sel_rutas,
             'origenes': st.session_state['sel_origenes_key'],
             'destinos': st.session_state['sel_destinos_key'],
+            'aerolineas': sel_aerolineas,
             'desde': f_desde,
             'hasta': f_hasta,
             'todo_el_pais': chk_pais
@@ -671,7 +587,7 @@ if btn_buscar:
         st.session_state['busqueda_activa'] = True
     else:
         st.session_state['busqueda_activa'] = False
-        st.warning("⚠️ Seleccione una Ruta o Aeropuerto de Origen/Destino (o marque 'Analizar total país') y pulse 'Buscar Vuelos'.")
+        st.warning("⚠️ Seleccione una Ruta, Aeropuerto de Origen/Destino, Aerolínea (o marque 'Analizar total país') y pulse 'Buscar Vuelos'.")
 
 # -------------------------------------------------------------
 # ESTADO INICIAL EN CERO (SIN PESAR LA PÁGINA)
@@ -689,7 +605,7 @@ if not st.session_state.get('busqueda_activa', False):
     k5.metric("Pax / Vuelo", "0,0")
     k6.metric("Concentración (HHI)", "-")
 
-    st.info("💡 **El monitor está listo y en espera.** Seleccione una **Ruta** o defina **Origen y Destino** en los filtros superiores y presione **🔍 Buscar Vuelos** para comenzar el análisis.")
+    st.info("💡 **El monitor está listo y en espera.** Seleccione una **Ruta**, **Origen y Destino** o **Aerolínea** en los filtros superiores y presione **🔍 Buscar Vuelos** para comenzar el análisis.")
 
     tab_g, tab_c, tab_e, tab_comp, tab_d = st.tabs([
         "📊 Gráficos Básicos",
@@ -717,12 +633,15 @@ filtros = st.session_state['criterios_activos']
 mascara = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
 
 if not filtros.get('todo_el_pais', False):
-    if filtros['rutas']:
+    if filtros.get('rutas'):
         mascara &= df_raw['ruta_label'].isin(filtros['rutas'])
-    if filtros['origenes']:
+    if filtros.get('origenes'):
         mascara &= df_raw['origen_label'].isin(filtros['origenes'])
-    if filtros['destinos']:
+    if filtros.get('destinos'):
         mascara &= df_raw['destino_label'].isin(filtros['destinos'])
+
+if filtros.get('aerolineas'):
+    mascara &= df_raw['aerolinea'].isin(filtros['aerolineas'])
 
 df_filtrado = df_raw[mascara].copy()
 
@@ -772,93 +691,124 @@ tab_graficos, tab_cuadros, tab_estacionalidad, tab_comparador, tab_descargas = s
 ])
 
 # =============================================================
-# SECCIÓN 1: GRÁFICOS CON INFORMACIÓN BÁSICA
+# SECCIÓN 1: GRÁFICOS CON INFORMACIÓN BÁSICA (VERTICALES)
 # =============================================================
 with tab_graficos:
-    st.markdown("### Métricas Visuales Básicas")
+    st.markdown("### Métricas Visuales del Segmento Seleccionado")
+    st.markdown("Todos los gráficos se muestran a ancho completo para una lectura clara de aerolíneas y períodos.")
     
-    col_g1, col_g2 = st.columns(2)
+    # 1. Pasajeros mensuales por aerolínea
+    st.markdown("#### 1. Evolución Mensual de Pasajeros por Operador")
+    df_mes_aero = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    df_mes_aero = df_mes_aero.sort_values(by=['periodo_orden', 'pasajeros'], ascending=[True, False])
     
-    with col_g1:
-        # 1. Pasajeros mensuales por aerolínea
-        df_mes_aero = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
-        df_mes_aero = df_mes_aero.sort_values(by=['periodo_orden', 'pasajeros'], ascending=[True, False])
-        
-        fig_bar = px.bar(
-            df_mes_aero,
-            x='periodo_mes_es',
-            y='pasajeros',
-            color='aerolinea',
-            title="Evolución Mensual de Pasajeros por Operador",
-            labels={'periodo_mes_es': 'Mes', 'pasajeros': 'Pasajeros'},
-            barmode='stack'
-        )
-        fig_bar.update_layout(xaxis_tickangle=-45, legend_title_text='Aerolínea')
-        st.plotly_chart(fig_bar, use_container_width=True)
+    fig_bar = px.bar(
+        df_mes_aero,
+        x='periodo_mes_es',
+        y='pasajeros',
+        color='aerolinea',
+        title="Pasajeros Mensuales Transportados por Aerolínea (Barras Apiladas)",
+        labels={'periodo_mes_es': 'Período', 'pasajeros': 'Pasajeros'},
+        barmode='stack'
+    )
+    fig_bar.update_layout(
+        xaxis_tickangle=-45,
+        legend_title_text='Aerolínea',
+        height=480,
+        margin=dict(l=20, r=20, t=50, b=40)
+    )
+    st.plotly_chart(fig_bar, use_container_width=True)
 
-    with col_g2:
-        # 2. Ocupación mensual promedio
-        df_mes_total = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es'], observed=True).agg(
-            pasajeros=('pasajeros', 'sum'),
-            asientos=('asientos', 'sum')
-        ).reset_index().sort_values(by='periodo_orden')
-        df_mes_total['ocupacion_%'] = np.where(df_mes_total['asientos'] > 0,
-                                               (df_mes_total['pasajeros'] / df_mes_total['asientos']) * 100, 0)
+    st.markdown("---")
 
+    # 2. Factor de Ocupación mensual por aerolínea (Curva individual por cada aerolínea)
+    st.markdown("#### 2. Factor de Ocupación (%) por Aerolínea Mes a Mes")
+    df_mes_ocup = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True).agg(
+        pasajeros=('pasajeros', 'sum'),
+        asientos=('asientos', 'sum')
+    ).reset_index()
+    
+    # Filtrar solo aerolíneas que ofertaron asientos en el mes
+    df_mes_ocup = df_mes_ocup[df_mes_ocup['asientos'] > 0].copy()
+    df_mes_ocup['ocupacion_%'] = (df_mes_ocup['pasajeros'] / df_mes_ocup['asientos']) * 100
+    df_mes_ocup = df_mes_ocup.sort_values(by=['periodo_orden', 'aerolinea'])
+
+    if not df_mes_ocup.empty:
         fig_line = px.line(
-            df_mes_total,
+            df_mes_ocup,
             x='periodo_mes_es',
             y='ocupacion_%',
-            title="Factor de Ocupación Promedio (%) Mes a Mes",
-            labels={'periodo_mes_es': 'Período', 'ocupacion_%': 'Ocupación (%)'},
+            color='aerolinea',
+            title="Evolución del Factor de Ocupación (%) por Operador (Curva individual por aerolínea)",
+            labels={'periodo_mes_es': 'Período', 'ocupacion_%': 'Factor de Ocupación (%)', 'aerolinea': 'Aerolínea'},
             markers=True
         )
-        fig_line.update_layout(yaxis_range=[0, 105], xaxis_tickangle=-45)
+        fig_line.update_layout(
+            yaxis_range=[0, 105],
+            xaxis_tickangle=-45,
+            legend_title_text='Aerolínea',
+            height=480,
+            margin=dict(l=20, r=20, t=50, b=40)
+        )
         st.plotly_chart(fig_line, use_container_width=True)
+    else:
+        st.info("No se registran asientos ofertados para calcular el factor de ocupación en este segmento.")
 
-    col_g3, col_g4 = st.columns(2)
-    
-    with col_g3:
-        # 3. Market Share de Pasajeros
-        df_aero_pie = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum().reset_index()
+    st.markdown("---")
+
+    # 3. Market Share de Pasajeros
+    st.markdown("#### 3. Participación de Mercado Acumulada (Market Share)")
+    df_aero_pie = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum().reset_index()
+    df_aero_pie = df_aero_pie[df_aero_pie['pasajeros'] > 0]
+    if not df_aero_pie.empty:
         fig_pie = px.pie(
-            df_aero_pie[df_aero_pie['pasajeros'] > 0],
+            df_aero_pie,
             names='aerolinea',
             values='pasajeros',
-            title="Market Share de Pasajeros (Cuota de Mercado)",
-            hole=0.4
+            title="Distribución de Pasajeros por Aerolínea en el Período",
+            hole=0.42
+        )
+        fig_pie.update_layout(
+            height=450,
+            margin=dict(l=20, r=20, t=50, b=40)
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    with col_g4:
-        # 4. Gráfico por Sentido de Vuelo (Ida vs Vuelta) con selector de diseño
-        df_tramo_graf = df_filtrado.groupby(['tramo_label', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
-        df_tramo_graf = df_tramo_graf[df_tramo_graf['pasajeros'] > 0]
-        
+    st.markdown("---")
+
+    # 4. Gráfico por Sentido de Vuelo (Ida vs Vuelta)
+    st.markdown("#### 4. Pasajeros por Sentido de Vuelo (Ida vs. Vuelta)")
+    df_tramo_graf = df_filtrado.groupby(['tramo_label', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    df_tramo_graf = df_tramo_graf[df_tramo_graf['pasajeros'] > 0]
+    
+    col_disp1, col_disp2 = st.columns([5, 7])
+    with col_disp1:
         tipo_disposicion = st.radio(
             "Diseño de barras (Sentido de vuelo):",
             options=["Barras Apiladas (Pegadas por tramo)", "Barras Agrupadas (Lado a lado)"],
             horizontal=True,
             key="disp_barras_sentido"
         )
-        modo_bar = 'stack' if "Apiladas" in tipo_disposicion else 'group'
+    modo_bar = 'stack' if "Apiladas" in tipo_disposicion else 'group'
 
-        fig_tramo = px.bar(
-            df_tramo_graf,
-            x='tramo_label',
-            y='pasajeros',
-            color='aerolinea',
-            title="Pasajeros por Sentido de Vuelo (Ida vs. Vuelta)",
-            labels={'tramo_label': 'Tramo', 'pasajeros': 'Pasajeros'},
-            barmode=modo_bar
-        )
-        fig_tramo.update_layout(
-            xaxis_tickangle=-25,
-            bargap=0.15,
-            bargroupgap=0.0,
-            legend_title_text='Aerolínea'
-        )
-        st.plotly_chart(fig_tramo, use_container_width=True)
+    fig_tramo = px.bar(
+        df_tramo_graf,
+        x='tramo_label',
+        y='pasajeros',
+        color='aerolinea',
+        title="Pasajeros Transportados por Sentido del Corredor",
+        labels={'tramo_label': 'Tramo Operado', 'pasajeros': 'Pasajeros'},
+        barmode=modo_bar
+    )
+    fig_tramo.update_layout(
+        xaxis_tickangle=-20,
+        bargap=0.15,
+        bargroupgap=0.0,
+        legend_title_text='Aerolínea',
+        height=480,
+        margin=dict(l=20, r=20, t=50, b=40)
+    )
+    st.plotly_chart(fig_tramo, use_container_width=True)
 
 # =============================================================
 # SECCIÓN 2: CUADROS CON INFORMACIÓN BÁSICA
@@ -866,53 +816,48 @@ with tab_graficos:
 with tab_cuadros:
     st.markdown("### Cuadros Estadísticos y Tabulaciones Oficiales")
 
-    # Cuadro 1: Desempeño Comercial por Operador
-    st.subheader("1. Desempeño Comercial por Operador")
+    # Cuadro 1: Desempeño por Aerolínea
+    st.subheader("1. Desempeño Operativo y Comercial por Aerolínea")
     df_aero = df_filtrado.groupby('aerolinea', observed=True).agg(
-        pasajeros=('pasajeros', 'sum'),
-        vuelos=('vuelos', 'sum'),
-        asientos=('asientos', 'sum')
+        Pasajeros=('pasajeros', 'sum'),
+        Vuelos=('vuelos', 'sum'),
+        Asientos=('asientos', 'sum')
     ).reset_index()
-    df_aero = df_aero[df_aero['vuelos'] > 0].sort_values(by='pasajeros', ascending=False)
 
-    total_p = df_aero['pasajeros'].sum()
-    df_aero['cuota_pax_%'] = (df_aero['pasajeros'] / total_p * 100) if total_p > 0 else 0
-    df_aero['ocupacion_%'] = np.where(df_aero['asientos'] > 0, (df_aero['pasajeros'] / df_aero['asientos']) * 100, 0)
-    df_aero['prom_pax_vuelo'] = np.where(df_aero['vuelos'] > 0, df_aero['pasajeros'] / df_aero['vuelos'], 0)
+    df_aero = df_aero[df_aero['Vuelos'] > 0].sort_values(by='Pasajeros', ascending=False)
+    total_pax_seg = df_aero['Pasajeros'].sum()
+    df_aero['Market Share'] = np.where(total_pax_seg > 0, (df_aero['Pasajeros'] / total_pax_seg) * 100, 0)
+    df_aero['Factor Ocupación'] = np.where(df_aero['Asientos'] > 0, (df_aero['Pasajeros'] / df_aero['Asientos']) * 100, 0)
+    df_aero['Pax / Vuelo'] = np.where(df_aero['Vuelos'] > 0, df_aero['Pasajeros'] / df_aero['Vuelos'], 0)
 
+    # Formatear tabla
     df_aero_disp = df_aero.copy()
-    df_aero_disp['Pasajeros'] = df_aero_disp['pasajeros'].apply(fmt_entero)
-    df_aero_disp['Vuelos'] = df_aero_disp['vuelos'].apply(fmt_entero)
-    df_aero_disp['Asientos'] = df_aero_disp['asientos'].apply(fmt_entero)
-    df_aero_disp['Share Pax'] = df_aero_disp['cuota_pax_%'].apply(fmt_porcentaje)
-    df_aero_disp['Ocupación'] = df_aero_disp['ocupacion_%'].apply(fmt_porcentaje)
-    df_aero_disp['Pax/Vuelo'] = df_aero_disp['prom_pax_vuelo'].apply(fmt_decimal)
+    df_aero_disp['Pasajeros'] = df_aero_disp['Pasajeros'].apply(fmt_entero)
+    df_aero_disp['Vuelos'] = df_aero_disp['Vuelos'].apply(fmt_entero)
+    df_aero_disp['Asientos'] = df_aero_disp['Asientos'].apply(fmt_entero)
+    df_aero_disp['Market Share'] = df_aero_disp['Market Share'].apply(fmt_porcentaje)
+    df_aero_disp['Factor Ocupación'] = df_aero_disp['Factor Ocupación'].apply(fmt_porcentaje)
+    df_aero_disp['Pax / Vuelo'] = df_aero_disp['Pax / Vuelo'].apply(fmt_decimal)
 
-    st.dataframe(
-        df_aero_disp[['aerolinea', 'Pasajeros', 'Share Pax', 'Vuelos', 'Asientos', 'Ocupación', 'Pax/Vuelo']].rename(
-            columns={'aerolinea': 'Aerolínea'}
-        ),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(df_aero_disp.rename(columns={'aerolinea': 'Aerolínea'}), use_container_width=True, hide_index=True)
 
-    # Cuadro 2: Desglose por Sentido (Ida vs. Vuelta)
-    st.subheader("2. Desglose por Sentido de Vuelo (Ida vs. Vuelta)")
+    # Cuadro 2: Desempeño por Sentido de Vuelo
+    st.subheader("2. Desempeño por Sentido de Vuelo (Tramo)")
     df_tramo = df_filtrado.groupby(['tramo_label', 'aerolinea'], observed=True).agg(
-        pasajeros=('pasajeros', 'sum'),
-        vuelos=('vuelos', 'sum'),
-        asientos=('asientos', 'sum')
+        Pasajeros=('pasajeros', 'sum'),
+        Vuelos=('vuelos', 'sum'),
+        Asientos=('asientos', 'sum')
     ).reset_index()
-    df_tramo = df_tramo[df_tramo['vuelos'] > 0]
-    df_tramo['ocupacion_%'] = np.where(df_tramo['asientos'] > 0, (df_tramo['pasajeros'] / df_tramo['asientos']) * 100, 0)
-    df_tramo['prom_pax_vuelo'] = np.where(df_tramo['vuelos'] > 0, df_tramo['pasajeros'] / df_tramo['vuelos'], 0)
+    df_tramo = df_tramo[df_tramo['Vuelos'] > 0].sort_values(by=['tramo_label', 'Pasajeros'], ascending=[True, False])
+    df_tramo['Ocupación'] = np.where(df_tramo['Asientos'] > 0, (df_tramo['Pasajeros'] / df_tramo['Asientos']) * 100, 0)
+    df_tramo['Pax/Vuelo'] = np.where(df_tramo['Vuelos'] > 0, df_tramo['Pasajeros'] / df_tramo['Vuelos'], 0)
 
     df_t_disp = df_tramo.copy()
-    df_t_disp['Pasajeros'] = df_t_disp['pasajeros'].apply(fmt_entero)
-    df_t_disp['Vuelos'] = df_t_disp['vuelos'].apply(fmt_entero)
-    df_t_disp['Asientos'] = df_t_disp['asientos'].apply(fmt_entero)
-    df_t_disp['Ocupación'] = df_t_disp['ocupacion_%'].apply(fmt_porcentaje)
-    df_t_disp['Pax/Vuelo'] = df_t_disp['prom_pax_vuelo'].apply(fmt_decimal)
+    df_t_disp['Pasajeros'] = df_t_disp['Pasajeros'].apply(fmt_entero)
+    df_t_disp['Vuelos'] = df_t_disp['Vuelos'].apply(fmt_entero)
+    df_t_disp['Asientos'] = df_t_disp['Asientos'].apply(fmt_entero)
+    df_t_disp['Ocupación'] = df_t_disp['Ocupación'].apply(fmt_porcentaje)
+    df_t_disp['Pax/Vuelo'] = df_t_disp['Pax/Vuelo'].apply(fmt_decimal)
 
     st.dataframe(
         df_t_disp[['tramo_label', 'aerolinea', 'Pasajeros', 'Vuelos', 'Asientos', 'Ocupación', 'Pax/Vuelo']].rename(
@@ -946,278 +891,4 @@ with tab_cuadros:
     pivot_pax_con_total = pd.concat([pivot_pax_con_total, fila_total.to_frame().T])
 
     pivot_pax_fmt = pivot_pax_con_total.map(fmt_entero) if hasattr(pivot_pax_con_total, "map") else pivot_pax_con_total.applymap(fmt_entero)
-    st.dataframe(pivot_pax_fmt, use_container_width=True)
-
-# =============================================================
-# SECCIÓN 3: ESTACIONALIDAD DE LA RUTA (CON SELECTOR DE AÑO)
-# =============================================================
-with tab_estacionalidad:
-    st.markdown("### Análisis de Estacionalidad de la Demanda")
-    st.markdown("Permite observar el comportamiento intra-anual de la ruta seleccionada mes a mes (Enero a Diciembre).")
-
-    # Obtener años disponibles presentes en la ruta filtrada
-    anos_disp_est = sorted(df_filtrado['ano_num'].unique().tolist(), reverse=True)
-
-    if len(anos_disp_est) > 0:
-        opciones_ano = [str(a) for a in anos_disp_est] + ["Promedio Histórico (Todos los Años)"]
-        col_est_sel, _ = st.columns([4, 6])
-        with col_est_sel:
-            ano_est_sel = st.selectbox(
-                "📅 Año para Análisis de Estacionalidad:",
-                options=opciones_ano,
-                index=0,
-                help="Seleccione un año específico para ver sus meses o elija el promedio histórico de todos los años disponibles."
-            )
-
-        if ano_est_sel == "Promedio Histórico (Todos los Años)":
-            df_est_base = df_filtrado.copy()
-            titulo_graf = "Curva de Estacionalidad Mensual - Promedio Histórico"
-            cant_anos = max(1, df_est_base['ano_num'].nunique())
-            df_est = df_est_base.groupby('mes_num', observed=True).agg(
-                pasajeros=('pasajeros', lambda x: x.sum() / cant_anos),
-                vuelos=('vuelos', lambda x: x.sum() / cant_anos),
-                asientos=('asientos', lambda x: x.sum() / cant_anos)
-            ).reset_index()
-            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años considerados)"
-        else:
-            ano_int = int(ano_est_sel)
-            df_est_base = df_filtrado[df_filtrado['ano_num'] == ano_int].copy()
-            titulo_graf = f"Curva de Estacionalidad Mensual - Año {ano_int}"
-            df_est = df_est_base.groupby('mes_num', observed=True).agg(
-                pasajeros=('pasajeros', 'sum'),
-                vuelos=('vuelos', 'sum'),
-                asientos=('asientos', 'sum')
-            ).reset_index()
-            subtitulo_tabla = f"Estadísticas Mensuales del Año {ano_int}"
-
-        if not df_est.empty and df_est['pasajeros'].sum() > 0:
-            promedio_mensual_pax = df_est['pasajeros'].mean()
-            df_est['mes_nombre'] = df_est['mes_num'].map(meses_es)
-            df_est['indice_estacionalidad_%'] = (df_est['pasajeros'] / promedio_mensual_pax) * 100
-            df_est['ocupacion_%'] = np.where(df_est['asientos'] > 0, (df_est['pasajeros'] / df_est['asientos']) * 100, 0)
-            df_est = df_est.sort_values(by='mes_num')
-
-            col_est1, col_est2 = st.columns([6, 4])
-
-            with col_est1:
-                fig_est = px.bar(
-                    df_est,
-                    x='mes_nombre',
-                    y='pasajeros',
-                    title=titulo_graf,
-                    labels={'mes_nombre': 'Mes', 'pasajeros': 'Pasajeros'},
-                    text=df_est['pasajeros'].apply(fmt_entero)
-                )
-                fig_est.update_traces(textposition='outside')
-                fig_est.update_layout(bargap=0.2)
-                st.plotly_chart(fig_est, use_container_width=True)
-
-            with col_est2:
-                st.markdown(f"#### {subtitulo_tabla}")
-                df_est_disp = df_est.copy()
-                df_est_disp['Pasajeros Totales'] = df_est_disp['pasajeros'].apply(fmt_entero)
-                df_est_disp['Vuelos Totales'] = df_est_disp['vuelos'].apply(fmt_entero)
-                df_est_disp['Ocupación Promedio'] = df_est_disp['ocupacion_%'].apply(fmt_porcentaje)
-                df_est_disp['Índice Estacional'] = df_est_disp['indice_estacionalidad_%'].apply(lambda x: f"{x:.1f}%")
-
-                st.dataframe(
-                    df_est_disp[['mes_nombre', 'Pasajeros Totales', 'Vuelos Totales', 'Ocupación Promedio', 'Índice Estacional']].rename(
-                        columns={'mes_nombre': 'Mes'}
-                    ),
-                    use_container_width=True,
-                    hide_index=True
-                )
-                st.caption("💡 *Un índice estacional superior al 100% representa meses de temporada alta (demanda por encima de la media anual).*")
-        else:
-            st.info(f"No se registraron vuelos para la ruta seleccionada en el año {ano_est_sel}.")
-    else:
-        st.info("No hay suficientes datos temporales para calcular la estacionalidad en el período seleccionado.")
-
-# =============================================================
-# SECCIÓN 4: COMPARACIÓN INTERANUAL (YoY) CON COMBOS DE PERÍODOS
-# =============================================================
-with tab_comparador:
-    st.markdown("### Comparación Interanual (YoY) y Shift de Participación")
-    st.markdown(
-        "Permite contrastar un período idéntico (mes individual, trimestre, semestre o año completo) "
-        "entre dos años diferentes para evaluar variaciones y verificar si **una aerolínea absorbió la cuota de otra**."
-    )
-
-    anos_disponibles = sorted(df_raw['ano_num'].unique().tolist())
-
-    if len(anos_disponibles) >= 2:
-        col_c1, col_c2, col_c3 = st.columns(3)
-
-        opciones_periodos_yoy = list(PERIODOS_YOY.keys())
-        
-        with col_c1:
-            periodo_sel_str = st.selectbox(
-                "Período a Comparar (Combos / Meses):",
-                options=opciones_periodos_yoy,
-                index=0,
-                help="Compare trimestres (Q1, Q2, Q3, Q4), semestres (S1, S2), el año completo o meses individuales."
-            )
-        with col_c2:
-            ano_base = st.selectbox("Año Base (Anterior):", options=anos_disponibles, index=max(0, len(anos_disponibles) - 2))
-        with col_c3:
-            ano_comp = st.selectbox("Año Comparado (Reciente):", options=anos_disponibles, index=len(anos_disponibles) - 1)
-
-        # Filtrar datos de la ruta elegida para ambos años
-        mask_yoy = df_raw['ano_num'].isin([ano_base, ano_comp])
-        if not filtros.get('todo_el_pais', False):
-            if filtros['rutas']:
-                mask_yoy &= df_raw['ruta_label'].isin(filtros['rutas'])
-            if filtros['origenes']:
-                mask_yoy &= df_raw['origen_label'].isin(filtros['origenes'])
-            if filtros['destinos']:
-                mask_yoy &= df_raw['destino_label'].isin(filtros['destinos'])
-
-        # Filtrar por conjunto de meses seleccionado (combos)
-        meses_seleccionados = PERIODOS_YOY.get(periodo_sel_str, list(range(1, 13)))
-        mask_yoy &= df_raw['mes_num'].isin(meses_seleccionados)
-
-        df_yoy = df_raw[mask_yoy].copy()
-
-        if not df_yoy.empty:
-            piv_pax = df_yoy.pivot_table(index='aerolinea', columns='ano_num', values='pasajeros', aggfunc='sum', fill_value=0, observed=True)
-            piv_vue = df_yoy.pivot_table(index='aerolinea', columns='ano_num', values='vuelos', aggfunc='sum', fill_value=0, observed=True)
-            piv_asi = df_yoy.pivot_table(index='aerolinea', columns='ano_num', values='asientos', aggfunc='sum', fill_value=0, observed=True)
-
-            # Asegurar columnas de ambos años
-            for col_y in [ano_base, ano_comp]:
-                if col_y not in piv_pax.columns:
-                    piv_pax[col_y] = 0
-                if col_y not in piv_vue.columns:
-                    piv_vue[col_y] = 0
-                if col_y not in piv_asi.columns:
-                    piv_asi[col_y] = 0
-
-            # Totales globales de la ruta para calcular métricas
-            tot_pax_base = piv_pax[ano_base].sum()
-            tot_pax_comp = piv_pax[ano_comp].sum()
-            tot_vue_base = piv_vue[ano_base].sum()
-            tot_vue_comp = piv_vue[ano_comp].sum()
-
-            dif_pax_global = tot_pax_comp - tot_pax_base
-            var_pax_global = (dif_pax_global / tot_pax_base * 100) if tot_pax_base > 0 else 0
-            dif_vue_global = tot_vue_comp - tot_vue_base
-
-            # Tarjetas resumen de la comparación
-            k_c1, k_c2, k_c3 = st.columns(3)
-            k_c1.metric(f"Total Pasajeros ({ano_comp})", fmt_entero(tot_pax_comp), delta=f"{var_pax_global:+.1f}% vs {ano_base}")
-            k_c2.metric(f"Total Vuelos ({ano_comp})", fmt_entero(tot_vue_comp), delta=f"{dif_vue_global:+d} vuelos vs {ano_base}")
-            k_c3.metric(f"Pasajeros {ano_base}", fmt_entero(tot_pax_base))
-
-            # Tabla comparativa detallada por aerolínea
-            comp_df = pd.DataFrame(index=piv_pax.index)
-            comp_df[f'Vuelos {ano_base}'] = piv_vue[ano_base]
-            comp_df[f'Vuelos {ano_comp}'] = piv_vue[ano_comp]
-            comp_df['Δ Vuelos'] = comp_df[f'Vuelos {ano_comp}'] - comp_df[f'Vuelos {ano_base}']
-
-            comp_df[f'Pax {ano_base}'] = piv_pax[ano_base]
-            comp_df[f'Pax {ano_comp}'] = piv_pax[ano_comp]
-            comp_df['Δ Pax'] = comp_df[f'Pax {ano_comp}'] - comp_df[f'Pax {ano_base}']
-
-            # Market Share en cada período
-            comp_df[f'Share {ano_base}'] = np.where(tot_pax_base > 0, (comp_df[f'Pax {ano_base}'] / tot_pax_base) * 100, 0)
-            comp_df[f'Share {ano_comp}'] = np.where(tot_pax_comp > 0, (comp_df[f'Pax {ano_comp}'] / tot_pax_comp) * 100, 0)
-            comp_df['Shift Share (pts)'] = comp_df[f'Share {ano_comp}'] - comp_df[f'Share {ano_base}']
-
-            # Ocupación en cada período
-            comp_df[f'Ocup {ano_base}'] = np.where(piv_asi[ano_base] > 0, (comp_df[f'Pax {ano_base}'] / piv_asi[ano_base]) * 100, 0)
-            comp_df[f'Ocup {ano_comp}'] = np.where(piv_asi[ano_comp] > 0, (comp_df[f'Pax {ano_comp}'] / piv_asi[ano_comp]) * 100, 0)
-
-            # Filtrar solo aerolíneas que hayan operado en alguno de los dos años
-            comp_df = comp_df[(comp_df[f'Vuelos {ano_base}'] > 0) | (comp_df[f'Vuelos {ano_comp}'] > 0)].sort_values(by=f'Pax {ano_comp}', ascending=False)
-
-            st.markdown(f"#### Comparativa por Operador: {periodo_sel_str} ({ano_base} vs. {ano_comp})")
-
-            # Mostrar tabla formateada
-            comp_disp = pd.DataFrame(index=comp_df.index)
-            comp_disp[f'Vuelos {ano_base}'] = comp_df[f'Vuelos {ano_base}'].apply(fmt_entero)
-            comp_disp[f'Vuelos {ano_comp}'] = comp_df[f'Vuelos {ano_comp}'].apply(fmt_entero)
-            comp_disp['Δ Vuelos'] = comp_df['Δ Vuelos'].apply(lambda x: f"{x:+d}")
-
-            comp_disp[f'Pax {ano_base}'] = comp_df[f'Pax {ano_base}'].apply(fmt_entero)
-            comp_disp[f'Pax {ano_comp}'] = comp_df[f'Pax {ano_comp}'].apply(fmt_entero)
-            comp_disp['Δ Pax'] = comp_df['Δ Pax'].apply(lambda x: f"{x:+,}".replace(",", "."))
-
-            comp_disp[f'Share {ano_base}'] = comp_df[f'Share {ano_base}'].apply(fmt_porcentaje)
-            comp_disp[f'Share {ano_comp}'] = comp_df[f'Share {ano_comp}'].apply(fmt_porcentaje)
-            comp_disp['Shift Share'] = comp_df['Shift Share (pts)'].apply(lambda x: f"{x:+.1f} pts".replace(".", ","))
-
-            comp_disp[f'Ocup {ano_base}'] = comp_df[f'Ocup {ano_base}'].apply(fmt_porcentaje)
-            comp_disp[f'Ocup {ano_comp}'] = comp_df[f'Ocup {ano_comp}'].apply(fmt_porcentaje)
-
-            st.dataframe(comp_disp.reset_index().rename(columns={'aerolinea': 'Aerolínea'}), use_container_width=True, hide_index=True)
-            
-            st.caption(
-                "💡 **Guía de métricas de la tabla:**  \n"
-                "• **Δ Vuelos / Δ Pax:** Variación absoluta de vuelos y pasajeros entre ambos períodos.  \n"
-                "• **Share:** Participación de mercado (% de pasajeros que transportó cada aerolínea sobre el total de la ruta).  \n"
-                "• **Shift Share (pts):** Desplazamiento neto de cuota de mercado en puntos porcentuales (Share Año Reciente − Share Año Base). Permite visualizar con exactitud qué aerolínea absorbió la demanda de otra.  \n"
-                "• **Ocupación:** Factor de ocupación de los vuelos (% de asientos vendidos)."
-            )
-
-            # Gráfico de barras comparativo lado a lado
-            df_plot_yoy = df_yoy.groupby(['aerolinea', 'ano_num'], observed=True)['pasajeros'].sum().reset_index()
-            df_plot_yoy['ano_num'] = df_plot_yoy['ano_num'].astype(str)
-            fig_yoy = px.bar(
-                df_plot_yoy,
-                x='aerolinea',
-                y='pasajeros',
-                color='ano_num',
-                barmode='group',
-                title=f"Comparativa de Pasajeros por Aerolínea: {periodo_sel_str} ({ano_base} vs. {ano_comp})",
-                labels={'aerolinea': 'Aerolínea', 'pasajeros': 'Pasajeros', 'ano_num': 'Año'}
-            )
-            fig_yoy.update_layout(bargap=0.2, bargroupgap=0.0)
-            st.plotly_chart(fig_yoy, use_container_width=True)
-
-        else:
-            st.warning("No se encontraron registros para la combinación de años y meses seleccionada.")
-    else:
-        st.info("💡 Para utilizar el comparador interanual (YoY), asegúrese de que la base oficial contenga datos de al menos dos años diferentes.")
-
-# =============================================================
-# SECCIÓN 5: DESCARGAS OFICIALES
-# =============================================================
-with tab_descargas:
-    st.markdown("### Descarga de Datos Oficiales Filtrados")
-    st.markdown("Exporte los microdatos reales correspondientes al filtro aplicado para su análisis en Excel o Python.")
-
-    col_exp1, col_exp2 = st.columns(2)
-    
-    csv_bytes = df_filtrado.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
-    with col_exp1:
-        st.download_button(
-            label="📥 Descargar Microdatos Oficiales (CSV)",
-            data=csv_bytes,
-            file_name=f"conectividad_oficial_filtrada_{datetime.now().strftime('%Y%m%d')}.csv",
-            mime="text/csv"
-        )
-
-    @st.cache_data(show_spinner=False)
-    def generar_excel_bytes(df_f, pivot_f, aero_f):
-        output_excel = io.BytesIO()
-        try:
-            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                if len(df_f) > 100000:
-                    df_f.head(100000).to_excel(writer, sheet_name='Microdatos_Muestra', index=False)
-                else:
-                    df_f.to_excel(writer, sheet_name='Microdatos', index=False)
-                pivot_f.to_excel(writer, sheet_name='Matriz_Pasajeros')
-                aero_f.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
-            return output_excel.getvalue()
-        except Exception:
-            return None
-
-    excel_bytes = generar_excel_bytes(df_filtrado, pivot_pax_con_total, df_aero)
-    with col_exp2:
-        if excel_bytes:
-            st.download_button(
-                label="📥 Descargar Reporte Completo (Excel)",
-                data=excel_bytes,
-                file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+    st.dataframe(pivot_pax_fmt, use_container_width=True
