@@ -35,6 +35,28 @@ meses_map = {
     'jul': 7, 'ago': 8, 'sep': 9, 'set': 9, 'oct': 10, 'nov': 11, 'dic': 12
 }
 
+PERIODOS_YOY = {
+    "Año Completo (Ene - Dic)": list(range(1, 13)),
+    "Primer Semestre (S1: Ene - Jun)": [1, 2, 3, 4, 5, 6],
+    "Segundo Semestre (S2: Jul - Dic)": [7, 8, 9, 10, 11, 12],
+    "Primer Trimestre (Q1: Ene - Mar)": [1, 2, 3],
+    "Segundo Trimestre (Q2: Abr - Jun)": [4, 5, 6],
+    "Tercer Trimestre (Q3: Jul - Sep)": [7, 8, 9],
+    "Cuarto Trimestre (Q4: Oct - Dic)": [10, 11, 12],
+    "Enero": [1],
+    "Febrero": [2],
+    "Marzo": [3],
+    "Abril": [4],
+    "Mayo": [5],
+    "Junio": [6],
+    "Julio": [7],
+    "Agosto": [8],
+    "Septiembre": [9],
+    "Octubre": [10],
+    "Noviembre": [11],
+    "Diciembre": [12]
+}
+
 AEROPUERTOS_EXHAUSTIVO = {
     'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AEP']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
@@ -113,7 +135,15 @@ AEROPUERTOS_EXHAUSTIVO = {
     'JSM': {'codigo': 'JSM', 'ciudad': 'José de San Martín', 'keywords': ['JOSE DE SAN MARTIN', 'JSM']},
     'LHS': {'codigo': 'LHS', 'ciudad': 'Las Heras', 'keywords': ['LAS HERAS', 'LHS']},
     'ING': {'codigo': 'ING', 'ciudad': 'Lago Argentino', 'keywords': ['LAGO ARGENTINO', 'ING']},
-    'CVH': {'codigo': 'CVH', 'ciudad': 'Caviahue', 'keywords': ['CAVIAHUE', 'CVH']}
+    'CVH': {'codigo': 'CVH', 'ciudad': 'Caviahue', 'keywords': ['CAVIAHUE', 'CVH']},
+    'RAF': {'codigo': 'RAF', 'ciudad': 'Rafaela', 'keywords': ['RAFAELA', 'RAF']},
+    'VDR': {'codigo': 'VDR', 'ciudad': 'Villa Dolores', 'keywords': ['VILLA DOLORES', 'VDR']},
+    'VMR': {'codigo': 'VMR', 'ciudad': 'Villa María', 'keywords': ['VILLA MARIA', 'VILLA MARÍA', 'VMR']},
+    'GNR': {'codigo': 'GNR', 'ciudad': 'General Roca', 'keywords': ['GENERAL ROCA', 'ROCA', 'GNR']},
+    'OES': {'codigo': 'OES', 'ciudad': 'San Antonio Oeste', 'keywords': ['SAN ANTONIO OESTE', 'OES']},
+    'CPF': {'codigo': 'CPF', 'ciudad': 'Cafayate', 'keywords': ['CAFAYATE', 'CPF']},
+    'LPG': {'codigo': 'LPG', 'ciudad': 'La Plata', 'keywords': ['LA PLATA', 'LPG']},
+    'CHM': {'codigo': 'CHM', 'ciudad': 'Chos Malal', 'keywords': ['CHOS MALAL', 'CHM']}
 }
 
 def normalizar_texto_aeropuerto(texto):
@@ -147,24 +177,26 @@ def obtener_sigla_y_ciudad(nombre_aeropuerto):
             if kw_norm and re.search(r'\b' + re.escape(kw_norm) + r'\b', norm):
                 return datos['codigo'], datos['ciudad']
 
-    # 3. Fallback inteligente sin asignar 'AER' genérico
+    # 3. Fallback inteligente: buscar el nombre propio real sin tomar "AEROPUERTO"
     stopwords = {
-        'AEROPUERTO', 'AERODROMO', 'BASE', 'AEREA', 'MILITAR', 'INTERNACIONAL', 'INT',
-        'NACIONAL', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'SAN', 'SANTA', 'GDOR',
-        'GOBERNADOR', 'TENIENTE', 'TTE', 'BRIGADIER', 'CAPITAN', 'ALMIRANTE', 'GENERAL',
-        'DR', 'DOCTOR', 'VICECOMODORO', 'COMODORO'
+        'AEROPUERTO', 'AERODROMO', 'AERÓDROMO', 'BASE', 'AEREA', 'AÉREA', 'MILITAR',
+        'INTERNACIONAL', 'INT', 'NACIONAL', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS',
+        'SAN', 'SANTA', 'GDOR', 'GOBERNADOR', 'TENIENTE', 'TTE', 'BRIGADIER', 'CAPITAN',
+        'ALMIRANTE', 'GENERAL', 'DR', 'DOCTOR', 'VICECOMODORO', 'COMODORO'
     }
-    tokens_utiles = [t for t in norm.split() if t not in stopwords and len(t) >= 2]
+    tokens_utiles = [t for t in norm.split() if t not in stopwords and len(t) >= 3]
     
     if tokens_utiles:
         ciudad_cand = tokens_utiles[0].title()
-        sigla_fallback = tokens_utiles[0][:3].upper() if len(tokens_utiles[0]) >= 3 else tokens_utiles[0].upper()
+        sigla_fallback = tokens_utiles[0][:3].upper()
     else:
-        ciudad_cand = nombre_aeropuerto.strip().title()
-        sigla_fallback = "DES"
+        palabras_resto = [p for p in norm.split() if p not in {'AEROPUERTO', 'AERODROMO', 'INT'}]
+        ciudad_cand = palabras_resto[0].title() if palabras_resto else nombre_aeropuerto.strip().title()
+        sigla_fallback = ciudad_cand[:3].upper() if len(ciudad_cand) >= 3 else "DES"
 
+    # NUNCA devolver 'AER' ni 'INT' como sigla
     if sigla_fallback in ['AER', 'INT']:
-        sigla_fallback = "DES"
+        sigla_fallback = "OTR"
 
     return sigla_fallback, ciudad_cand
 
@@ -1002,13 +1034,13 @@ with tab_estacionalidad:
         st.info("No hay suficientes datos temporales para calcular la estacionalidad en el período seleccionado.")
 
 # =============================================================
-# SECCIÓN 4: COMPARACIÓN INTERANUAL (YoY) / ABSORCIÓN DE MERCADO
+# SECCIÓN 4: COMPARACIÓN INTERANUAL (YoY) CON COMBOS DE PERÍODOS
 # =============================================================
 with tab_comparador:
     st.markdown("### Comparación Interanual (YoY) y Shift de Participación")
     st.markdown(
-        "Permite contrastar un mes idéntico (por ejemplo, **Julio 2022 vs. Julio 2026**) "
-        "para evaluar cómo variaron los vuelos y pasajeros, y si **una aerolínea absorbió la cuota de otra**."
+        "Permite contrastar un período idéntico (mes individual, trimestre, semestre o año completo) "
+        "entre dos años diferentes para evaluar variaciones y verificar si **una aerolínea absorbió la cuota de otra**."
     )
 
     anos_disponibles = sorted(df_raw['ano_num'].unique().tolist())
@@ -1016,10 +1048,15 @@ with tab_comparador:
     if len(anos_disponibles) >= 2:
         col_c1, col_c2, col_c3 = st.columns(3)
 
-        nombres_meses_opciones = ["Todos los Meses (Año Completo)"] + [meses_es[m] for m in range(1, 13)]
+        opciones_periodos_yoy = list(PERIODOS_YOY.keys())
         
         with col_c1:
-            mes_sel_str = st.selectbox("Mes a Comparar:", options=nombres_meses_opciones, index=7) # Por defecto Julio (índice 7)
+            periodo_sel_str = st.selectbox(
+                "Período a Comparar (Combos / Meses):",
+                options=opciones_periodos_yoy,
+                index=0,
+                help="Compare trimestres (Q1, Q2, Q3, Q4), semestres (S1, S2), el año completo o meses individuales."
+            )
         with col_c2:
             ano_base = st.selectbox("Año Base (Anterior):", options=anos_disponibles, index=max(0, len(anos_disponibles) - 2))
         with col_c3:
@@ -1035,9 +1072,9 @@ with tab_comparador:
             if filtros['destinos']:
                 mask_yoy &= df_raw['destino_label'].isin(filtros['destinos'])
 
-        if mes_sel_str != "Todos los Meses (Año Completo)":
-            mes_num_target = next(k for k, v in meses_es.items() if v == mes_sel_str)
-            mask_yoy &= (df_raw['mes_num'] == mes_num_target)
+        # Filtrar por conjunto de meses seleccionado (combos)
+        meses_seleccionados = PERIODOS_YOY.get(periodo_sel_str, list(range(1, 13)))
+        mask_yoy &= df_raw['mes_num'].isin(meses_seleccionados)
 
         df_yoy = df_raw[mask_yoy].copy()
 
@@ -1093,7 +1130,7 @@ with tab_comparador:
             # Filtrar solo aerolíneas que hayan operado en alguno de los dos años
             comp_df = comp_df[(comp_df[f'Vuelos {ano_base}'] > 0) | (comp_df[f'Vuelos {ano_comp}'] > 0)].sort_values(by=f'Pax {ano_comp}', ascending=False)
 
-            st.markdown(f"#### Comparativa por Operador: {mes_sel_str} {ano_base} vs. {ano_comp}")
+            st.markdown(f"#### Comparativa por Operador: {periodo_sel_str} ({ano_base} vs. {ano_comp})")
 
             # Mostrar tabla formateada
             comp_disp = pd.DataFrame(index=comp_df.index)
@@ -1118,7 +1155,7 @@ with tab_comparador:
                 "💡 **Guía de métricas de la tabla:**  \n"
                 "• **Δ Vuelos / Δ Pax:** Variación absoluta de vuelos y pasajeros entre ambos períodos.  \n"
                 "• **Share:** Participación de mercado (% de pasajeros que transportó cada aerolínea sobre el total de la ruta).  \n"
-                "• **Shift Share (pts):** Desplazamiento neto de cuota de mercado en puntos porcentuales (Share Año Reciente − Share Año Base). Mide qué aerolínea absorbió la cuota de otra.  \n"
+                "• **Shift Share (pts):** Desplazamiento neto de cuota de mercado en puntos porcentuales (Share Año Reciente − Share Año Base). Permite visualizar con exactitud qué aerolínea absorbió la demanda de otra.  \n"
                 "• **Ocupación:** Factor de ocupación de los vuelos (% de asientos vendidos)."
             )
 
@@ -1131,7 +1168,7 @@ with tab_comparador:
                 y='pasajeros',
                 color='ano_num',
                 barmode='group',
-                title=f"Comparativa de Pasajeros por Aerolínea ({ano_base} vs. {ano_comp})",
+                title=f"Comparativa de Pasajeros por Aerolínea: {periodo_sel_str} ({ano_base} vs. {ano_comp})",
                 labels={'aerolinea': 'Aerolínea', 'pasajeros': 'Pasajeros', 'ano_num': 'Año'}
             )
             fig_yoy.update_layout(bargap=0.2, bargroupgap=0.0)
