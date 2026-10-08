@@ -1,36 +1,68 @@
-name: Actualizador SINTA
+name: Actualizar datos de conectividad aérea
 
 on:
-  # Ejecución semanal desactivada: la app usa conectividad_aerea.zip, que se actualiza a mano.
-  # schedule:
-  #   - cron: '0 6 * * 1'
+  schedule:
+    # Todos los días del 10 al 20 de cada mes, 09:00 hora de Argentina (12:00 UTC).
+    # SINTA/ANAC suelen publicar entre el 10 y el 15; los días extra son margen.
+    - cron: '0 12 10-20 * *'
   workflow_dispatch:
+    inputs:
+      forzar:
+        description: 'Descargar y reemplazar aunque el tablero no tenga datos más nuevos'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: actualizar-datos
+  cancel-in-progress: false
+
 jobs:
   actualizar:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - name: Descargar codigo
+      - name: Descargar código
         uses: actions/checkout@v4
 
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.12'
 
-      - name: Instalar librerias
-        run: pip install pandas requests
-
-      - name: Ejecutar actualizador
-        run: python actualizar.py
-
-      - name: Guardar cambios
+      - name: Verificar si falta actualizar este mes (chequeo liviano)
+        id: chk
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Auto-update base SINTA" || exit 0
+          if [ "${{ inputs.forzar }}" = "true" ]; then
+            echo "pendiente=true" >> "$GITHUB_OUTPUT"
+            echo "Ejecución forzada manualmente."
+          else
+            python verificar_zip.py
+          fi
+
+      - name: Instalar dependencias
+        if: steps.chk.outputs.pendiente == 'true'
+        run: |
+          pip install pandas playwright
+          playwright install --with-deps chromium
+
+      - name: Actualizar conectividad_aerea.zip desde el tablero de SINTA
+        if: steps.chk.outputs.pendiente == 'true'
+        id: act
+        run: |
+          if [ "${{ inputs.forzar }}" = "true" ]; then
+            python actualizar_zip.py --forzar
+          else
+            python actualizar_zip.py
+          fi
+
+      - name: Guardar cambios en GitHub
+        if: steps.act.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add conectividad_aerea.zip
+          git commit -m "Actualización automática de datos hasta ${{ steps.act.outputs.ultima_fecha }} (${{ steps.act.outputs.filas }} filas)"
           git push
