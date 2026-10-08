@@ -260,25 +260,23 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + ' ' + df['ano_num'].astype(str)
 
-    # Priorizar la columna 'Ruta' (Origen - Destino) para evitar nombres largos
+    # Identificar Origen y Destino REALES para diferenciar Ida vs Vuelta:
+    # Usar 'Origen aeropuerto' y 'Destino aeropuerto' prioritariamente
+    col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada', 'arribo']) and 'origen' not in c), None)
+    col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida', 'partida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c or 'puente' in c), None)
-    col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
-    col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
 
-    if cand_ruta:
+    if col_orig and col_dest:
+        origen_raw = df[col_orig].astype(str).str.strip(' "\'')
+        destino_raw = df[col_dest].astype(str).str.strip(' "\'')
+    elif cand_ruta:
         partes = df[cand_ruta].astype(str).str.strip(' "\'').str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
             origen_raw = partes[0]
             destino_raw = partes[1]
-        elif col_orig and col_dest:
-            origen_raw = df[col_orig].astype(str).str.strip(' "\'')
-            destino_raw = df[col_dest].astype(str).str.strip(' "\'')
         else:
             origen_raw = df[cand_ruta]
             destino_raw = df[cand_ruta]
-    elif col_orig and col_dest:
-        origen_raw = df[col_orig].astype(str).str.strip(' "\'')
-        destino_raw = df[col_dest].astype(str).str.strip(' "\'')
     else:
         origen_raw = pd.Series(["AEP"] * len(df))
         destino_raw = pd.Series(["BRC"] * len(df))
@@ -414,89 +412,105 @@ st.success(
 )
 
 # -------------------------------------------------------------
-# FILTROS DE BÚSQUEDA Y BOTÓN BUSCAR VUELOS
+# FORMULARIO DE FILTROS Y BOTÓN BUSCAR VUELOS ACTIVO
 # -------------------------------------------------------------
 st.subheader("🔍 Filtros de Búsqueda de Vuelos")
 
-rutas_disponibles = sorted(df_raw['ruta_label'].dropna().unique().tolist())
-origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
-destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
+with st.form("form_filtros_vuelos"):
+    rutas_disponibles = sorted(df_raw['ruta_label'].dropna().unique().tolist())
+    origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
+    destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
 
-col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
 
-with col_f1:
-    sel_rutas = st.multiselect(
-        "🗺️ Ruta (Ida y Vuelta):",
-        options=rutas_disponibles,
-        help="Agrupa ambos sentidos de vuelo (ej. Bariloche ⇄ Ezeiza, Jujuy ⇄ Aeroparque)."
-    )
+    with col_f1:
+        sel_rutas = st.multiselect(
+            "🗺️ Ruta (Ida y Vuelta):",
+            options=rutas_disponibles,
+            help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Jujuy incluye tanto idas como vueltas)."
+        )
 
-with col_f2:
-    sel_origenes = st.multiselect(
-        "🛫 Aeropuerto de Salida (Origen):",
-        options=origenes_disponibles
-    )
+    with col_f2:
+        sel_origenes = st.multiselect(
+            "🛫 Aeropuerto de Salida (Origen):",
+            options=origenes_disponibles,
+            help="Filtra estrictamente los despegues desde este aeropuerto (sentido de ida)."
+        )
 
-with col_f3:
-    sel_destinos = st.multiselect(
-        "🛬 Aeropuerto de Llegada (Destino):",
-        options=destinos_disponibles
-    )
+    with col_f3:
+        sel_destinos = st.multiselect(
+            "🛬 Aeropuerto de Llegada (Destino):",
+            options=destinos_disponibles,
+            help="Filtra estrictamente los aterrizajes en este aeropuerto (sentido de llegada)."
+        )
 
-# Rango de fechas ajustado automáticamente a las fechas reales de la base
-col_d1, col_d2 = st.columns(2)
+    # Rango de fechas ajustado automáticamente a las fechas reales de la base
+    col_d1, col_d2 = st.columns(2)
 
-def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
-def_hasta = f_max_total
+    def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
+    def_hasta = f_max_total
 
-with col_d1:
-    f_desde = st.date_input(
-        "📅 Desde:",
-        value=def_desde,
-        min_value=f_min_total,
-        max_value=f_max_total,
-        help=f"Fecha inicial dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
-    )
+    with col_d1:
+        f_desde = st.date_input(
+            "📅 Desde:",
+            value=def_desde,
+            min_value=f_min_total,
+            max_value=f_max_total,
+            help=f"Fecha inicial dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
+        )
 
-with col_d2:
-    f_hasta = st.date_input(
-        "📅 Hasta:",
-        value=def_hasta,
-        min_value=f_min_total,
-        max_value=f_max_total,
-        help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
-    )
+    with col_d2:
+        f_hasta = st.date_input(
+            "📅 Hasta:",
+            value=def_hasta,
+            min_value=f_min_total,
+            max_value=f_max_total,
+            help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
+        )
 
-# Botones de control solicitados
-col_b1, col_b2 = st.columns([1, 4])
-with col_b1:
-    btn_buscar = st.button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
+    # Botón principal de búsqueda que ejecuta el filtro únicamente al hacer clic
+    col_b1, col_b2 = st.columns([1, 4])
+    with col_b1:
+        btn_buscar = st.form_submit_button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
 
-# Mantener estado de búsqueda activo una vez presionado
-if 'busqueda_realizada' not in st.session_state:
-    st.session_state['busqueda_realizada'] = True
+# Guardar en session_state los criterios ejecutados para no perderlos al interactuar con las pestañas
+if 'filtros_activos' not in st.session_state:
+    st.session_state['filtros_activos'] = {
+        'rutas': [],
+        'origenes': [],
+        'destinos': [],
+        'desde': def_desde,
+        'hasta': def_hasta
+    }
 
 if btn_buscar:
-    st.session_state['busqueda_realizada'] = True
+    st.session_state['filtros_activos'] = {
+        'rutas': sel_rutas,
+        'origenes': sel_origenes,
+        'destinos': sel_destinos,
+        'desde': f_desde,
+        'hasta': f_hasta
+    }
 
-# Aplicar filtros
-mask = (df_raw['fecha'].dt.date >= f_desde) & (df_raw['fecha'].dt.date <= f_hasta)
+# Aplicar los filtros confirmados
+filtros = st.session_state['filtros_activos']
 
-if sel_rutas:
-    mask &= df_raw['ruta_label'].isin(sel_rutas)
-if sel_origenes:
-    mask &= df_raw['origen_label'].isin(sel_origenes)
-if sel_destinos:
-    mask &= df_raw['destino_label'].isin(sel_destinos)
+mask = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
+
+if filtros['rutas']:
+    mask &= df_raw['ruta_label'].isin(filtros['rutas'])
+if filtros['origenes']:
+    mask &= df_raw['origen_label'].isin(filtros['origenes'])
+if filtros['destinos']:
+    mask &= df_raw['destino_label'].isin(filtros['destinos'])
 
 df_filtrado = df_raw[mask].copy()
 
 if df_filtrado.empty:
     st.warning(
         f"⚠️ **No se encontraron vuelos para los criterios y rango de fechas seleccionados.**  \n"
-        f"• Verifique que el rango de fechas seleccionado ({f_desde.strftime('%d/%m/%Y')} a {f_hasta.strftime('%d/%m/%Y')}) "
-        f"corresponda al período del dataset cargado ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}).  \n"
-        f"• Si seleccionó una ruta específica, pruebe dejando vacíos los selectores individuales de Origen/Destino o ampliando las fechas."
+        f"• Rango consultado: {filtros['desde'].strftime('%d/%m/%Y')} al {filtros['hasta'].strftime('%d/%m/%Y')}.  \n"
+        f"• Pruebe ampliando las fechas o verificando que exista conexión directa entre los aeropuertos seleccionados."
     )
     st.stop()
 
