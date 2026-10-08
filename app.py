@@ -412,70 +412,25 @@ st.success(
 )
 
 # -------------------------------------------------------------
-# FORMULARIO DE FILTROS Y BOTÓN BUSCAR VUELOS ACTIVO
+# FILTROS DE BÚSQUEDA Y BOTÓN BUSCAR VUELOS ACTIVO
 # -------------------------------------------------------------
 st.subheader("🔍 Filtros de Búsqueda de Vuelos")
 
-with st.form("form_filtros_vuelos"):
-    rutas_disponibles = sorted(df_raw['ruta_label'].dropna().unique().tolist())
-    origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
-    destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
+rutas_disponibles = sorted(df_raw['ruta_label'].dropna().unique().tolist())
+origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
+destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
 
-    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+# Inicializar sesión para intercambio e inputs
+if 'sel_origenes_key' not in st.session_state:
+    st.session_state['sel_origenes_key'] = []
+if 'sel_destinos_key' not in st.session_state:
+    st.session_state['sel_destinos_key'] = []
 
-    with col_f1:
-        sel_rutas = st.multiselect(
-            "🗺️ Ruta (Ida y Vuelta):",
-            options=rutas_disponibles,
-            help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Jujuy incluye tanto idas como vueltas)."
-        )
+def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
+def_hasta = f_max_total
 
-    with col_f2:
-        sel_origenes = st.multiselect(
-            "🛫 Aeropuerto de Salida (Origen):",
-            options=origenes_disponibles,
-            help="Filtra estrictamente los despegues desde este aeropuerto (sentido de ida)."
-        )
-
-    with col_f3:
-        sel_destinos = st.multiselect(
-            "🛬 Aeropuerto de Llegada (Destino):",
-            options=destinos_disponibles,
-            help="Filtra estrictamente los aterrizajes en este aeropuerto (sentido de llegada)."
-        )
-
-    # Rango de fechas ajustado automáticamente a las fechas reales de la base
-    col_d1, col_d2 = st.columns(2)
-
-    def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
-    def_hasta = f_max_total
-
-    with col_d1:
-        f_desde = st.date_input(
-            "📅 Desde:",
-            value=def_desde,
-            min_value=f_min_total,
-            max_value=f_max_total,
-            help=f"Fecha inicial dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
-        )
-
-    with col_d2:
-        f_hasta = st.date_input(
-            "📅 Hasta:",
-            value=def_hasta,
-            min_value=f_min_total,
-            max_value=f_max_total,
-            help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
-        )
-
-    # Botón principal de búsqueda que ejecuta el filtro únicamente al hacer clic
-    col_b1, col_b2 = st.columns([1, 4])
-    with col_b1:
-        btn_buscar = st.form_submit_button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
-
-# Guardar en session_state los criterios ejecutados para no perderlos al interactuar con las pestañas
-if 'filtros_activos' not in st.session_state:
-    st.session_state['filtros_activos'] = {
+if 'criterios_activos' not in st.session_state:
+    st.session_state['criterios_activos'] = {
         'rutas': [],
         'origenes': [],
         'destinos': [],
@@ -483,8 +438,86 @@ if 'filtros_activos' not in st.session_state:
         'hasta': def_hasta
     }
 
+# 1. Selector de Ruta General
+sel_rutas = st.multiselect(
+    "🗺️ Ruta (Ida y Vuelta):",
+    options=rutas_disponibles,
+    default=st.session_state['criterios_activos']['rutas'],
+    help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Jujuy incluye tanto idas como vueltas)."
+)
+
+# 2. Selectores de Origen, Botón Invertir, y Destino
+col_orig, col_inv, col_dest = st.columns([5, 2, 5])
+
+with col_orig:
+    sel_origenes = st.multiselect(
+        "🛫 Aeropuerto de Salida (Origen):",
+        options=origenes_disponibles,
+        key='sel_origenes_key',
+        help="Filtra estrictamente los despegues desde este aeropuerto."
+    )
+
+with col_inv:
+    st.write("")
+    st.write("")
+    btn_invertir = st.button("⇄ Invertir", use_container_width=True, help="Intercambia Origen y Destino")
+
+with col_dest:
+    sel_destinos = st.multiselect(
+        "🛬 Aeropuerto de Llegada (Destino):",
+        options=destinos_disponibles,
+        key='sel_destinos_key',
+        help="Filtra estrictamente los aterrizajes en este aeropuerto."
+    )
+
+if btn_invertir:
+    st.session_state['sel_origenes_key'], st.session_state['sel_destinos_key'] = (
+        st.session_state.get('sel_destinos_key', []),
+        st.session_state.get('sel_origenes_key', [])
+    )
+    st.rerun()
+
+# 3. Rango de Fechas
+col_d1, col_d2 = st.columns(2)
+with col_d1:
+    f_desde = st.date_input(
+        "📅 Desde:",
+        value=st.session_state['criterios_activos']['desde'],
+        min_value=f_min_total,
+        max_value=f_max_total,
+        help=f"Fecha inicial dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
+    )
+with col_d2:
+    f_hasta = st.date_input(
+        "📅 Hasta:",
+        value=st.session_state['criterios_activos']['hasta'],
+        min_value=f_min_total,
+        max_value=f_max_total,
+        help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
+    )
+
+# 4. Botones de acción
+col_b1, col_b2, col_b3 = st.columns([2, 2, 6])
+with col_b1:
+    btn_buscar = st.button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
+with col_b2:
+    btn_reset = st.button("🔄 Restablecer Filtros", use_container_width=True)
+
+if btn_reset:
+    st.session_state['sel_origenes_key'] = []
+    st.session_state['sel_destinos_key'] = []
+    st.session_state['criterios_activos'] = {
+        'rutas': [],
+        'origenes': [],
+        'destinos': [],
+        'desde': f_min_total,
+        'hasta': f_max_total
+    }
+    st.rerun()
+
+# ÚNICAMENTE al hacer clic en 'Buscar Vuelos' se actualiza la consulta
 if btn_buscar:
-    st.session_state['filtros_activos'] = {
+    st.session_state['criterios_activos'] = {
         'rutas': sel_rutas,
         'origenes': sel_origenes,
         'destinos': sel_destinos,
@@ -492,9 +525,8 @@ if btn_buscar:
         'hasta': f_hasta
     }
 
-# Aplicar los filtros confirmados
-filtros = st.session_state['filtros_activos']
-
+# Filtrar con los criterios confirmados
+filtros = st.session_state['criterios_activos']
 mask = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
 
 if filtros['rutas']:
@@ -515,7 +547,7 @@ if df_filtrado.empty:
     st.stop()
 
 # -------------------------------------------------------------
-# KPIs PRINCIPALES
+# KPIs PRINCIPALES (DETALLES RÁPIDOS CON HHI RESTAURADO)
 # -------------------------------------------------------------
 st.markdown("---")
 st.subheader("📈 Resumen Ejecutivo de Operación")
@@ -526,12 +558,29 @@ total_asi = df_filtrado['asientos'].sum()
 prom_pax_vuelo = total_pax / total_vue if total_vue > 0 else 0
 load_factor_global = (total_pax / total_asi * 100) if total_asi > 0 else 0
 
-k1, k2, k3, k4, k5 = st.columns(5)
-k1.metric("Pasajeros Transportados", fmt_entero(total_pax))
-k2.metric("Vuelos Realizados", fmt_entero(total_vue))
-k3.metric("Asientos Ofrecidos", fmt_entero(total_asi))
-k4.metric("Ocupación Promedio", fmt_porcentaje(load_factor_global))
-k5.metric("Promedio Pax / Vuelo", fmt_decimal(prom_pax_vuelo))
+# Cálculo de HHI para los detalles rápidos
+df_aero_kpi = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum().reset_index()
+tot_pax_kpi = df_aero_kpi['pasajeros'].sum()
+if tot_pax_kpi > 0:
+    df_aero_kpi['share'] = (df_aero_kpi['pasajeros'] / tot_pax_kpi) * 100
+    hhi_kpi = (df_aero_kpi['share'] ** 2).sum()
+else:
+    hhi_kpi = 0
+
+if hhi_kpi < 1500:
+    hhi_badge = "Baja (Competitivo)"
+elif hhi_kpi <= 2500:
+    hhi_badge = "Moderada"
+else:
+    hhi_badge = "Alta (Concentrado)"
+
+k1, k2, k3, k4, k5, k6 = st.columns(6)
+k1.metric("Pasajeros", fmt_entero(total_pax))
+k2.metric("Vuelos", fmt_entero(total_vue))
+k3.metric("Asientos", fmt_entero(total_asi))
+k4.metric("Ocupación", fmt_porcentaje(load_factor_global))
+k5.metric("Pax / Vuelo", fmt_decimal(prom_pax_vuelo))
+k6.metric("Concentración (HHI)", f"{hhi_kpi:.0f} pts", delta=hhi_badge, delta_color="off")
 
 # -------------------------------------------------------------
 # TABS DE ANÁLISIS
