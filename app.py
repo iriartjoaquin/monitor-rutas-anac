@@ -950,8 +950,6 @@ with tab_descargas:
     csv_bytes = df_filtrado.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
     with col_exp1:
         st.download_button(
-            label="📥 Descargar Microdatos Oficiales col_exp1:
-        st.download_button(
             label="📥 Descargar Microdatos Oficiales (CSV)",
             data=csv_bytes,
             file_name=f"conectividad_oficial_filtrada_{datetime.now().strftime('%Y%m%d')}.csv",
