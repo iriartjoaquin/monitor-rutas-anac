@@ -234,6 +234,27 @@ def parsear_dia(val):
     except Exception:
         return 1
 
+def sanitizar_fecha(val, default_val, min_val, max_val):
+    if isinstance(val, (tuple, list)):
+        val = val[0] if len(val) > 0 else default_val
+    if isinstance(val, pd.Timestamp):
+        val = val.date()
+    elif isinstance(val, datetime):
+        val = val.date()
+    elif isinstance(val, str):
+        try:
+            val = datetime.strptime(val[:10], '%Y-%m-%d').date()
+        except Exception:
+            val = default_val
+    elif not isinstance(val, date):
+        val = default_val
+
+    if val < min_val:
+        return min_val
+    if val > max_val:
+        return max_val
+    return val
+
 def parsear_ano(val):
     if val is None or pd.isna(val):
         return None
@@ -309,7 +330,6 @@ def cargar_y_limpiar_datos(archivo_path):
         elif any(k in norm for k in ['ASIENTO', 'ASIENTOS', 'BUTACAS', 'CAPACIDAD']):
             col_map['asientos'] = col
 
-    # Requerir al menos origen, destino y fecha
     if 'origen' not in col_map or 'destino' not in col_map:
         return None, "El archivo debe contener columnas identificables de Origen y Destino."
 
@@ -318,7 +338,6 @@ def cargar_y_limpiar_datos(archivo_path):
     df['destino_raw'] = df_raw[col_map['destino']].astype(str).str.strip()
     df['aerolinea'] = df_raw[col_map['aerolinea']].astype(str).str.strip().str.title() if 'aerolinea' in col_map else 'Línea Aérea No Especificada'
 
-    # Normalizar valores numéricos
     for dest, src in [('pasajeros', 'pasajeros'), ('asientos', 'asientos'), ('vuelos', 'vuelos')]:
         if src in col_map:
             s = df_raw[col_map[src]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
@@ -326,13 +345,11 @@ def cargar_y_limpiar_datos(archivo_path):
         else:
             df[dest] = 1 if dest == 'vuelos' else 0
 
-    # Construir fecha exacta
     if 'fecha_raw' in col_map:
         df['fecha'] = pd.to_datetime(df_raw[col_map['fecha_raw']], errors='coerce', dayfirst=True)
     else:
         df['fecha'] = pd.NaT
 
-    # Fallback si no hay fecha directa pero hay columnas de año y mes
     if df['fecha'].isna().all() and ('ano' in col_map or 'mes' in col_map):
         anos = [parsear_ano(x) or 2024 for x in df_raw[col_map.get('ano', df_raw.columns[0])]]
         meses = [parsear_mes(x) for x in df_raw[col_map.get('mes', df_raw.columns[0])]]
@@ -358,7 +375,6 @@ def cargar_y_limpiar_datos(archivo_path):
     df['periodo_orden'] = df['fecha'].dt.strftime('%Y-%m')
     df['periodo_mes_es'] = df['fecha'].apply(lambda d: f"{meses_es.get(d.month, '')}-{str(d.year)[2:]}")
 
-    # Etiquetas de aeropuertos con sigla oficial estricta
     cache_etiquetas = {}
     def cached_etiqueta(nombre):
         if nombre not in cache_etiquetas:
@@ -368,7 +384,6 @@ def cargar_y_limpiar_datos(archivo_path):
     df['origen_label'] = df['origen_raw'].apply(cached_etiqueta)
     df['destino_label'] = df['destino_raw'].apply(cached_etiqueta)
 
-    # Optimización vectorizada de pares y tramos
     o_arr = df['origen_label'].to_numpy()
     d_arr = df['destino_label'].to_numpy()
     p1 = np.where(o_arr < d_arr, o_arr, d_arr)
@@ -376,7 +391,6 @@ def cargar_y_limpiar_datos(archivo_path):
     df['ruta_label'] = pd.Series(p1 + " ⇄ " + p2, index=df.index).astype('category')
     df['tramo_label'] = pd.Series(o_arr + " ➔ " + d_arr, index=df.index).astype('category')
 
-    # Convertir columnas repetitivas a category para reducir la RAM en un 90%
     for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
         df[c] = df[c].astype('category')
 
@@ -388,7 +402,6 @@ def cargar_y_limpiar_datos(archivo_path):
 st.title("✈️ Monitor de Rutas Aéreas y Conectividad Argentina")
 st.markdown("Herramienta de monitoreo basada en los microdatos oficiales de la **ANAC / SINTA**.")
 
-# Búsqueda de archivo de datos
 archivos_candidatos = [
     'conectividad_aerea.zip',
     'conectividad_aerea.csv.gz',
@@ -425,7 +438,6 @@ else:
     st.info("Suba el archivo de datos desde el panel lateral para iniciar.")
     st.stop()
 
-# Carga de datos con caché
 with st.spinner("Cargando y procesando base oficial..."):
     df_raw, err = cargar_y_limpiar_datos(archivo_encontrado)
 
@@ -453,7 +465,6 @@ origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
 destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
 aerolineas_disponibles = sorted(df_raw['aerolinea'].dropna().unique().tolist())
 
-# Callback seguro para invertir Origen y Destino sin error de widget
 def intercambiar_origen_destino():
     st.session_state['sel_origenes_key'], st.session_state['sel_destinos_key'] = (
         st.session_state.get('sel_destinos_key', []),
@@ -463,7 +474,6 @@ def intercambiar_origen_destino():
         st.session_state['criterios_activos']['origenes'] = st.session_state['sel_origenes_key']
         st.session_state['criterios_activos']['destinos'] = st.session_state['sel_destinos_key']
 
-# Control de estado de búsqueda inicial en CERO
 if 'busqueda_activa' not in st.session_state:
     st.session_state['busqueda_activa'] = False
 if 'sel_origenes_key' not in st.session_state:
@@ -471,10 +481,10 @@ if 'sel_origenes_key' not in st.session_state:
 if 'sel_destinos_key' not in st.session_state:
     st.session_state['sel_destinos_key'] = []
 
-def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
+def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if f_min_total <= date(f_max_total.year, 1, 1) <= f_max_total else f_min_total
 def_hasta = f_max_total
 
-if 'criterios_activos' not in st.session_state:
+if 'criterios_activos' not in st.session_state or not isinstance(st.session_state['criterios_activos'], dict):
     st.session_state['criterios_activos'] = {
         'rutas': [],
         'origenes': [],
@@ -484,6 +494,13 @@ if 'criterios_activos' not in st.session_state:
         'hasta': def_hasta,
         'todo_el_pais': False
     }
+else:
+    st.session_state['criterios_activos']['desde'] = sanitizar_fecha(
+        st.session_state['criterios_activos'].get('desde'), def_desde, f_min_total, f_max_total
+    )
+    st.session_state['criterios_activos']['hasta'] = sanitizar_fecha(
+        st.session_state['criterios_activos'].get('hasta'), def_hasta, f_min_total, f_max_total
+    )
 
 # 1. Selector de Ruta y Aerolínea
 col_r1, col_r2 = st.columns([7, 5])
@@ -528,10 +545,13 @@ with col_dest:
 
 # 3. Rango de Fechas y opción de mercado completo
 col_d1, col_d2, col_d3 = st.columns([4, 4, 3])
+val_desde_input = sanitizar_fecha(st.session_state['criterios_activos'].get('desde'), def_desde, f_min_total, f_max_total)
+val_hasta_input = sanitizar_fecha(st.session_state['criterios_activos'].get('hasta'), def_hasta, f_min_total, f_max_total)
+
 with col_d1:
     f_desde = st.date_input(
         "📅 Desde:",
-        value=st.session_state['criterios_activos']['desde'],
+        value=val_desde_input,
         min_value=f_min_total,
         max_value=f_max_total,
         help=f"Fecha inicial dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
@@ -539,11 +559,15 @@ with col_d1:
 with col_d2:
     f_hasta = st.date_input(
         "📅 Hasta:",
-        value=st.session_state['criterios_activos']['hasta'],
+        value=val_hasta_input,
         min_value=f_min_total,
         max_value=f_max_total,
         help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
     )
+
+f_desde = sanitizar_fecha(f_desde, def_desde, f_min_total, f_max_total)
+f_hasta = sanitizar_fecha(f_hasta, def_hasta, f_min_total, f_max_total)
+
 with col_d3:
     st.write("")
     st.write("")
@@ -571,7 +595,6 @@ if btn_reset:
     st.session_state['busqueda_activa'] = False
     st.rerun()
 
-# Actualizar criterios al pulsar Buscar Vuelos
 if btn_buscar:
     tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or sel_aerolineas or chk_pais)
     if tiene_criterios:
@@ -580,8 +603,8 @@ if btn_buscar:
             'origenes': st.session_state['sel_origenes_key'],
             'destinos': st.session_state['sel_destinos_key'],
             'aerolineas': sel_aerolineas,
-            'desde': f_desde,
-            'hasta': f_hasta,
+            'desde': sanitizar_fecha(f_desde, def_desde, f_min_total, f_max_total),
+            'hasta': sanitizar_fecha(f_hasta, def_hasta, f_min_total, f_max_total),
             'todo_el_pais': chk_pais
         }
         st.session_state['busqueda_activa'] = True
@@ -596,7 +619,6 @@ st.markdown("---")
 st.subheader("📌 Resumen Ejecutivo del Segmento Seleccionado")
 
 if not st.session_state.get('busqueda_activa', False):
-    # Todo en cero al ingresar por primera vez
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Pasajeros", "0")
     k2.metric("Vuelos", "0")
@@ -630,7 +652,9 @@ if not st.session_state.get('busqueda_activa', False):
 # EJECUCIÓN FILTRADA (INSTANTÁNEA)
 # -------------------------------------------------------------
 filtros = st.session_state['criterios_activos']
-mascara = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
+f_d_efectiva = sanitizar_fecha(filtros.get('desde'), def_desde, f_min_total, f_max_total)
+f_h_efectiva = sanitizar_fecha(filtros.get('hasta'), def_hasta, f_min_total, f_max_total)
+mascara = (df_raw['fecha'].dt.date >= f_d_efectiva) & (df_raw['fecha'].dt.date <= f_h_efectiva)
 
 if not filtros.get('todo_el_pais', False):
     if filtros.get('rutas'):
@@ -656,7 +680,7 @@ asientos_total = df_filtrado['asientos'].sum()
 factor_ocupacion = (pax_total / asientos_total * 100) if asientos_total > 0 else 0
 pax_por_vuelo = (pax_total / vuelos_total) if vuelos_total > 0 else 0
 
-# Cálculo del Índice HHI (Herfindahl-Hirschman Index)
+# Índice HHI
 cuotas_pax = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum()
 if pax_total > 0:
     shares_pct = (cuotas_pax / pax_total) * 100
@@ -728,7 +752,6 @@ with tab_graficos:
         asientos=('asientos', 'sum')
     ).reset_index()
     
-    # Filtrar solo aerolíneas que ofertaron asientos en el mes
     df_mes_ocup = df_mes_ocup[df_mes_ocup['asientos'] > 0].copy()
     df_mes_ocup['ocupacion_%'] = (df_mes_ocup['pasajeros'] / df_mes_ocup['asientos']) * 100
     df_mes_ocup = df_mes_ocup.sort_values(by=['periodo_orden', 'aerolinea'])
@@ -830,7 +853,6 @@ with tab_cuadros:
     df_aero['Factor Ocupación'] = np.where(df_aero['Asientos'] > 0, (df_aero['Pasajeros'] / df_aero['Asientos']) * 100, 0)
     df_aero['Pax / Vuelo'] = np.where(df_aero['Vuelos'] > 0, df_aero['Pasajeros'] / df_aero['Vuelos'], 0)
 
-    # Formatear tabla
     df_aero_disp = df_aero.copy()
     df_aero_disp['Pasajeros'] = df_aero_disp['Pasajeros'].apply(fmt_entero)
     df_aero_disp['Vuelos'] = df_aero_disp['Vuelos'].apply(fmt_entero)
@@ -878,12 +900,10 @@ with tab_cuadros:
         observed=True
     )
 
-    # Orden cronológico de las columnas
     meses_presentes = df_filtrado[['periodo_orden', 'periodo_mes_es']].drop_duplicates().sort_values('periodo_orden')['periodo_mes_es'].tolist()
     columnas_ordenadas = [m for m in meses_presentes if m in pivot_pax.columns]
     pivot_pax = pivot_pax[columnas_ordenadas]
 
-    # Fila y columna de totales
     pivot_pax_con_total = pivot_pax.copy()
     pivot_pax_con_total['Total General'] = pivot_pax_con_total.sum(axis=1)
     fila_total = pivot_pax_con_total.sum(axis=0)
@@ -892,3 +912,388 @@ with tab_cuadros:
 
     pivot_pax_fmt = pivot_pax_con_total.map(fmt_entero) if hasattr(pivot_pax_con_total, "map") else pivot_pax_con_total.applymap(fmt_entero)
     st.dataframe(pivot_pax_fmt, use_container_width=True)
+
+# =============================================================
+# SECCIÓN 3: ESTACIONALIDAD DE LA RUTA (CON SELECTOR DE AÑO)
+# =============================================================
+with tab_estacionalidad:
+    st.markdown("### Análisis de Estacionalidad de la Demanda")
+    st.markdown("Permite observar el comportamiento intra-anual de la ruta seleccionada mes a mes (Enero a Diciembre).")
+
+    anos_disp_est = sorted(df_filtrado['ano_num'].unique().tolist(), reverse=True)
+
+    if len(anos_disp_est) > 0:
+        opciones_ano = [str(a) for a in anos_disp_est] + ["Promedio Histórico (Todos los Años)"]
+        col_est_sel, _ = st.columns([4, 6])
+        with col_est_sel:
+            ano_est_sel = st.selectbox(
+                "📅 Año para Análisis de Estacionalidad:",
+                options=opciones_ano,
+                index=0,
+                help="Seleccione un año específico para ver sus meses o elija el promedio histórico de todos los años disponibles."
+            )
+
+        if ano_est_sel == "Promedio Histórico (Todos los Años)":
+            df_est_base = df_filtrado.copy()
+            titulo_graf = "Curva de Estacionalidad Mensual - Promedio Histórico"
+            cant_anos = max(1, df_est_base['ano_num'].nunique())
+            df_est = df_est_base.groupby('mes_num', observed=True).agg(
+                pasajeros=('pasajeros', lambda x: x.sum() / cant_anos),
+                vuelos=('vuelos', lambda x: x.sum() / cant_anos),
+                asientos=('asientos', lambda x: x.sum() / cant_anos)
+            ).reset_index()
+            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años considerados)"
+        else:
+            ano_int = int(ano_est_sel)
+            df_est_base = df_filtrado[df_filtrado['ano_num'] == ano_int].copy()
+            titulo_graf = f"Curva de Estacionalidad Mensual - Año {ano_int}"
+            df_est = df_est_base.groupby('mes_num', observed=True).agg(
+                pasajeros=('pasajeros', 'sum'),
+                vuelos=('vuelos', 'sum'),
+                asientos=('asientos', 'sum')
+            ).reset_index()
+            subtitulo_tabla = f"Estadísticas Mensuales del Año {ano_int}"
+
+        if not df_est.empty and df_est['pasajeros'].sum() > 0:
+            promedio_mensual_pax = df_est['pasajeros'].mean()
+            df_est['mes_nombre'] = df_est['mes_num'].map(meses_es)
+            df_est['indice_estacionalidad_%'] = (df_est['pasajeros'] / promedio_mensual_pax) * 100
+            df_est['ocupacion_%'] = np.where(df_est['asientos'] > 0, (df_est['pasajeros'] / df_est['asientos']) * 100, 0)
+            df_est = df_est.sort_values(by='mes_num')
+
+            col_est1, col_est2 = st.columns([6, 4])
+
+            with col_est1:
+                fig_est = px.bar(
+                    df_est,
+                    x='mes_nombre',
+                    y='pasajeros',
+                    title=titulo_graf,
+                    labels={'mes_nombre': 'Mes', 'pasajeros': 'Pasajeros'},
+                    text=df_est['pasajeros'].apply(fmt_entero)
+                )
+                fig_est.update_traces(textposition='outside')
+                fig_est.update_layout(bargap=0.2)
+                st.plotly_chart(fig_est, use_container_width=True)
+
+            with col_est2:
+                st.markdown(f"#### {subtitulo_tabla}")
+                df_est_disp = df_est.copy()
+                df_est_disp['Pasajeros Totales'] = df_est_disp['pasajeros'].apply(fmt_entero)
+                df_est_disp['Vuelos Totales'] = df_est_disp['vuelos'].apply(fmt_entero)
+                df_est_disp['Ocupación Promedio'] = df_est_disp['ocupacion_%'].apply(fmt_porcentaje)
+                df_est_disp['Índice Estacional'] = df_est_disp['indice_estacionalidad_%'].apply(lambda x: f"{x:.1f}%")
+
+                st.dataframe(
+                    df_est_disp[['mes_nombre', 'Pasajeros Totales', 'Vuelos Totales', 'Ocupación Promedio', 'Índice Estacional']].rename(
+                        columns={'mes_nombre': 'Mes'}
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.caption("💡 *Un índice estacional superior al 100% representa meses de temporada alta (demanda por encima de la media anual).*")
+        else:
+            st.info(f"No se registraron vuelos para la ruta seleccionada en el año {ano_est_sel}.")
+    else:
+        st.info("No hay suficientes datos temporales para calcular la estacionalidad en el período seleccionado.")
+
+# =============================================================
+# SECCIÓN 4: COMPARACIÓN INTERANUAL (YoY) CON CALENDARIO (MÁX 1 AÑO)
+# =============================================================
+with tab_comparador:
+    st.markdown("### Comparación Interanual (YoY) y Shift de Participación")
+    st.markdown(
+        "Seleccione en el **calendario** el rango de fechas que desea analizar (máximo 1 año). "
+        "El sistema comparará ese lapso contra el **mismo período del año base** elegido para calcular el crecimiento y el "
+        "**desplazamiento de cuota de mercado (Shift Share)** entre aerolíneas."
+    )
+
+    anos_disponibles = sorted(df_raw['ano_num'].unique().tolist())
+
+    if len(anos_disponibles) >= 2:
+        def_yoy_hasta = f_max_total
+        def_yoy_desde = max(f_min_total, date(f_max_total.year, 1, 1))
+        if (def_yoy_hasta - def_yoy_desde).days > 365:
+            def_yoy_desde = max(f_min_total, def_yoy_hasta - timedelta(days=180))
+        def_yoy_desde = sanitizar_fecha(def_yoy_desde, f_min_total, f_min_total, f_max_total)
+        def_yoy_hasta = sanitizar_fecha(def_yoy_hasta, f_max_total, f_min_total, f_max_total)
+
+        col_cal1, col_cal2, col_cal3 = st.columns([4, 4, 4])
+        with col_cal1:
+            f_yoy_desde = st.date_input(
+                "📅 Fecha Desde (Período Analizado):",
+                value=def_yoy_desde,
+                min_value=f_min_total,
+                max_value=f_max_total,
+                key="cal_yoy_desde",
+                help="Fecha de inicio del rango a analizar (máximo 1 año de amplitud)."
+            )
+        with col_cal2:
+            f_yoy_hasta = st.date_input(
+                "📅 Fecha Hasta (Período Analizado):",
+                value=def_yoy_hasta,
+                min_value=f_min_total,
+                max_value=f_max_total,
+                key="cal_yoy_hasta",
+                help="Fecha de fin del rango a analizar."
+            )
+
+        f_yoy_desde = sanitizar_fecha(f_yoy_desde, def_yoy_desde, f_min_total, f_max_total)
+        f_yoy_hasta = sanitizar_fecha(f_yoy_hasta, def_yoy_hasta, f_min_total, f_max_total)
+
+        if f_yoy_hasta < f_yoy_desde:
+            st.error("⚠️ La fecha 'Hasta' debe ser igual o posterior a la fecha 'Desde'.")
+            st.stop()
+
+        dias_rango = (f_yoy_hasta - f_yoy_desde).days + 1
+        if dias_rango > 366:
+            st.error(f"⚠️ El rango seleccionado tiene {dias_rango} días y supera el límite de 1 año (365 días). Por favor elija un rango de fechas menor o igual a 1 año.")
+            st.stop()
+
+        ano_reciente = f_yoy_hasta.year
+        anos_posibles_base = [a for a in anos_disponibles if a != ano_reciente]
+        if not anos_posibles_base:
+            anos_posibles_base = [a for a in anos_disponibles if a < ano_reciente]
+
+        if not anos_posibles_base:
+            st.warning("⚠️ No hay un año base anterior disponible para contrastar contra el período seleccionado.")
+            st.stop()
+
+        idx_base_def = 0
+        if (ano_reciente - 1) in anos_posibles_base:
+            idx_base_def = anos_posibles_base.index(ano_reciente - 1)
+        else:
+            idx_base_def = len(anos_posibles_base) - 1
+
+        with col_cal3:
+            ano_base = st.selectbox(
+                "⚖️ Año Base a Comparar:",
+                options=anos_posibles_base,
+                index=idx_base_def,
+                help="Año contra el cual se compararán exactamente los mismos días del calendario."
+            )
+
+        delta_anios = ano_reciente - ano_base
+        def desplazar_fecha(f, d_anios):
+            target_y = f.year - d_anios
+            try:
+                return f.replace(year=target_y)
+            except ValueError:
+                return f.replace(year=target_y, day=28)
+
+        f_base_desde = desplazar_fecha(f_yoy_desde, delta_anios)
+        f_base_hasta = desplazar_fecha(f_yoy_hasta, delta_anios)
+
+        st.info(
+            f"🔍 **Período Analizado:** del **{f_yoy_desde.strftime('%d/%m/%Y')}** al **{f_yoy_hasta.strftime('%d/%m/%Y')}** ({dias_rango} días)  \n"
+            f"⚖️ **Período Base Homólogo ({ano_base}):** del **{f_base_desde.strftime('%d/%m/%Y')}** al **{f_base_hasta.strftime('%d/%m/%Y')}**"
+        )
+
+        mask_reciente = (df_raw['fecha'].dt.date >= f_yoy_desde) & (df_raw['fecha'].dt.date <= f_yoy_hasta)
+        mask_base = (df_raw['fecha'].dt.date >= f_base_desde) & (df_raw['fecha'].dt.date <= f_base_hasta)
+
+        if not filtros.get('todo_el_pais', False):
+            if filtros.get('rutas'):
+                mask_reciente &= df_raw['ruta_label'].isin(filtros['rutas'])
+                mask_base &= df_raw['ruta_label'].isin(filtros['rutas'])
+            if filtros.get('origenes'):
+                mask_reciente &= df_raw['origen_label'].isin(filtros['origenes'])
+                mask_base &= df_raw['origen_label'].isin(filtros['origenes'])
+            if filtros.get('destinos'):
+                mask_reciente &= df_raw['destino_label'].isin(filtros['destinos'])
+                mask_base &= df_raw['destino_label'].isin(filtros['destinos'])
+
+        if filtros.get('aerolineas'):
+            mask_reciente &= df_raw['aerolinea'].isin(filtros['aerolineas'])
+            mask_base &= df_raw['aerolinea'].isin(filtros['aerolineas'])
+
+        df_yoy_reciente = df_raw[mask_reciente].copy()
+        df_yoy_base = df_raw[mask_base].copy()
+
+        pax_reciente = df_yoy_reciente.groupby('aerolinea', observed=True)['pasajeros'].sum()
+        pax_base = df_yoy_base.groupby('aerolinea', observed=True)['pasajeros'].sum()
+
+        vue_reciente = df_yoy_reciente.groupby('aerolinea', observed=True)['vuelos'].sum()
+        vue_base = df_yoy_base.groupby('aerolinea', observed=True)['vuelos'].sum()
+
+        asi_reciente = df_yoy_reciente.groupby('aerolinea', observed=True)['asientos'].sum()
+        asi_base = df_yoy_base.groupby('aerolinea', observed=True)['asientos'].sum()
+
+        tot_pax_reciente = int(pax_reciente.sum())
+        tot_pax_base = int(pax_base.sum())
+        tot_vue_reciente = int(vue_reciente.sum())
+        tot_vue_base = int(vue_base.sum())
+
+        dif_pax_global = tot_pax_reciente - tot_pax_base
+        var_pax_global = (dif_pax_global / tot_pax_base * 100) if tot_pax_base > 0 else 0
+        dif_vue_global = tot_vue_reciente - tot_vue_base
+
+        k_c1, k_c2, k_c3 = st.columns(3)
+        k_c1.metric(
+            f"Total Pasajeros ({ano_reciente})",
+            fmt_entero(tot_pax_reciente),
+            delta=f"{var_pax_global:+.1f}% vs {ano_base}" if tot_pax_base > 0 else None
+        )
+        k_c2.metric(
+            f"Total Vuelos ({ano_reciente})",
+            fmt_entero(tot_vue_reciente),
+            delta=f"{dif_vue_global:+d} vuelos vs {ano_base}"
+        )
+        k_c3.metric(
+            f"Pasajeros Base ({ano_base})",
+            fmt_entero(tot_pax_base)
+        )
+
+        aeros_activas = sorted(list(set(
+            [a for a, v in pax_reciente.items() if v > 0] +
+            [a for a, v in pax_base.items() if v > 0] +
+            [a for a, v in vue_reciente.items() if v > 0] +
+            [a for a, v in vue_base.items() if v > 0]
+        )))
+
+        if aeros_activas:
+            comp_df = pd.DataFrame(index=aeros_activas)
+            comp_df[f'Vuelos {ano_base}'] = [int(vue_base.get(a, 0)) for a in aeros_activas]
+            comp_df[f'Vuelos {ano_reciente}'] = [int(vue_reciente.get(a, 0)) for a in aeros_activas]
+            comp_df['Δ Vuelos'] = comp_df[f'Vuelos {ano_reciente}'] - comp_df[f'Vuelos {ano_base}']
+
+            comp_df[f'Pax {ano_base}'] = [int(pax_base.get(a, 0)) for a in aeros_activas]
+            comp_df[f'Pax {ano_reciente}'] = [int(pax_reciente.get(a, 0)) for a in aeros_activas]
+            comp_df['Δ Pax'] = comp_df[f'Pax {ano_reciente}'] - comp_df[f'Pax {ano_base}']
+
+            comp_df[f'Share {ano_base}'] = np.where(tot_pax_base > 0, (comp_df[f'Pax {ano_base}'] / tot_pax_base) * 100, 0)
+            comp_df[f'Share {ano_reciente}'] = np.where(tot_pax_reciente > 0, (comp_df[f'Pax {ano_reciente}'] / tot_pax_reciente) * 100, 0)
+            comp_df['Shift Share (pts)'] = comp_df[f'Share {ano_reciente}'] - comp_df[f'Share {ano_base}']
+
+            as_b = np.array([asi_base.get(a, 0) for a in aeros_activas])
+            as_r = np.array([asi_reciente.get(a, 0) for a in aeros_activas])
+            comp_df[f'Ocup {ano_base}'] = np.where(as_b > 0, (comp_df[f'Pax {ano_base}'] / as_b) * 100, 0)
+            comp_df[f'Ocup {ano_reciente}'] = np.where(as_r > 0, (comp_df[f'Pax {ano_reciente}'] / as_r) * 100, 0)
+
+            comp_df = comp_df.sort_values(by=f'Pax {ano_reciente}', ascending=False)
+
+            st.markdown(f"#### Cuadro Comparativo por Operador ({f_base_desde.strftime('%d/%m/%Y')} vs. {f_yoy_desde.strftime('%d/%m/%Y')})")
+
+            comp_disp = pd.DataFrame(index=comp_df.index)
+            comp_disp[f'Vuelos {ano_base}'] = comp_df[f'Vuelos {ano_base}'].apply(fmt_entero)
+            comp_disp[f'Vuelos {ano_reciente}'] = comp_df[f'Vuelos {ano_reciente}'].apply(fmt_entero)
+            comp_disp['Δ Vuelos'] = comp_df['Δ Vuelos'].apply(lambda x: f"{x:+d}")
+
+            comp_disp[f'Pax {ano_base}'] = comp_df[f'Pax {ano_base}'].apply(fmt_entero)
+            comp_disp[f'Pax {ano_reciente}'] = comp_df[f'Pax {ano_reciente}'].apply(fmt_entero)
+            comp_disp['Δ Pax'] = comp_df['Δ Pax'].apply(lambda x: f"{x:+,}".replace(",", "."))
+
+            comp_disp[f'Share {ano_base}'] = comp_df[f'Share {ano_base}'].apply(fmt_porcentaje)
+            comp_disp[f'Share {ano_reciente}'] = comp_df[f'Share {ano_reciente}'].apply(fmt_porcentaje)
+            comp_disp['Shift Share'] = comp_df['Shift Share (pts)'].apply(lambda x: f"{x:+.1f} pts".replace(".", ","))
+
+            comp_disp[f'Ocup {ano_base}'] = comp_df[f'Ocup {ano_base}'].apply(fmt_porcentaje)
+            comp_disp[f'Ocup {ano_reciente}'] = comp_df[f'Ocup {ano_reciente}'].apply(fmt_porcentaje)
+
+            st.dataframe(comp_disp.reset_index().rename(columns={'aerolinea': 'Aerolínea'}), use_container_width=True, hide_index=True)
+
+            st.caption(
+                "💡 **Interpretación de Métricas:**  \n"
+                "• **Δ Vuelos / Δ Pax:** Variación neta entre ambos períodos analizados.  \n"
+                "• **Share:** Porcentaje de pasajeros que transportó cada aerolínea sobre el total de la ruta en cada período.  \n"
+                "• **Shift Share (pts):** Puntos porcentuales ganados o perdidos por la aerolínea (Share Reciente − Share Base). Permite verificar exactamente qué compañía absorbió mercado de otra.  \n"
+                "• **Ocupación:** Factor de ocupación de los vuelos en cada período."
+            )
+
+            st.markdown("---")
+
+            # Gráficos verticales uno abajo del otro
+            st.markdown("#### Comparación Gráfica de Pasajeros por Operador")
+            df_bar_pax = pd.DataFrame({
+                'Aerolínea': aeros_activas * 2,
+                'Período': [f'Base ({ano_base})'] * len(aeros_activas) + [f'Reciente ({ano_reciente})'] * len(aeros_activas),
+                'Pasajeros': [int(pax_base.get(a, 0)) for a in aeros_activas] + [int(pax_reciente.get(a, 0)) for a in aeros_activas]
+            })
+
+            fig_pax_comp = px.bar(
+                df_bar_pax,
+                x='Aerolínea',
+                y='Pasajeros',
+                color='Período',
+                barmode='group',
+                title=f"Volumen de Pasajeros por Aerolínea ({ano_base} vs. {ano_reciente})",
+                labels={'Pasajeros': 'Pasajeros Transportados'}
+            )
+            fig_pax_comp.update_layout(
+                xaxis_tickangle=-20,
+                height=480,
+                margin=dict(l=20, r=20, t=50, b=40)
+            )
+            st.plotly_chart(fig_pax_comp, use_container_width=True)
+
+            st.markdown("---")
+
+            st.markdown("#### Desplazamiento Neto de Cuota de Mercado (Shift Share en Puntos Porcentuales)")
+            df_shift = comp_df[['Shift Share (pts)']].reset_index().rename(columns={'index': 'Aerolínea'})
+            df_shift['Color'] = np.where(df_shift['Shift Share (pts)'] >= 0, 'Ganancia de Cuota', 'Pérdida de Cuota')
+
+            fig_shift = px.bar(
+                df_shift,
+                x='Aerolínea',
+                y='Shift Share (pts)',
+                color='Color',
+                color_discrete_map={'Ganancia de Cuota': '#2ecc71', 'Pérdida de Cuota': '#e74c3c'},
+                title="Shift Share por Operador (Puntos Porcentuales de Cuota de Mercado Ganados o Cedidos)",
+                labels={'Shift Share (pts)': 'Shift Share (puntos porcentuales)'},
+                text=df_shift['Shift Share (pts)'].apply(lambda x: f"{x:+.1f} pts".replace(".", ","))
+            )
+            fig_shift.update_traces(textposition='outside')
+            fig_shift.update_layout(
+                xaxis_tickangle=-20,
+                height=450,
+                margin=dict(l=20, r=20, t=50, b=40)
+            )
+            st.plotly_chart(fig_shift, use_container_width=True)
+
+        else:
+            st.warning("No se encontraron vuelos para la combinación de fechas y filtros seleccionada.")
+    else:
+        st.info("💡 Para utilizar la comparación interanual (YoY), la base oficial debe contener datos de al menos dos años diferentes.")
+
+# =============================================================
+# SECCIÓN 5: DESCARGAS OFICIALES
+# =============================================================
+with tab_descargas:
+    st.markdown("### Descarga de Datos Oficiales Filtrados")
+    st.markdown("Exporte los microdatos reales correspondientes al filtro aplicado para su análisis en Excel o Python.")
+
+    col_exp1, col_exp2 = st.columns(2)
+    
+    csv_bytes = df_filtrado.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+    with col_exp1:
+        st.download_button(
+            label="📥 Descargar Microdatos Oficiales (CSV)",
+            data=csv_bytes,
+            file_name=f"conectividad_oficial_filtrada_{datetime.now().strftime('%Y%m%d')}.csv",
+            mime="text/csv"
+        )
+
+    @st.cache_data(show_spinner=False)
+    def generar_excel_bytes(df_f, pivot_f, aero_f):
+        output_excel = io.BytesIO()
+        try:
+            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                if len(df_f) > 100000:
+                    df_f.head(100000).to_excel(writer, sheet_name='Microdatos_Muestra', index=False)
+                else:
+                    df_f.to_excel(writer, sheet_name='Microdatos', index=False)
+                pivot_f.to_excel(writer, sheet_name='Matriz_Pasajeros')
+                aero_f.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
+            return output_excel.getvalue()
+        except Exception:
+            return None
+
+    excel_bytes = generar_excel_bytes(df_filtrado, pivot_pax_con_total, df_aero)
+    with col_exp2:
+        if excel_bytes:
+            st.download_button(
+                label="📥 Descargar Reporte Completo (Excel)",
+                data=excel_bytes,
+                file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
