@@ -68,7 +68,7 @@ def formatear_cuadro_totales(df_in, col_periodo='Período'):
 # DICCIONARIO EXHAUSTIVO DE AEROPUERTOS COMERCIALES ARGENTINOS
 # -------------------------------------------------------------
 AEROPUERTOS_EXHAUSTIVO = {
-    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'aliases': ['AEP', 'AER', 'SABE', 'AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'BUE']},
+    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'aliases': ['AEP', 'AER', 'SABE', 'AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CIUDAD DE BUENOS AIRES', 'CABA', 'BUE']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'aliases': ['EZE', 'SAEZ', 'EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI']},
     'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'aliases': ['EPA', 'PAL', 'SADP', 'PALOMAR', 'EL PALOMAR']},
     'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'aliases': ['FDO', 'SADF', 'SAN FERNANDO']},
@@ -278,8 +278,20 @@ def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026, mes_inicio=1, mes
 # -------------------------------------------------------------
 # CARGA ROBUSTA Y TRANSPARENTE DE DATOS (CSV Y GZIP)
 # -------------------------------------------------------------
-def leer_archivo_robusto(path):
-    is_gz = str(path).endswith('.gz')
+def leer_archivo_robusto(source):
+    if hasattr(source, 'read'):
+        try:
+            source.seek(0)
+            return pd.read_csv(source, sep=None, engine='python')
+        except Exception:
+            try:
+                source.seek(0)
+                return pd.read_excel(source)
+            except Exception:
+                return pd.DataFrame()
+                
+    path = str(source)
+    is_gz = path.endswith('.gz')
     sep = ';'
     try:
         if is_gz:
@@ -300,41 +312,53 @@ def leer_archivo_robusto(path):
     return df
 
 @st.cache_data(show_spinner="Cargando y procesando estadísticas de vuelos...")
-def cargar_datos(cache_buster="v5_jujuy_2026_dates"):
-    import glob
-    archivos_candidatos = [
-        "datos_actualizados.csv.gz",
-        "datos_actualizados.csv",
-        "datos_cabotaje.csv.gz",
-        "datos_cabotaje.csv",
-        "datos_anac.csv.gz",
-        "datos_anac.csv",
-        "datos_sinta.csv.gz",
-        "datos_sinta.csv",
-        "vuelos_cabotaje.csv.gz",
-        "vuelos_cabotaje.csv",
-        "datos_test.csv"
-    ]
-    for c in (glob.glob("*.csv") + glob.glob("*.csv.gz") + glob.glob("data/*.csv*") + glob.glob("datos/*.csv*")):
-        if c not in archivos_candidatos:
-            archivos_candidatos.append(c)
+def cargar_datos(archivo_subido=None, cache_buster="v7_sinta_real_uploader"):
+    es_real = False
+    df = None
+    
+    if archivo_subido is not None:
+        try:
+            df = leer_archivo_robusto(archivo_subido)
+            if df is not None and not df.empty and len(df) >= 2:
+                es_real = True
+        except Exception:
+            df = None
             
-    archivo_encontrado = None
-    for a in archivos_candidatos:
-        if os.path.exists(a) and os.path.getsize(a) > 200:
-            archivo_encontrado = a
-            break
-            
-    if not archivo_encontrado:
-        return generar_conectividad_rango(2017, 2026)
-        
-    try:
-        df = leer_archivo_robusto(archivo_encontrado)
-    except Exception:
-        return generar_conectividad_rango(2017, 2026)
+    if df is None or df.empty:
+        import glob
+        archivos_candidatos = [
+            "datos_cabotaje.csv.gz",
+            "datos_cabotaje.csv",
+            "datos_actualizados.csv.gz",
+            "datos_actualizados.csv",
+            "datos_sinta.csv.gz",
+            "datos_sinta.csv",
+            "datos_anac.csv.gz",
+            "datos_anac.csv",
+            "vuelos_cabotaje.csv.gz",
+            "vuelos_cabotaje.csv",
+            "datos_test.csv"
+        ]
+        for c in (glob.glob("*.csv") + glob.glob("*.csv.gz") + glob.glob("data/*.csv*") + glob.glob("datos/*.csv*")):
+            if c not in archivos_candidatos:
+                archivos_candidatos.append(c)
+                
+        archivo_encontrado = None
+        for a in archivos_candidatos:
+            if os.path.exists(a) and os.path.getsize(a) > 200:
+                archivo_encontrado = a
+                break
+                
+        if archivo_encontrado:
+            try:
+                df = leer_archivo_robusto(archivo_encontrado)
+                if df is not None and not df.empty and len(df) >= 2:
+                    es_real = True
+            except Exception:
+                df = None
 
-    if df is None or df.empty or len(df) < 5:
-        return generar_conectividad_rango(2017, 2026)
+    if df is None or df.empty or len(df) < 2:
+        return generar_conectividad_rango(2017, 2026), False
         
     cols_map = {c: c.strip().lower() for c in df.columns}
     df.rename(columns=cols_map, inplace=True)
@@ -400,7 +424,7 @@ def cargar_datos(cache_buster="v5_jujuy_2026_dates"):
         fecha_valida = True
 
     if not fecha_valida or df['fecha'].isna().all():
-        return generar_conectividad_rango(2017, 2026)
+        return generar_conectividad_rango(2017, 2026), False
 
     # Limpiar NaT contiguos
     df['fecha'] = df['fecha'].ffill().bfill()
@@ -459,7 +483,7 @@ def cargar_datos(cache_buster="v5_jujuy_2026_dates"):
     )
     df = df[mascara_validos].copy()
     if df.empty:
-        return generar_conectividad_rango(2017, 2026)
+        return generar_conectividad_rango(2017, 2026), False
 
     # Si vienen despegues y aterrizajes en datos de movimientos individuales de ANAC,
     # filtrar despegues para evitar duplicar pasajeros y vuelos
@@ -513,9 +537,42 @@ def cargar_datos(cache_buster="v5_jujuy_2026_dates"):
         'origen_label', 'destino_label', 'tramo_label', 'ruta_label',
         'aerolinea', 'pasajeros', 'vuelos', 'asientos'
     ]
-    return df[columnas_finales]
+    return df[columnas_finales], es_real
 
-df_raw = cargar_datos()
+# -------------------------------------------------------------
+# BARRA LATERAL: FUENTES OFICIALES Y SUBIDA DE ARCHIVO REAL
+# -------------------------------------------------------------
+with st.sidebar:
+    st.header("🌐 Fuentes Oficiales de Información")
+    st.markdown(
+        """
+        Consulte o descargue las bases públicas oficiales:
+        * 🏛️ **[Tablero de Conectividad SINTA](https://tableros.yvera.tur.ar/conectividad/)**  
+          *(Subsecretaría de Turismo / DNMyE)*
+        * 📊 **[Datos Abiertos Turismo (Yvera)](https://datos.yvera.gob.ar/dataset/conectividad-aerea)**  
+          *(Dataset oficial de vuelos, asientos y pasajeros)*
+        * ✈️ **[Estadísticas DNTA - ANAC](https://consultas-publicas.anac.gob.ar/estadisticas-dnta/)**  
+          *(Administración Nacional de Aviación Civil)*
+        * 📑 **[Aterrizajes y Despegues (Transporte)](https://datos.transporte.gob.ar/dataset/aterrizajes-y-despegues-procesados-por-la-administracion-nacional-de-aviacion-civil-anac)**  
+          *(Microdatos oficiales por movimiento)*
+        """
+    )
+    st.markdown("---")
+    st.subheader("📂 Cargar Base Oficial SINTA / ANAC")
+    st.caption("Para comparar con los datos exactos del tablero oficial, descargue el archivo ('Descargar en csv') en el tablero SINTA y cárguelo aquí:")
+    archivo_subido_sidebar = st.file_uploader(
+        "Subir archivo CSV oficial:",
+        type=["csv", "gz", "xlsx"],
+        key="uploader_sinta",
+        help="Suba directamente el archivo exportado de SINTA o ANAC para ver las cifras reales exactas sin necesidad de configurar GitHub."
+    )
+
+df_raw, es_datos_reales = cargar_datos(archivo_subido=archivo_subido_sidebar)
+
+if es_datos_reales:
+    st.success("🟢 **Fuente de Datos Activa:** Base de datos oficial conectada y cargada exitosamente.")
+else:
+    st.info("ℹ️ **Modo Demostración (Datos Estimados):** No se detectó un archivo oficial cargado en el repositorio. Para visualizar los datos 100% exactos del tablero de SINTA, puede subir el archivo CSV en la barra lateral izquierda o colocar `datos_cabotaje.csv` en su repositorio de GitHub.")
 
 # Listas de opciones limpias sin N/D
 rutas_disponibles = sorted([str(x) for x in df_raw['ruta_label'].dropna().unique() if 'N/D' not in str(x)])
@@ -886,7 +943,7 @@ else:
             )
             st.plotly_chart(fig_hhi, use_container_width=True)
 
-            # Curo de participación de mercado (%)
+            # Curva de participación de mercado (%)
             fig_share = px.area(
                 df_hhi,
                 x='periodo_mes_es',
