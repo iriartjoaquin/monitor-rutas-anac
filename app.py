@@ -36,7 +36,7 @@ meses_map = {
 }
 
 AEROPUERTOS_EXHAUSTIVO = {
-    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AEP', 'AER']},
+    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AEP']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
     'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'keywords': ['PALOMAR', 'EPA']},
     'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'keywords': ['SAN FERNANDO', 'FDO']},
@@ -71,6 +71,12 @@ AEROPUERTOS_EXHAUSTIVO = {
     'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'keywords': ['TERMAS', 'RIO HONDO', 'RÍO HONDO', 'LAS TERMAS', 'RHD']},
     'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'keywords': ['SAN JUAN', 'DOMINGO FAUSTINO SARMIENTO', 'SARMIENTO', 'UAQ']},
     'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'keywords': ['SAN LUIS', 'BRIGADIER MAYOR CESAR RAUL OJEDA', 'CESAR RAUL OJEDA', 'OJEDA', 'LUQ']},
+    'RLO': {'codigo': 'RLO', 'ciudad': 'Valle del Conlara (Merlo)', 'keywords': ['VALLE DEL CONLARA', 'CONLARA', 'MERLO', 'RLO']},
+    'PMQ': {'codigo': 'PMQ', 'ciudad': 'Perito Moreno', 'keywords': ['PERITO MORENO', 'JALIL HAMER', 'HAMER', 'PMQ']},
+    'RCQ': {'codigo': 'RCQ', 'ciudad': 'Reconquista', 'keywords': ['RECONQUISTA', 'DANIEL JUKIC', 'JUKIC', 'RCQ']},
+    'RZA': {'codigo': 'RZA', 'ciudad': 'Puerto Santa Cruz', 'keywords': ['PUERTO SANTA CRUZ', 'SANTA CRUZ', 'RZA']},
+    'NCJ': {'codigo': 'NCJ', 'ciudad': 'Sunchales', 'keywords': ['SUNCHALES', 'NCJ']},
+    'ROY': {'codigo': 'ROY', 'ciudad': 'Río Mayo', 'keywords': ['RIO MAYO', 'RÍO MAYO', 'ROY']},
     'VME': {'codigo': 'VME', 'ciudad': 'Villa Reynolds', 'keywords': ['VILLA REYNOLDS', 'REYNOLDS', 'VME']},
     'VLG': {'codigo': 'VLG', 'ciudad': 'Villa Gesell', 'keywords': ['VILLA GESELL', 'GESELL', 'VLG']},
     'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'keywords': ['PARANA', 'PARANÁ', 'GENERAL JUSTO JOSE DE URQUIZA', 'URQUIZA', 'PRA']},
@@ -87,13 +93,27 @@ AEROPUERTOS_EXHAUSTIVO = {
     'PEH': {'codigo': 'PEH', 'ciudad': 'Pehuajó', 'keywords': ['PEHUAJO', 'PEHUAJÓ', 'PEH']},
     'CSZ': {'codigo': 'CSZ', 'ciudad': 'Brigadier Lopez', 'keywords': ['COCHICO', 'CSZ']},
     'RYO': {'codigo': 'RYO', 'ciudad': 'Río Turbio', 'keywords': ['RIO TURBIO', 'RÍO TURBIO', 'RYO']},
-    'PMQ': {'codigo': 'PMQ', 'ciudad': 'Perito Moreno', 'keywords': ['PERITO MORENO', 'PMQ']},
     'GGS': {'codigo': 'GGS', 'ciudad': 'Gobernador Gregores', 'keywords': ['GOBERNADOR GREGORES', 'GREGORES', 'GGS']},
     'ULA': {'codigo': 'ULA', 'ciudad': 'San Julián', 'keywords': ['SAN JULIAN', 'SAN JULIÁN', 'ULA']},
     'SZT': {'codigo': 'SZT', 'ciudad': 'San Cristóbal', 'keywords': ['SAN CRISTOBAL', 'SZT']},
     'RDS': {'codigo': 'RDS', 'ciudad': 'Rincón de los Sauces', 'keywords': ['RINCON DE LOS SAUCES', 'RDS']},
     'APZ': {'codigo': 'APZ', 'ciudad': 'Zapala', 'keywords': ['ZAPALA', 'APZ']},
-    'CUT': {'codigo': 'CUT', 'ciudad': 'Cutral Có', 'keywords': ['CUTRAL CO', 'CUTRAL CÓ', 'CUT']}
+    'CUT': {'codigo': 'CUT', 'ciudad': 'Cutral Có', 'keywords': ['CUTRAL CO', 'CUTRAL CÓ', 'CUT']},
+    'SST': {'codigo': 'SST', 'ciudad': 'Santa Teresita', 'keywords': ['SANTA TERESITA', 'SST']},
+    'GHU': {'codigo': 'GHU', 'ciudad': 'Gualeguaychú', 'keywords': ['GUALEGUAYCHU', 'GUALEGUAYCHÚ', 'GHU']},
+    'COC': {'codigo': 'COC', 'ciudad': 'Concordia', 'keywords': ['CONCORDIA', 'PIERRESTEGUI', 'COC']},
+    'JNI': {'codigo': 'JNI', 'ciudad': 'Junín', 'keywords': ['JUNIN', 'JUNÍN', 'JNI']},
+    'TTG': {'codigo': 'TTG', 'ciudad': 'Tartagal', 'keywords': ['TARTAGAL', 'TTG']},
+    'ORS': {'codigo': 'ORS', 'ciudad': 'Orán', 'keywords': ['ORAN', 'ORÁN', 'ORS']},
+    'CLX': {'codigo': 'CLX', 'ciudad': 'Clorinda', 'keywords': ['CLORINDA', 'CLX']},
+    'PRQ': {'codigo': 'PRQ', 'ciudad': 'Presidencia Roque Sáenz Peña', 'keywords': ['SAENZ PENA', 'SÁENZ PEÑA', 'ROQUE SAENZ', 'PRQ']},
+    'CUR': {'codigo': 'CUR', 'ciudad': 'Curuzú Cuatiá', 'keywords': ['CURUZU', 'CURUZÚ', 'CUR']},
+    'MCS': {'codigo': 'MCS', 'ciudad': 'Monte Caseros', 'keywords': ['MONTE CASEROS', 'MCS']},
+    'PZL': {'codigo': 'PZL', 'ciudad': 'Paso de los Libres', 'keywords': ['PASO DE LOS LIBRES', 'PZL']},
+    'JSM': {'codigo': 'JSM', 'ciudad': 'José de San Martín', 'keywords': ['JOSE DE SAN MARTIN', 'JSM']},
+    'LHS': {'codigo': 'LHS', 'ciudad': 'Las Heras', 'keywords': ['LAS HERAS', 'LHS']},
+    'ING': {'codigo': 'ING', 'ciudad': 'Lago Argentino', 'keywords': ['LAGO ARGENTINO', 'ING']},
+    'CVH': {'codigo': 'CVH', 'ciudad': 'Caviahue', 'keywords': ['CAVIAHUE', 'CVH']}
 }
 
 def normalizar_texto_aeropuerto(texto):
@@ -115,20 +135,38 @@ def obtener_sigla_y_ciudad(nombre_aeropuerto):
 
     norm = normalizar_texto_aeropuerto(nombre_aeropuerto)
 
+    # 1. Búsqueda exacta de código IATA conocido
     for iata, datos in AEROPUERTOS_EXHAUSTIVO.items():
         if re.search(r'\b' + re.escape(iata) + r'\b', norm):
             return datos['codigo'], datos['ciudad']
 
+    # 2. Búsqueda por palabras clave oficiales
     for iata, datos in AEROPUERTOS_EXHAUSTIVO.items():
         for kw in datos['keywords']:
             kw_norm = normalizar_texto_aeropuerto(kw)
             if kw_norm and re.search(r'\b' + re.escape(kw_norm) + r'\b', norm):
                 return datos['codigo'], datos['ciudad']
 
-    primer_token = norm.split()[0] if norm.split() else "DES"
-    sigla_fallback = primer_token[:3] if len(primer_token) >= 3 else primer_token
-    nombre_limpio = nombre_aeropuerto.strip()
-    return sigla_fallback, nombre_limpio
+    # 3. Fallback inteligente sin asignar 'AER' genérico
+    stopwords = {
+        'AEROPUERTO', 'AERODROMO', 'BASE', 'AEREA', 'MILITAR', 'INTERNACIONAL', 'INT',
+        'NACIONAL', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS', 'SAN', 'SANTA', 'GDOR',
+        'GOBERNADOR', 'TENIENTE', 'TTE', 'BRIGADIER', 'CAPITAN', 'ALMIRANTE', 'GENERAL',
+        'DR', 'DOCTOR', 'VICECOMODORO', 'COMODORO'
+    }
+    tokens_utiles = [t for t in norm.split() if t not in stopwords and len(t) >= 2]
+    
+    if tokens_utiles:
+        ciudad_cand = tokens_utiles[0].title()
+        sigla_fallback = tokens_utiles[0][:3].upper() if len(tokens_utiles[0]) >= 3 else tokens_utiles[0].upper()
+    else:
+        ciudad_cand = nombre_aeropuerto.strip().title()
+        sigla_fallback = "DES"
+
+    if sigla_fallback in ['AER', 'INT']:
+        sigla_fallback = "DES"
+
+    return sigla_fallback, ciudad_cand
 
 def construir_etiqueta_aeropuerto(nombre_aeropuerto):
     sigla, ciudad = obtener_sigla_y_ciudad(nombre_aeropuerto)
@@ -761,9 +799,18 @@ with tab_graficos:
         st.plotly_chart(fig_pie, use_container_width=True)
 
     with col_g4:
-        # 4. Gráfico por Sentido de Vuelo (Ida vs Vuelta)
+        # 4. Gráfico por Sentido de Vuelo (Ida vs Vuelta) con selector de diseño
         df_tramo_graf = df_filtrado.groupby(['tramo_label', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
         df_tramo_graf = df_tramo_graf[df_tramo_graf['pasajeros'] > 0]
+        
+        tipo_disposicion = st.radio(
+            "Diseño de barras (Sentido de vuelo):",
+            options=["Barras Apiladas (Pegadas por tramo)", "Barras Agrupadas (Lado a lado)"],
+            horizontal=True,
+            key="disp_barras_sentido"
+        )
+        modo_bar = 'stack' if "Apiladas" in tipo_disposicion else 'group'
+
         fig_tramo = px.bar(
             df_tramo_graf,
             x='tramo_label',
@@ -771,9 +818,14 @@ with tab_graficos:
             color='aerolinea',
             title="Pasajeros por Sentido de Vuelo (Ida vs. Vuelta)",
             labels={'tramo_label': 'Tramo', 'pasajeros': 'Pasajeros'},
-            barmode='group'
+            barmode=modo_bar
         )
-        fig_tramo.update_layout(xaxis_tickangle=-25)
+        fig_tramo.update_layout(
+            xaxis_tickangle=-25,
+            bargap=0.15,
+            bargroupgap=0.0,
+            legend_title_text='Aerolínea'
+        )
         st.plotly_chart(fig_tramo, use_container_width=True)
 
 # =============================================================
@@ -865,56 +917,87 @@ with tab_cuadros:
     st.dataframe(pivot_pax_fmt, use_container_width=True)
 
 # =============================================================
-# SECCIÓN 3: ESTACIONALIDAD DE LA RUTA
+# SECCIÓN 3: ESTACIONALIDAD DE LA RUTA (CON SELECTOR DE AÑO)
 # =============================================================
 with tab_estacionalidad:
     st.markdown("### Análisis de Estacionalidad de la Demanda")
-    st.markdown("Permite observar el comportamiento intra-anual típico de la ruta agrupando los datos por mes del año (Enero a Diciembre).")
+    st.markdown("Permite observar el comportamiento intra-anual de la ruta seleccionada mes a mes (Enero a Diciembre).")
 
-    # Agrupación por mes calendario
-    df_est = df_filtrado.groupby('mes_num', observed=True).agg(
-        pasajeros=('pasajeros', 'sum'),
-        vuelos=('vuelos', 'sum'),
-        asientos=('asientos', 'sum')
-    ).reset_index()
+    # Obtener años disponibles presentes en la ruta filtrada
+    anos_disp_est = sorted(df_filtrado['ano_num'].unique().tolist(), reverse=True)
 
-    if not df_est.empty and df_est['pasajeros'].sum() > 0:
-        promedio_mensual_pax = df_est['pasajeros'].mean()
-        df_est['mes_nombre'] = df_est['mes_num'].map(meses_es)
-        df_est['indice_estacionalidad_%'] = (df_est['pasajeros'] / promedio_mensual_pax) * 100
-        df_est['ocupacion_%'] = np.where(df_est['asientos'] > 0, (df_est['pasajeros'] / df_est['asientos']) * 100, 0)
-        df_est = df_est.sort_values(by='mes_num')
-
-        col_est1, col_est2 = st.columns([6, 4])
-
-        with col_est1:
-            fig_est = px.bar(
-                df_est,
-                x='mes_nombre',
-                y='pasajeros',
-                title="Curva de Estacionalidad Mensual Acumulada",
-                labels={'mes_nombre': 'Mes', 'pasajeros': 'Pasajeros Acumulados'},
-                text=df_est['pasajeros'].apply(fmt_entero)
+    if len(anos_disp_est) > 0:
+        opciones_ano = [str(a) for a in anos_disp_est] + ["Promedio Histórico (Todos los Años)"]
+        col_est_sel, _ = st.columns([4, 6])
+        with col_est_sel:
+            ano_est_sel = st.selectbox(
+                "📅 Año para Análisis de Estacionalidad:",
+                options=opciones_ano,
+                index=0,
+                help="Seleccione un año específico para ver sus meses o elija el promedio histórico de todos los años disponibles."
             )
-            fig_est.update_traces(textposition='outside')
-            st.plotly_chart(fig_est, use_container_width=True)
 
-        with col_est2:
-            st.markdown("#### Índices de Temporada")
-            df_est_disp = df_est.copy()
-            df_est_disp['Pasajeros Totales'] = df_est_disp['pasajeros'].apply(fmt_entero)
-            df_est_disp['Vuelos Totales'] = df_est_disp['vuelos'].apply(fmt_entero)
-            df_est_disp['Ocupación Promedio'] = df_est_disp['ocupacion_%'].apply(fmt_porcentaje)
-            df_est_disp['Índice Estacional'] = df_est_disp['indice_estacionalidad_%'].apply(lambda x: f"{x:.1f}%")
+        if ano_est_sel == "Promedio Histórico (Todos los Años)":
+            df_est_base = df_filtrado.copy()
+            titulo_graf = "Curva de Estacionalidad Mensual - Promedio Histórico"
+            cant_anos = max(1, df_est_base['ano_num'].nunique())
+            df_est = df_est_base.groupby('mes_num', observed=True).agg(
+                pasajeros=('pasajeros', lambda x: x.sum() / cant_anos),
+                vuelos=('vuelos', lambda x: x.sum() / cant_anos),
+                asientos=('asientos', lambda x: x.sum() / cant_anos)
+            ).reset_index()
+            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años considerados)"
+        else:
+            ano_int = int(ano_est_sel)
+            df_est_base = df_filtrado[df_filtrado['ano_num'] == ano_int].copy()
+            titulo_graf = f"Curva de Estacionalidad Mensual - Año {ano_int}"
+            df_est = df_est_base.groupby('mes_num', observed=True).agg(
+                pasajeros=('pasajeros', 'sum'),
+                vuelos=('vuelos', 'sum'),
+                asientos=('asientos', 'sum')
+            ).reset_index()
+            subtitulo_tabla = f"Estadísticas Mensuales del Año {ano_int}"
 
-            st.dataframe(
-                df_est_disp[['mes_nombre', 'Pasajeros Totales', 'Vuelos Totales', 'Ocupación Promedio', 'Índice Estacional']].rename(
-                    columns={'mes_nombre': 'Mes'}
-                ),
-                use_container_width=True,
-                hide_index=True
-            )
-            st.caption("💡 *Un índice estacional superior al 100% representa meses de temporada alta (demanda por encima de la media anual).*")
+        if not df_est.empty and df_est['pasajeros'].sum() > 0:
+            promedio_mensual_pax = df_est['pasajeros'].mean()
+            df_est['mes_nombre'] = df_est['mes_num'].map(meses_es)
+            df_est['indice_estacionalidad_%'] = (df_est['pasajeros'] / promedio_mensual_pax) * 100
+            df_est['ocupacion_%'] = np.where(df_est['asientos'] > 0, (df_est['pasajeros'] / df_est['asientos']) * 100, 0)
+            df_est = df_est.sort_values(by='mes_num')
+
+            col_est1, col_est2 = st.columns([6, 4])
+
+            with col_est1:
+                fig_est = px.bar(
+                    df_est,
+                    x='mes_nombre',
+                    y='pasajeros',
+                    title=titulo_graf,
+                    labels={'mes_nombre': 'Mes', 'pasajeros': 'Pasajeros'},
+                    text=df_est['pasajeros'].apply(fmt_entero)
+                )
+                fig_est.update_traces(textposition='outside')
+                fig_est.update_layout(bargap=0.2)
+                st.plotly_chart(fig_est, use_container_width=True)
+
+            with col_est2:
+                st.markdown(f"#### {subtitulo_tabla}")
+                df_est_disp = df_est.copy()
+                df_est_disp['Pasajeros Totales'] = df_est_disp['pasajeros'].apply(fmt_entero)
+                df_est_disp['Vuelos Totales'] = df_est_disp['vuelos'].apply(fmt_entero)
+                df_est_disp['Ocupación Promedio'] = df_est_disp['ocupacion_%'].apply(fmt_porcentaje)
+                df_est_disp['Índice Estacional'] = df_est_disp['indice_estacionalidad_%'].apply(lambda x: f"{x:.1f}%")
+
+                st.dataframe(
+                    df_est_disp[['mes_nombre', 'Pasajeros Totales', 'Vuelos Totales', 'Ocupación Promedio', 'Índice Estacional']].rename(
+                        columns={'mes_nombre': 'Mes'}
+                    ),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.caption("💡 *Un índice estacional superior al 100% representa meses de temporada alta (demanda por encima de la media anual).*")
+        else:
+            st.info(f"No se registraron vuelos para la ruta seleccionada en el año {ano_est_sel}.")
     else:
         st.info("No hay suficientes datos temporales para calcular la estacionalidad en el período seleccionado.")
 
@@ -924,7 +1007,7 @@ with tab_estacionalidad:
 with tab_comparador:
     st.markdown("### Comparación Interanual (YoY) y Shift de Participación")
     st.markdown(
-        "Permite contrastar un mes idéntico (por ejemplo, **Julio 2025 vs. Julio 2026**) "
+        "Permite contrastar un mes idéntico (por ejemplo, **Julio 2022 vs. Julio 2026**) "
         "para evaluar cómo variaron los vuelos y pasajeros, y si **una aerolínea absorbió la cuota de otra**."
     )
 
@@ -1030,6 +1113,14 @@ with tab_comparador:
             comp_disp[f'Ocup {ano_comp}'] = comp_df[f'Ocup {ano_comp}'].apply(fmt_porcentaje)
 
             st.dataframe(comp_disp.reset_index().rename(columns={'aerolinea': 'Aerolínea'}), use_container_width=True, hide_index=True)
+            
+            st.caption(
+                "💡 **Guía de métricas de la tabla:**  \n"
+                "• **Δ Vuelos / Δ Pax:** Variación absoluta de vuelos y pasajeros entre ambos períodos.  \n"
+                "• **Share:** Participación de mercado (% de pasajeros que transportó cada aerolínea sobre el total de la ruta).  \n"
+                "• **Shift Share (pts):** Desplazamiento neto de cuota de mercado en puntos porcentuales (Share Año Reciente − Share Año Base). Mide qué aerolínea absorbió la cuota de otra.  \n"
+                "• **Ocupación:** Factor de ocupación de los vuelos (% de asientos vendidos)."
+            )
 
             # Gráfico de barras comparativo lado a lado
             df_plot_yoy = df_yoy.groupby(['aerolinea', 'ano_num'], observed=True)['pasajeros'].sum().reset_index()
@@ -1043,6 +1134,7 @@ with tab_comparador:
                 title=f"Comparativa de Pasajeros por Aerolínea ({ano_base} vs. {ano_comp})",
                 labels={'aerolinea': 'Aerolínea', 'pasajeros': 'Pasajeros', 'ano_num': 'Año'}
             )
+            fig_yoy.update_layout(bargap=0.2, bargroupgap=0.0)
             st.plotly_chart(fig_yoy, use_container_width=True)
 
         else:
