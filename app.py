@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import io
+import zipfile
+import gzip
 import re
 import os
 from datetime import datetime, date
@@ -300,6 +302,48 @@ def procesar_dataframe_oficial(df_in):
     return df, None
 
 def cargar_archivo_en_memoria(archivo_bytes_o_path):
+    # Soporte para archivos ZIP (.zip)
+    try:
+        es_zip = False
+        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.zip'):
+            es_zip = True
+        elif not isinstance(archivo_bytes_o_path, str):
+            archivo_bytes_o_path.seek(0)
+            magic = archivo_bytes_o_path.read(4)
+            archivo_bytes_o_path.seek(0)
+            if magic == b'PK\x03\x04':
+                es_zip = True
+
+        if es_zip:
+            with zipfile.ZipFile(archivo_bytes_o_path) as z:
+                csv_names = [n for n in z.namelist() if n.lower().endswith(('.csv', '.txt')) and not n.startswith('__MACOSX')]
+                if not csv_names:
+                    csv_names = [n for n in z.namelist() if not n.startswith('__MACOSX') and not n.endswith('/')]
+                if csv_names:
+                    with z.open(csv_names[0]) as zf:
+                        contenido_bytes = io.BytesIO(zf.read())
+                        return cargar_archivo_en_memoria(contenido_bytes)
+    except Exception:
+        pass
+
+    # Soporte para archivos GZIP (.gz)
+    try:
+        es_gz = False
+        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.gz'):
+            es_gz = True
+        elif not isinstance(archivo_bytes_o_path, str):
+            archivo_bytes_o_path.seek(0)
+            magic = archivo_bytes_o_path.read(2)
+            archivo_bytes_o_path.seek(0)
+            if magic == b'\x1f\x8b':
+                es_gz = True
+        if es_gz:
+            with gzip.open(archivo_bytes_o_path, 'rb') as gz_f:
+                contenido_bytes = io.BytesIO(gz_f.read())
+                return cargar_archivo_en_memoria(contenido_bytes)
+    except Exception:
+        pass
+
     encodings = ['utf-8-sig', 'utf-8', 'latin1', 'iso-8859-1', 'cp1252']
     separadores = [',', ';', '\t']
 
@@ -322,7 +366,7 @@ def cargar_archivo_en_memoria(archivo_bytes_o_path):
             except Exception:
                 continue
 
-    return None, "No se pudo interpretar el archivo CSV con las codificaciones habituales."
+    return None, "No se pudo interpretar el archivo (CSV/ZIP/GZ) con las codificaciones habituales."
 
 # -------------------------------------------------------------
 # BARRA LATERAL: FUENTES DE DATOS
@@ -335,9 +379,9 @@ df_raw = None
 fuente_activa = None
 
 subido = st.sidebar.file_uploader(
-    "📂 Cargar microdatos (CSV oficial)",
-    type=['csv', 'txt', 'gz', 'parquet'],
-    help="Suba la base oficial descargada de ANAC o de su repositorio."
+    "📂 Cargar microdatos (CSV o ZIP oficial)",
+    type=['csv', 'zip', 'gz', 'txt', 'parquet'],
+    help="Suba la base oficial descargada de ANAC o comprimida en ZIP."
 )
 
 if subido is not None:
@@ -353,16 +397,23 @@ if subido is not None:
             fuente_activa = f"Archivo subido manualmente ({subido.name})"
 else:
     posibles_rutas = [
+        "conectividad_aerea.zip",
+        "conectividad_aerea.csv.gz",
         "conectividad_aerea.csv",
+        "conectividad-aerea.zip",
         "conectividad-aerea.csv",
+        "data/conectividad_aerea.zip",
         "data/conectividad_aerea.csv",
+        "datos/conectividad_aerea.zip",
         "datos/conectividad_aerea.csv",
+        "base_anac.zip",
         "base_anac.csv",
+        "cabotaje.zip",
         "cabotaje.csv"
     ]
     try:
         for f in os.listdir('.'):
-            if f.lower().endswith('.csv') and f not in posibles_rutas:
+            if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
                 posibles_rutas.append(f)
     except Exception:
         pass
@@ -388,8 +439,8 @@ if df_raw is None or df_raw.empty:
         "⛔ **NO HAY DATOS REALES CARGADOS O VÁLIDOS**  \n\n"
         "Esta aplicación tiene **estrictamente prohibido generar, simular o inventar datos**.  \n"
         "Para visualizar información, realice una de las siguientes acciones:  \n"
-        "1. Asegúrese de que el archivo oficial `conectividad_aerea.csv` esté en la raíz del repositorio de GitHub.  \n"
-        "2. O bien, suba el archivo CSV oficial en el menú lateral izquierdo."
+        "1. Asegúrese de que el archivo oficial `conectividad_aerea.zip` o `conectividad_aerea.csv` esté en la raíz del repositorio de GitHub.  \n"
+        "2. O bien, suba el archivo oficial (.csv o .zip) en el menú lateral izquierdo."
     )
     st.info("ℹ️ Una vez cargado el archivo oficial con columnas de fecha, aerolínea, origen, destino, pasajeros y vuelos, se habilitará el monitor.")
     st.stop()
