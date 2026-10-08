@@ -891,4 +891,4 @@ with tab_cuadros:
     pivot_pax_con_total = pd.concat([pivot_pax_con_total, fila_total.to_frame().T])
 
     pivot_pax_fmt = pivot_pax_con_total.map(fmt_entero) if hasattr(pivot_pax_con_total, "map") else pivot_pax_con_total.applymap(fmt_entero)
-    st.dataframe(pivot_pax_fmt, use_container_width=True
+    st.dataframe(pivot_pax_fmt, use_container_width=True)
