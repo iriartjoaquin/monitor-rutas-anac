@@ -1,8 +1,9 @@
 name: Actualizador SINTA
 
 on:
-  schedule:
-    - cron: '0 6 * * 1'
+  # Ejecución semanal desactivada: la app usa conectividad_aerea.zip, que se actualiza a mano.
+  # schedule:
+  #   - cron: '0 6 * * 1'
   workflow_dispatch:
 
 permissions:
