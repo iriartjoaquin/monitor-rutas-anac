@@ -134,7 +134,7 @@ def construir_etiqueta_aeropuerto(nombre_aeropuerto):
     sigla, ciudad = obtener_sigla_y_ciudad(nombre_aeropuerto)
     return f"{sigla} ({ciudad})"
 
-# Formateadores estándar
+# Formateadores numéricos
 fmt_entero = lambda x: f"{int(round(x)):,}".replace(",", ".")
 fmt_decimal = lambda x: f"{x:,.1f}".replace(",", "X").replace(".", ",").replace("X", ".")
 fmt_porcentaje = lambda x: f"{x:.1f}%".replace(".", ",")
@@ -197,7 +197,7 @@ def limpiar_mojibake_texto(val):
     return txt.strip()
 
 # -------------------------------------------------------------
-# DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES
+# DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES (OPTIMIZADO EN RAM)
 # -------------------------------------------------------------
 @st.cache_data(show_spinner=False)
 def procesar_dataframe_oficial(df_in):
@@ -232,7 +232,6 @@ def procesar_dataframe_oficial(df_in):
 
     df.rename(columns=col_map, inplace=True)
 
-    # Validar aeropuertos origen y destino
     if 'origen_raw' not in df.columns or 'destino_raw' not in df.columns:
         return None, "El archivo debe contener columnas que indiquen el origen y destino de cada vuelo."
 
@@ -242,13 +241,17 @@ def procesar_dataframe_oficial(df_in):
     else:
         df['aerolinea'] = 'Línea Regular'
 
-    # Métricas numéricas
-    for col_met, col_dest in [('pasajeros_raw', 'pasajeros'), ('vuelos_raw', 'vuelos'), ('asientos_raw', 'asientos')]:
+    # Métricas numéricas con tipos compactos
+    for col_met, col_dest, col_type in [
+        ('pasajeros_raw', 'pasajeros', np.int32),
+        ('vuelos_raw', 'vuelos', np.int16),
+        ('asientos_raw', 'asientos', np.int32)
+    ]:
         if col_met in df.columns:
             s_clean = df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
-            df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0)
+            df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0).astype(col_type)
         else:
-            df[col_dest] = 0
+            df[col_dest] = col_type(0)
 
     # Construcción de Fechas
     if 'fecha_raw' in df.columns:
@@ -278,8 +281,8 @@ def procesar_dataframe_oficial(df_in):
     if df.empty:
         return None, "No se pudieron construir fechas válidas a partir de los datos."
 
-    df['ano_num'] = df['fecha'].dt.year.astype(int)
-    df['mes_num'] = df['fecha'].dt.month.astype(int)
+    df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
+    df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
     df['periodo_orden'] = df['fecha'].dt.strftime('%Y-%m')
     df['periodo_mes_es'] = df['fecha'].apply(lambda d: f"{meses_es.get(d.month, '')}-{str(d.year)[2:]}")
 
@@ -293,15 +296,24 @@ def procesar_dataframe_oficial(df_in):
     df['origen_label'] = df['origen_raw'].apply(cached_etiqueta)
     df['destino_label'] = df['destino_raw'].apply(cached_etiqueta)
 
-    # Identificación estricta de sentido y corredor bidireccional
-    def crear_par_ordenado(row):
-        pts = sorted([row['origen_label'], row['destino_label']])
-        return f"{pts[0]} ⇄ {pts[1]}"
+    # Optimización vectorizada de pares y tramos
+    o_arr = df['origen_label'].to_numpy()
+    d_arr = df['destino_label'].to_numpy()
+    p1 = np.where(o_arr < d_arr, o_arr, d_arr)
+    p2 = np.where(o_arr < d_arr, d_arr, o_arr)
+    df['ruta_label'] = pd.Series(p1 + " ⇄ " + p2, index=df.index).astype('category')
+    df['tramo_label'] = pd.Series(o_arr + " ➔ " + d_arr, index=df.index).astype('category')
 
-    df['ruta_label'] = df.apply(crear_par_ordenado, axis=1)
-    df['tramo_label'] = df['origen_label'] + " ➔ " + df['destino_label']
+    # Convertir columnas repetitivas a category para reducir la RAM en un 90%
+    for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
+        df[c] = df[c].astype('category')
 
-    return df, None
+    cols_finales = [
+        'fecha', 'ano_num', 'mes_num', 'periodo_orden', 'periodo_mes_es',
+        'aerolinea', 'origen_label', 'destino_label', 'ruta_label', 'tramo_label',
+        'pasajeros', 'vuelos', 'asientos'
+    ]
+    return df[cols_finales], None
 
 def cargar_archivo_en_memoria(archivo_bytes_o_path):
     # Soporte para archivos ZIP (.zip)
@@ -454,12 +466,12 @@ total_registros = len(df_raw)
 
 st.success(
     f"🟢 **Fuente de Datos Activa:** {fuente_activa}  \n"
-    f"📊 **Registros oficiales procesados:** {fmt_entero(total_registros)} filas.  \n"
+    f"📊 **Registros oficiales en memoria:** {fmt_entero(total_registros)} filas.  \n"
     f"📅 **Período con estadísticas disponibles:** desde el **{f_min_total.strftime('%d/%m/%Y')}** hasta el **{f_max_total.strftime('%d/%m/%Y')}**."
 )
 
 # -------------------------------------------------------------
-# FILTROS DE BÚSQUEDA Y BOTÓN BUSCAR VUELOS ACTIVO
+# FILTROS DE BÚSQUEDA Y BOTÓN BUSCAR VUELOS
 # -------------------------------------------------------------
 st.subheader("🔍 Filtros de Búsqueda de Vuelos")
 
@@ -477,6 +489,9 @@ def intercambiar_origen_destino():
         st.session_state['criterios_activos']['origenes'] = st.session_state['sel_origenes_key']
         st.session_state['criterios_activos']['destinos'] = st.session_state['sel_destinos_key']
 
+# Control de estado de búsqueda inicial en CERO
+if 'busqueda_activa' not in st.session_state:
+    st.session_state['busqueda_activa'] = False
 if 'sel_origenes_key' not in st.session_state:
     st.session_state['sel_origenes_key'] = []
 if 'sel_destinos_key' not in st.session_state:
@@ -491,7 +506,8 @@ if 'criterios_activos' not in st.session_state:
         'origenes': [],
         'destinos': [],
         'desde': def_desde,
-        'hasta': def_hasta
+        'hasta': def_hasta,
+        'todo_el_pais': False
     }
 
 # 1. Selector de Ruta
@@ -499,7 +515,7 @@ sel_rutas = st.multiselect(
     "🗺️ Ruta (Ida y Vuelta):",
     options=rutas_disponibles,
     default=st.session_state['criterios_activos']['rutas'],
-    help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Jujuy incluye tanto idas como vueltas)."
+    help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye tanto idas como vueltas)."
 )
 
 # 2. Selectores de Origen, Invertir y Destino
@@ -526,8 +542,8 @@ with col_dest:
         help="Filtra estrictamente los aterrizajes en este aeropuerto."
     )
 
-# 3. Rango de Fechas
-col_d1, col_d2 = st.columns(2)
+# 3. Rango de Fechas y opción de mercado completo
+col_d1, col_d2, col_d3 = st.columns([4, 4, 3])
 with col_d1:
     f_desde = st.date_input(
         "📅 Desde:",
@@ -544,6 +560,10 @@ with col_d2:
         max_value=f_max_total,
         help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
     )
+with col_d3:
+    st.write("")
+    st.write("")
+    chk_pais = st.checkbox("Analizar total país (todas las rutas)", value=st.session_state['criterios_activos'].get('todo_el_pais', False))
 
 # 4. Botones de acción
 col_b1, col_b2, col_b3 = st.columns([2, 2, 6])
@@ -559,48 +579,88 @@ if btn_reset:
         'rutas': [],
         'origenes': [],
         'destinos': [],
-        'desde': f_min_total,
-        'hasta': f_max_total
+        'desde': def_desde,
+        'hasta': def_hasta,
+        'todo_el_pais': False
     }
+    st.session_state['busqueda_activa'] = False
     st.rerun()
 
 # Actualizar criterios al pulsar Buscar Vuelos
 if btn_buscar:
-    st.session_state['criterios_activos'] = {
-        'rutas': sel_rutas,
-        'origenes': st.session_state['sel_origenes_key'],
-        'destinos': st.session_state['sel_destinos_key'],
-        'desde': f_desde,
-        'hasta': f_hasta
-    }
-
-filtros = st.session_state['criterios_activos']
-
-# Aplicar el filtrado con las reglas estrictas de diferenciación
-mascara = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
-
-if filtros['rutas']:
-    mascara &= df_raw['ruta_label'].isin(filtros['rutas'])
-if filtros['origenes']:
-    mascara &= df_raw['origen_label'].isin(filtros['origenes'])
-if filtros['destinos']:
-    mascara &= df_raw['destino_label'].isin(filtros['destinos'])
-
-df_filtrado = df_raw[mascara].copy()
+    tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or chk_pais)
+    if tiene_criterios:
+        st.session_state['criterios_activos'] = {
+            'rutas': sel_rutas,
+            'origenes': st.session_state['sel_origenes_key'],
+            'destinos': st.session_state['sel_destinos_key'],
+            'desde': f_desde,
+            'hasta': f_hasta,
+            'todo_el_pais': chk_pais
+        }
+        st.session_state['busqueda_activa'] = True
+    else:
+        st.session_state['busqueda_activa'] = False
+        st.warning("⚠️ Seleccione una Ruta o Aeropuerto de Origen/Destino (o marque 'Analizar total país') y pulse 'Buscar Vuelos'.")
 
 # -------------------------------------------------------------
-# VALIDACIÓN DE RESULTADOS ENCONTRADOS
-# -------------------------------------------------------------
-if df_filtrado.empty:
-    st.warning("⚠️ No se encontraron vuelos para los criterios seleccionados. Ajuste los filtros y pulse **Buscar Vuelos**.")
-    st.stop()
-
-# -------------------------------------------------------------
-# KPIs GLOBALES Y RETORNO DEL ÍNDICE HHI
+# ESTADO INICIAL EN CERO (SIN PESAR LA PÁGINA)
 # -------------------------------------------------------------
 st.markdown("---")
 st.subheader("📌 Resumen Ejecutivo del Segmento Seleccionado")
 
+if not st.session_state.get('busqueda_activa', False):
+    # Todo en cero al ingresar por primera vez
+    k1, k2, k3, k4, k5, k6 = st.columns(6)
+    k1.metric("Pasajeros", "0")
+    k2.metric("Vuelos", "0")
+    k3.metric("Asientos", "0")
+    k4.metric("Ocupación", "0,0%")
+    k5.metric("Pax / Vuelo", "0,0")
+    k6.metric("Concentración (HHI)", "-")
+
+    st.info("💡 **El monitor está listo y en espera.** Seleccione una **Ruta** o defina **Origen y Destino** en los filtros superiores y presione **🔍 Buscar Vuelos** para comenzar el análisis.")
+
+    tab_g, tab_c, tab_e, tab_comp, tab_d = st.tabs([
+        "📊 Gráficos Básicos",
+        "📋 Cuadros de Datos",
+        "📅 Estacionalidad",
+        "⚖️ Comparación Interanual (YoY)",
+        "📥 Descarga de Datos"
+    ])
+    with tab_g:
+        st.info("Seleccione una ruta o tramo y presione 'Buscar Vuelos' para visualizar los gráficos de evolución, factor de ocupación y cuota de mercado.")
+    with tab_c:
+        st.info("Seleccione una ruta o tramo y presione 'Buscar Vuelos' para consultar las tablas tabuladas por aerolínea y mes.")
+    with tab_e:
+        st.info("Seleccione una ruta o tramo y presione 'Buscar Vuelos' para ver el comportamiento estacional y los índices de temporada.")
+    with tab_comp:
+        st.info("Seleccione una ruta o tramo y presione 'Buscar Vuelos' para comparar meses entre diferentes años y ver la absorción de mercado.")
+    with tab_d:
+        st.info("Seleccione una ruta o tramo y presione 'Buscar Vuelos' para descargar los microdatos y reportes del segmento.")
+    st.stop()
+
+# -------------------------------------------------------------
+# EJECUCIÓN FILTRADA (INSTANTÁNEA)
+# -------------------------------------------------------------
+filtros = st.session_state['criterios_activos']
+mascara = (df_raw['fecha'].dt.date >= filtros['desde']) & (df_raw['fecha'].dt.date <= filtros['hasta'])
+
+if not filtros.get('todo_el_pais', False):
+    if filtros['rutas']:
+        mascara &= df_raw['ruta_label'].isin(filtros['rutas'])
+    if filtros['origenes']:
+        mascara &= df_raw['origen_label'].isin(filtros['origenes'])
+    if filtros['destinos']:
+        mascara &= df_raw['destino_label'].isin(filtros['destinos'])
+
+df_filtrado = df_raw[mascara].copy()
+
+if df_filtrado.empty:
+    st.warning("⚠️ No se encontraron vuelos para los criterios seleccionados. Ajuste los filtros y pulse **Buscar Vuelos**.")
+    st.stop()
+
+# KPIs Reales del Segmento Filtrado
 pax_total = df_filtrado['pasajeros'].sum()
 vuelos_total = df_filtrado['vuelos'].sum()
 asientos_total = df_filtrado['asientos'].sum()
@@ -608,7 +668,7 @@ factor_ocupacion = (pax_total / asientos_total * 100) if asientos_total > 0 else
 pax_por_vuelo = (pax_total / vuelos_total) if vuelos_total > 0 else 0
 
 # Cálculo del Índice HHI (Herfindahl-Hirschman Index)
-cuotas_pax = df_filtrado.groupby('aerolinea')['pasajeros'].sum()
+cuotas_pax = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum()
 if pax_total > 0:
     shares_pct = (cuotas_pax / pax_total) * 100
     hhi_val = int(round((shares_pct ** 2).sum()))
@@ -633,8 +693,6 @@ kpi6.metric("Concentración (HHI)", f"{hhi_val:,}".replace(",", "."), help=f"Ín
 # -------------------------------------------------------------
 # ESTRUCTURA ORGANIZADA POR PESTAÑAS FUNCIONALES
 # -------------------------------------------------------------
-st.markdown("---")
-
 tab_graficos, tab_cuadros, tab_estacionalidad, tab_comparador, tab_descargas = st.tabs([
     "📊 Gráficos Básicos",
     "📋 Cuadros de Datos",
@@ -886,12 +944,13 @@ with tab_comparador:
 
         # Filtrar datos de la ruta elegida para ambos años
         mask_yoy = df_raw['ano_num'].isin([ano_base, ano_comp])
-        if filtros['rutas']:
-            mask_yoy &= df_raw['ruta_label'].isin(filtros['rutas'])
-        if filtros['origenes']:
-            mask_yoy &= df_raw['origen_label'].isin(filtros['origenes'])
-        if filtros['destinos']:
-            mask_yoy &= df_raw['destino_label'].isin(filtros['destinos'])
+        if not filtros.get('todo_el_pais', False):
+            if filtros['rutas']:
+                mask_yoy &= df_raw['ruta_label'].isin(filtros['rutas'])
+            if filtros['origenes']:
+                mask_yoy &= df_raw['origen_label'].isin(filtros['origenes'])
+            if filtros['destinos']:
+                mask_yoy &= df_raw['destino_label'].isin(filtros['destinos'])
 
         if mes_sel_str != "Todos los Meses (Año Completo)":
             mes_num_target = next(k for k, v in meses_es.items() if v == mes_sel_str)
