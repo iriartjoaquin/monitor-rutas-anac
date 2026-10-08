@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import io
+import warnings
+warnings.filterwarnings("ignore")
 import zipfile
 import gzip
 import re
@@ -801,7 +803,7 @@ with tab_cuadros:
     fila_total.name = 'Total Mercado'
     pivot_pax_con_total = pd.concat([pivot_pax_con_total, fila_total.to_frame().T])
 
-    pivot_pax_fmt = pivot_pax_con_total.applymap(fmt_entero)
+    pivot_pax_fmt = pivot_pax_con_total.map(fmt_entero) if hasattr(pivot_pax_con_total, "map") else pivot_pax_con_total.applymap(fmt_entero)
     st.dataframe(pivot_pax_fmt, use_container_width=True)
 
 # =============================================================
@@ -1007,17 +1009,27 @@ with tab_descargas:
             mime="text/csv"
         )
 
-    output_excel = io.BytesIO()
-    with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-        df_filtrado.to_excel(writer, sheet_name='Microdatos', index=False)
-        pivot_pax_con_total.to_excel(writer, sheet_name='Matriz_Pasajeros')
-        df_aero.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
-    output_excel.seek(0)
+    @st.cache_data(show_spinner=False)
+    def generar_excel_bytes(df_f, pivot_f, aero_f):
+        output_excel = io.BytesIO()
+        try:
+            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                if len(df_f) > 100000:
+                    df_f.head(100000).to_excel(writer, sheet_name='Microdatos_Muestra', index=False)
+                else:
+                    df_f.to_excel(writer, sheet_name='Microdatos', index=False)
+                pivot_f.to_excel(writer, sheet_name='Matriz_Pasajeros')
+                aero_f.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
+            return output_excel.getvalue()
+        except Exception:
+            return None
 
+    excel_bytes = generar_excel_bytes(df_filtrado, pivot_pax_con_total, df_aero)
     with col_exp2:
-        st.download_button(
-            label="📥 Descargar Reporte Completo (Excel)",
-            data=output_excel.getvalue(),
-            file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        if excel_bytes:
+            st.download_button(
+                label="📥 Descargar Reporte Completo (Excel)",
+                data=excel_bytes,
+                file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
