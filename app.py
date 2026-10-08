@@ -31,72 +31,85 @@ meses_map = {
     'jul': 7, 'ago': 8, 'sep': 9, 'set': 9, 'oct': 10, 'nov': 11, 'dic': 12
 }
 
-AEROPUERTOS_INFO = {
-    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AER']},
+AEROPUERTOS_EXHAUSTIVO = {
+    'AEP': {'codigo': 'AEP', 'ciudad': 'Aeroparque', 'keywords': ['AEROPARQUE', 'JORGE NEWBERY', 'BUENOS AIRES', 'CABA', 'AEP', 'AER']},
     'EZE': {'codigo': 'EZE', 'ciudad': 'Ezeiza', 'keywords': ['EZEIZA', 'PISTARINI', 'MINISTRO PISTARINI', 'EZE']},
     'EPA': {'codigo': 'EPA', 'ciudad': 'El Palomar', 'keywords': ['PALOMAR', 'EPA']},
     'FDO': {'codigo': 'FDO', 'ciudad': 'San Fernando', 'keywords': ['SAN FERNANDO', 'FDO']},
-    'BRC': {'codigo': 'BRC', 'ciudad': 'Bariloche', 'keywords': ['BARILOCHE', 'SAN CARLOS DE BARILOCHE', 'BRC', 'BAR', 'CANDELARIA']},
-    'COR': {'codigo': 'COR', 'ciudad': 'Córdoba', 'keywords': ['CORDOBA', 'CÓRDOBA', 'TARAVELLA', 'PAJAS BLANCAS', 'COR']},
-    'MDZ': {'codigo': 'MDZ', 'ciudad': 'Mendoza', 'keywords': ['MENDOZA', 'PLUMERILLO', 'MDZ', 'MEN']},
-    'SLA': {'codigo': 'SLA', 'ciudad': 'Salta', 'keywords': ['SALTA', 'GUEMES', 'GÜEMES', 'MARTIN MIGUEL', 'SLA', 'SAL']},
-    'JUJ': {'codigo': 'JUJ', 'ciudad': 'Jujuy', 'keywords': ['JUJUY', 'SAN SALVADOR', 'GUZMAN', 'GZMN', 'JUJ']},
-    'IGR': {'codigo': 'IGR', 'ciudad': 'Iguazú', 'keywords': ['IGUAZU', 'IGUAZÚ', 'CATARATAS', 'IGR']},
+    'BRC': {'codigo': 'BRC', 'ciudad': 'Bariloche', 'keywords': ['BARILOCHE', 'SAN CARLOS DE BARILOCHE', 'CANDELARIA', 'LUIS CANDELARIA', 'BRC']},
+    'COR': {'codigo': 'COR', 'ciudad': 'Córdoba', 'keywords': ['CORDOBA', 'CÓRDOBA', 'TARAVELLA', 'PAJAS BLANCAS', 'AMBROSIO', 'COR', 'CBA']},
+    'MDZ': {'codigo': 'MDZ', 'ciudad': 'Mendoza', 'keywords': ['MENDOZA', 'PLUMERILLO', 'EL PLUMERILLO', 'GABRIELLI', 'MDZ']},
+    'SLA': {'codigo': 'SLA', 'ciudad': 'Salta', 'keywords': ['SALTA', 'GUEMES', 'GÜEMES', 'MARTIN MIGUEL', 'MARTÍN MIGUEL', 'SLA']},
+    'JUJ': {'codigo': 'JUJ', 'ciudad': 'Jujuy', 'keywords': ['JUJUY', 'SAN SALVADOR', 'GUZMAN', 'GUZMÁN', 'HORACIO GUZMAN', 'HORACIO GUZMÁN', 'GDOR. HORACIO', 'JUJ']},
+    'IGR': {'codigo': 'IGR', 'ciudad': 'Iguazú', 'keywords': ['IGUAZU', 'IGUAZÚ', 'CATARATAS', 'PUERTO IGUAZU', 'PUERTO IGUAZÚ', 'IGR']},
     'USH': {'codigo': 'USH', 'ciudad': 'Ushuaia', 'keywords': ['USHUAIA', 'MALVINAS ARGENTINAS', 'USH']},
-    'FTE': {'codigo': 'FTE', 'ciudad': 'El Calafate', 'keywords': ['CALAFATE', 'ARMANDO TOLA', 'FTE']},
-    'NQN': {'codigo': 'NQN', 'ciudad': 'Neuquén', 'keywords': ['NEUQUEN', 'NEUQUÉN', 'PERON', 'PERÓN', 'NQN']},
-    'TUC': {'codigo': 'TUC', 'ciudad': 'Tucumán', 'keywords': ['TUCUMAN', 'TUCUMÁN', 'BENJAMIN MATIENZO', 'TUC']},
-    'BHI': {'codigo': 'BHI', 'ciudad': 'Bahía Blanca', 'keywords': ['BAHIA BLANCA', 'BAHÍA BLANCA', 'ESPORA', 'BHI']},
-    'CRD': {'codigo': 'CRD', 'ciudad': 'Comodoro Rivadavia', 'keywords': ['COMODORO', 'MOSCONI', 'CRD']},
-    'REL': {'codigo': 'REL', 'ciudad': 'Trelew', 'keywords': ['TRELEW', 'ALMIRANTE ZAR', 'REL']},
+    'FTE': {'codigo': 'FTE', 'ciudad': 'El Calafate', 'keywords': ['CALAFATE', 'EL CALAFATE', 'ARMANDO TOLA', 'TOLA', 'FTE']},
+    'NQN': {'codigo': 'NQN', 'ciudad': 'Neuquén', 'keywords': ['NEUQUEN', 'NEUQUÉN', 'PERON', 'PERÓN', 'PRESIDENTE PERON', 'NQN']},
+    'TUC': {'codigo': 'TUC', 'ciudad': 'Tucumán', 'keywords': ['TUCUMAN', 'TUCUMÁN', 'MATIENZO', 'BENJAMIN', 'BENJAMÍN', 'BENJAMI', 'BENJAMÍ', 'TUC']},
+    'MDQ': {'codigo': 'MDQ', 'ciudad': 'Mar del Plata', 'keywords': ['MAR DEL PLATA', 'PIAZZOLLA', 'PIAZZOLA', 'PIAZOLA', 'ASTOR', 'MDQ', 'MDP']},
+    'BHI': {'codigo': 'BHI', 'ciudad': 'Bahía Blanca', 'keywords': ['BAHIA BLANCA', 'BAHÍA BLANCA', 'ESPORA', 'COMANDANTE ESPORA', 'BHI']},
+    'CRD': {'codigo': 'CRD', 'ciudad': 'Comodoro Rivadavia', 'keywords': ['COMODORO', 'COMODORO RIVADAVIA', 'MOSCONI', 'GENERAL MOSCONI', 'CRD']},
+    'REL': {'codigo': 'REL', 'ciudad': 'Trelew', 'keywords': ['TRELEW', 'ALMIRANTE ZAR', 'ZAR', 'REL']},
     'ROS': {'codigo': 'ROS', 'ciudad': 'Rosario', 'keywords': ['ROSARIO', 'ISLAS MALVINAS', 'ROS']},
     'SFN': {'codigo': 'SFN', 'ciudad': 'Santa Fe', 'keywords': ['SANTA FE', 'SAUCE VIEJO', 'SFN']},
-    'CNQ': {'codigo': 'CNQ', 'ciudad': 'Corrientes', 'keywords': ['CORRIENTES', 'PIRAGUINE', 'CNQ']},
-    'PSS': {'codigo': 'PSS', 'ciudad': 'Posadas', 'keywords': ['POSADAS', 'SAN MARTIN', 'PSS']},
+    'CNQ': {'codigo': 'CNQ', 'ciudad': 'Corrientes', 'keywords': ['CORRIENTES', 'PIRAGINE', 'PIRAGINE NIVEYRO', 'PIRAG', 'FERNANDO PIRAG', 'CNQ']},
+    'PSS': {'codigo': 'PSS', 'ciudad': 'Posadas', 'keywords': ['POSADAS', 'LIBERTADOR GENERAL SAN MARTIN', 'JOSE DE SAN MARTIN', 'SAN MARTIN', 'PSS']},
     'RES': {'codigo': 'RES', 'ciudad': 'Resistencia', 'keywords': ['RESISTENCIA', 'JOSE DE SAN MARTIN', 'RES']},
-    'MDQ': {'codigo': 'MDQ', 'ciudad': 'Mar del Plata', 'keywords': ['MAR DEL PLATA', 'CAMET', 'ASTOR PIAZZOLLA', 'MDQ']},
-    'RGL': {'codigo': 'RGL', 'ciudad': 'Río Gallegos', 'keywords': ['RIO GALLEGOS', 'RÍO GALLEGOS', 'NORBERTO FERNANDEZ', 'RGL']},
-    'RGA': {'codigo': 'RGA', 'ciudad': 'Río Grande', 'keywords': ['RIO GRANDE', 'RÍO GRANDE', 'TREJO', 'RGA']},
-    'EQS': {'codigo': 'EQS', 'ciudad': 'Esquel', 'keywords': ['ESQUEL', 'BRIGADIER PARODI', 'EQS']},
-    'CPC': {'codigo': 'CPC', 'ciudad': 'San Martín de los Andes', 'keywords': ['CHAPELCO', 'SAN MARTIN DE LOS ANDES', 'SAN MARTÍN DE LOS ANDES', 'CARLOS CAMPOS', 'CPC']},
-    'PMY': {'codigo': 'PMY', 'ciudad': 'Puerto Madryn', 'keywords': ['PUERTO MADRYN', 'EL TEHUELCHE', 'PMY']},
-    'VDM': {'codigo': 'VDM', 'ciudad': 'Viedma', 'keywords': ['VIEDMA', 'GOBERNADOR CASTELLO', 'VDM']},
-    'SDE': {'codigo': 'SDE', 'ciudad': 'Santiago del Estero', 'keywords': ['SANTIAGO DEL ESTERO', 'VICECOMODORO ARAGONES', 'SDE']},
-    'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'keywords': ['TERMAS', 'RIO HONDO', 'RÍO HONDO', 'RHD']},
-    'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'keywords': ['SAN JUAN', 'DOMINGO FAUSTINO SARMIENTO', 'UAQ']},
-    'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'keywords': ['SAN LUIS', 'CESAR RAUL OJEDA', 'LUQ']},
-    'VME': {'codigo': 'VME', 'ciudad': 'Villa Reynolds', 'keywords': ['VILLA REYNOLDS', 'REYNOLDS', 'VME']},
-    'CTC': {'codigo': 'CTC', 'ciudad': 'Catamarca', 'keywords': ['CATAMARCA', 'FELIPE VARELA', 'CTC']},
-    'IRJ': {'codigo': 'IRJ', 'ciudad': 'La Rioja', 'keywords': ['LA RIOJA', 'CAPITAN VICENTE ALMANDOZ', 'IRJ']},
-    'FMA': {'codigo': 'FMA', 'ciudad': 'Formosa', 'keywords': ['FORMOSA', 'EL PUCU', 'FMA']},
+    'RGL': {'codigo': 'RGL', 'ciudad': 'Río Gallegos', 'keywords': ['RIO GALLEGOS', 'RÍO GALLEGOS', 'NORBERTO FERNANDEZ', 'NORBERTO FERNÁNDEZ', 'PILOTO CIVIL NORBE', 'NORBE', 'RGL']},
+    'RGA': {'codigo': 'RGA', 'ciudad': 'Río Grande', 'keywords': ['RIO GRANDE', 'RÍO GRANDE', 'HERMES QUIJADA', 'RAMON TREJO', 'TREJO NOEL', 'RGA']},
+    'EQS': {'codigo': 'EQS', 'ciudad': 'Esquel', 'keywords': ['ESQUEL', 'BRIGADIER GENERAL ANTONIO PARODI', 'PARODI', 'EQS']},
+    'CPC': {'codigo': 'CPC', 'ciudad': 'San Martín de los Andes', 'keywords': ['CHAPELCO', 'SAN MARTIN DE LOS ANDES', 'SAN MARTÍN DE LOS ANDES', 'CARLOS CAMPOS', 'AVIADOR CARLOS CAMPOS', 'CPC']},
+    'PMY': {'codigo': 'PMY', 'ciudad': 'Puerto Madryn', 'keywords': ['PUERTO MADRYN', 'MADRYN', 'EL TEHUELCHE', 'TEHUELCHE', 'PMY']},
+    'VDM': {'codigo': 'VDM', 'ciudad': 'Viedma', 'keywords': ['VIEDMA', 'GOBERNADOR CASTELLO', 'EDGARDO CASTELLO', 'VDM']},
+    'SDE': {'codigo': 'SDE', 'ciudad': 'Santiago del Estero', 'keywords': ['SANTIAGO DEL ESTERO', 'VICECOMODORO ARAGONES', 'ARAGONES', 'ARAGONÉS', 'SDE']},
+    'RHD': {'codigo': 'RHD', 'ciudad': 'Termas de Río Hondo', 'keywords': ['TERMAS', 'RIO HONDO', 'RÍO HONDO', 'TERMAS DE RIO HONDO', 'RHD']},
+    'UAQ': {'codigo': 'UAQ', 'ciudad': 'San Juan', 'keywords': ['SAN JUAN', 'DOMINGO FAUSTINO SARMIENTO', 'SARMIENTO', 'UAQ']},
+    'LUQ': {'codigo': 'LUQ', 'ciudad': 'San Luis', 'keywords': ['SAN LUIS', 'BRIGADIER MAYOR CESAR RAUL OJEDA', 'CESAR RAUL OJEDA', 'CÉSAR RAÚL OJEDA', 'OJEDA', 'LUQ']},
+    'RLO': {'codigo': 'RLO', 'ciudad': 'Valle del Conlara', 'keywords': ['VALLE DEL CONLARA', 'CONLARA', 'CONLA', 'MERLO', 'SANTA ROSA DEL CONLARA', 'RLO']},
+    'CTC': {'codigo': 'CTC', 'ciudad': 'Catamarca', 'keywords': ['CATAMARCA', 'FELIPE VARELA', 'CORONEL FELIPE VARELA', 'JALIL HAMER', 'HAMER', 'CTC']},
+    'IRJ': {'codigo': 'IRJ', 'ciudad': 'La Rioja', 'keywords': ['LA RIOJA', 'CAPITAN VICENTE ALMANDOS', 'CAP. VICENTE ALMANDOS', 'ALMANDOS', 'ALMAN', 'ALMONACID', 'IRJ']},
+    'FMA': {'codigo': 'FMA', 'ciudad': 'Formosa', 'keywords': ['FORMOSA', 'EL PUCU', 'EL PUCÚ', 'FMA']},
     'RSA': {'codigo': 'RSA', 'ciudad': 'Santa Rosa', 'keywords': ['SANTA ROSA', 'RSA']},
     'RCU': {'codigo': 'RCU', 'ciudad': 'Río Cuarto', 'keywords': ['RIO CUARTO', 'RÍO CUARTO', 'AREA DE MATERIAL', 'RCU']},
-    'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'keywords': ['PARANA', 'PARANÁ', 'URQUIZA', 'PRA']},
-    'AFA': {'codigo': 'AFA', 'ciudad': 'San Rafael', 'keywords': ['SAN RAFAEL', 'SANTIAGO GERMANO', 'AFA']},
-    'MLG': {'codigo': 'MLG', 'ciudad': 'Malargüe', 'keywords': ['MALARGUE', 'MALARGÜE', 'COMODORO RICARDO SALOMON', 'MLG']},
+    'PRA': {'codigo': 'PRA', 'ciudad': 'Paraná', 'keywords': ['PARANA', 'PARANÁ', 'URQUIZA', 'JUSTO JOSE DE URQUIZA', 'PRA']},
+    'AFA': {'codigo': 'AFA', 'ciudad': 'San Rafael', 'keywords': ['SAN RAFAEL', 'SANTIAGO GERMANO', 'GERMANÓ', 'AFA']},
+    'MLG': {'codigo': 'MLG', 'ciudad': 'Malargüe', 'keywords': ['MALARGUE', 'MALARGÜE', 'COMODORO RICARDO SALOMON', 'SALOMON', 'MLG']},
     'GPO': {'codigo': 'GPO', 'ciudad': 'General Pico', 'keywords': ['GENERAL PICO', 'PICO', 'GPO']},
-    'RCQ': {'codigo': 'RCQ', 'ciudad': 'Reconquista', 'keywords': ['RECONQUISTA', 'DANIEL JUKIC', 'RCQ']},
+    'RCQ': {'codigo': 'RCQ', 'ciudad': 'Reconquista', 'keywords': ['RECONQUISTA', 'DANIEL JUKIC', 'JUKIC', 'RCQ']},
     'OYA': {'codigo': 'OYA', 'ciudad': 'Goya', 'keywords': ['GOYA', 'OYA']},
-    'CSZ': {'codigo': 'CSZ', 'ciudad': 'Sauce Viejo', 'keywords': ['SAUCE VIEJO', 'CSZ']}
+    'CSZ': {'codigo': 'CSZ', 'ciudad': 'Sauce Viejo', 'keywords': ['SAUCE VIEJO', 'CSZ']},
+    'PMQ': {'codigo': 'PMQ', 'ciudad': 'Perito Moreno', 'keywords': ['PERITO MORENO', 'PMQ']},
+    'RYO': {'codigo': 'RYO', 'ciudad': 'Río Mayo', 'keywords': ['RIO MAYO', 'RÍO MAYO', 'RYO']},
+    'JNI': {'codigo': 'JNI', 'ciudad': 'Junín', 'keywords': ['JUNIN', 'JUNÍN', 'JNI']}
 }
 
 def resolver_aeropuerto_texto(texto):
     if not texto or str(texto).strip() in ['', 'N/D', 'None', 'nan']:
         return "N/D", "Desconocido"
     t = str(texto).strip().upper()
-    if t in AEROPUERTOS_INFO:
-        info = AEROPUERTOS_INFO[t]
+    
+    if t in AEROPUERTOS_EXHAUSTIVO:
+        info = AEROPUERTOS_EXHAUSTIVO[t]
         return info['codigo'], info['ciudad']
-    for code, info in AEROPUERTOS_INFO.items():
+        
+    candidatos = []
+    for code, info in AEROPUERTOS_EXHAUSTIVO.items():
         for kw in info['keywords']:
             if len(kw) > 3 and kw in t:
-                return info['codigo'], info['ciudad']
-            if len(kw) <= 3 and re.search(r'\b' + re.escape(kw) + r'\b', t):
-                return info['codigo'], info['ciudad']
+                candidatos.append((len(kw), info['codigo'], info['ciudad']))
+            elif len(kw) <= 3 and re.search(r'\b' + re.escape(kw) + r'\b', t):
+                candidatos.append((len(kw), info['codigo'], info['ciudad']))
+                
+    if candidatos:
+        candidatos.sort(key=lambda x: x[0], reverse=True)
+        return candidatos[0][1], candidatos[0][2]
+        
     if len(t) == 3 and t.isalpha():
         return t, t
-    limpio = t.replace('AEROPUERTO', '').replace('INT.', '').strip().title()
-    return t[:4], limpio[:18]
+        
+    limpio = t.replace('AEROPUERTO', '').replace('INT.', '').replace('INTERNACIONAL', '').strip().title()
+    codigo_fallback = limpio[:3].upper() if len(limpio) >= 3 else t[:3].upper()
+    return codigo_fallback, limpio[:18]
 
 # -------------------------------------------------------------
 # FORMATEADORES NUMÉRICOS ARGENTINOS
@@ -131,7 +144,6 @@ def fmt_decimal(val):
 # LECTURA ROBUSTA DE ARCHIVOS (SIN INVENTAR DATOS)
 # -------------------------------------------------------------
 def extraer_bytes_fuente(fuente):
-    """Extrae el buffer de bytes completo sin importar el puntero o tipo de objeto."""
     if hasattr(fuente, 'getvalue'):
         return fuente.getvalue()
     if hasattr(fuente, 'seek'):
@@ -148,15 +160,9 @@ def extraer_bytes_fuente(fuente):
 
 @st.cache_data(show_spinner=False)
 def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
-    """
-    Procesa un buffer de bytes crudos de SINTA / ANAC.
-    Prioriza UTF-8 para evitar transformar 'Año' en 'AÃ±o'.
-    Garantiza lectura sin inventar datos y con tolerancia a encodings y separadores.
-    """
     if not raw_bytes or len(raw_bytes) == 0:
         return pd.DataFrame()
 
-    # Prioridad estricta: utf-8 primero para no degradar UTF-8 a mojibake con latin-1
     encodings = ['utf-8-sig', 'utf-8', 'latin-1', 'cp1252']
     separadores = [',', ';', '\t', '|']
     df = None
@@ -190,18 +196,15 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     if df is None or df.empty:
         return pd.DataFrame()
 
-    # Normalizar nombres de columnas limpiando comillas, espacios y posibles rezagos de mojibake
     cols_map = {c.strip(' "\'').lower().replace('ã±', 'ñ'): c for c in df.columns}
     df.rename(columns={v: k for k, v in cols_map.items()}, inplace=True)
 
-    # Identificar columna aerolínea
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'aerolínea', 'empresa', 'operador', 'linea', 'compania', 'compañía'])]
     if cand_aero:
         df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip(' "\'')
     else:
         df['aerolinea'] = 'Todas las Aerolíneas (Total)'
 
-    # Identificar pasajeros
     cand_pax = [c for c in df.columns if 'pasajero' in c or 'pax' in c]
     if cand_pax:
         s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -209,7 +212,6 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['pasajeros'] = np.int32(0)
 
-    # Identificar vuelos
     cand_vue = [c for c in df.columns if 'vuelo' in c or 'movimiento' in c or 'operacion' in c]
     if cand_vue:
         s_vue = df[cand_vue[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -217,7 +219,6 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['vuelos'] = np.int16(1)
 
-    # Identificar asientos
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
     if cand_asi:
         s_asi = df[cand_asi[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
@@ -225,19 +226,16 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     else:
         df['asientos'] = np.int32(0)
 
-    # Identificación y construcción robusta de Fechas
     col_dia = next((c for c in df.columns if any(k in c for k in ['dia', 'día', 'day', 'da']) and 'diario' not in c), None)
     col_mes = next((c for c in df.columns if 'mes' in c or 'month' in c), None)
     col_ano = next((c for c in df.columns if any(k in c for k in ['año', 'aã±o', 'anio', 'year', 'ano', 'ao'])), None)
     col_fecha = next((c for c in df.columns if any(k in c for k in ['fecha', 'date', 'indice_tiempo', 'periodo'])), None)
 
     if col_ano and col_mes:
-        # Extraer año tolerando puntos de miles ("2.024"), float ("2024.0") o texto ("2024")
         s_ano_clean = df[col_ano].astype(str).str.strip(' "\'').str.replace(r'\.0$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '', regex=False)
         s_ano_ext = s_ano_clean.str.extract(r'(20\d{2}|19\d{2})')[0]
         num_ano = pd.to_numeric(s_ano_ext, errors='coerce')
 
-        # Extraer mes numérico o texto (Julio, jul, 7, 07)
         s_mes_str = df[col_mes].astype(str).str.strip(' "\'').str.lower()
         num_mes = s_mes_str.map(meses_map).fillna(pd.to_numeric(s_mes_str, errors='coerce')).fillna(1).clip(1, 12).astype(int)
 
@@ -262,22 +260,25 @@ def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
     df['periodo_mes_es'] = df['mes_num'].map(meses_es) + ' ' + df['ano_num'].astype(str)
 
-    # Procesar Origen y Destino / Rutas
+    # Priorizar la columna 'Ruta' (Origen - Destino) para evitar nombres largos
+    cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c or 'puente' in c), None)
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
-    cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c or 'puente' in c), None)
 
-    if col_orig and col_dest:
-        origen_raw = df[col_orig].astype(str).str.strip(' "\'')
-        destino_raw = df[col_dest].astype(str).str.strip(' "\'')
-    elif cand_ruta:
+    if cand_ruta:
         partes = df[cand_ruta].astype(str).str.strip(' "\'').str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
             origen_raw = partes[0]
             destino_raw = partes[1]
+        elif col_orig and col_dest:
+            origen_raw = df[col_orig].astype(str).str.strip(' "\'')
+            destino_raw = df[col_dest].astype(str).str.strip(' "\'')
         else:
             origen_raw = df[cand_ruta]
             destino_raw = df[cand_ruta]
+    elif col_orig and col_dest:
+        origen_raw = df[col_orig].astype(str).str.strip(' "\'')
+        destino_raw = df[col_dest].astype(str).str.strip(' "\'')
     else:
         origen_raw = pd.Series(["AEP"] * len(df))
         destino_raw = pd.Series(["BRC"] * len(df))
@@ -413,7 +414,7 @@ st.success(
 )
 
 # -------------------------------------------------------------
-# FILTROS DINÁMICOS
+# FILTROS DE BÚSQUEDA Y BOTÓN BUSCAR VUELOS
 # -------------------------------------------------------------
 st.subheader("🔍 Filtros de Búsqueda de Vuelos")
 
@@ -427,7 +428,7 @@ with col_f1:
     sel_rutas = st.multiselect(
         "🗺️ Ruta (Ida y Vuelta):",
         options=rutas_disponibles,
-        help="Agrupa ambos sentidos de vuelo (ej. Bariloche ⇄ Ezeiza)."
+        help="Agrupa ambos sentidos de vuelo (ej. Bariloche ⇄ Ezeiza, Jujuy ⇄ Aeroparque)."
     )
 
 with col_f2:
@@ -443,7 +444,7 @@ with col_f3:
     )
 
 # Rango de fechas ajustado automáticamente a las fechas reales de la base
-col_d1, col_d2, col_btn = st.columns([1, 1, 1])
+col_d1, col_d2 = st.columns(2)
 
 def_desde = max(f_min_total, date(f_max_total.year, 1, 1)) if (f_max_total - f_min_total).days > 365 else f_min_total
 def_hasta = f_max_total
@@ -466,13 +467,17 @@ with col_d2:
         help=f"Fecha final dentro de la base oficial ({f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')})."
     )
 
-with col_btn:
-    st.write("")
-    st.write("")
-    btn_reset = st.button("🔄 Restablecer Filtros de Fecha")
-    if btn_reset:
-        f_desde = f_min_total
-        f_hasta = f_max_total
+# Botones de control solicitados
+col_b1, col_b2 = st.columns([1, 4])
+with col_b1:
+    btn_buscar = st.button("🔍 Buscar Vuelos", type="primary", use_container_width=True)
+
+# Mantener estado de búsqueda activo una vez presionado
+if 'busqueda_realizada' not in st.session_state:
+    st.session_state['busqueda_realizada'] = True
+
+if btn_buscar:
+    st.session_state['busqueda_realizada'] = True
 
 # Aplicar filtros
 mask = (df_raw['fecha'].dt.date >= f_desde) & (df_raw['fecha'].dt.date <= f_hasta)
