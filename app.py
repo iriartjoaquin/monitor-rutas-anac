@@ -4,6 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import requests
 import gzip
 import io
 import re
@@ -138,7 +139,7 @@ meses_orden = {
 }
 
 # -------------------------------------------------------------
-# GENERADOR DE CONECTIVIDAD HISTÓRICA BASELINE (2017 A 2026)
+# GENERADOR DE CONECTIVIDAD HISTÓRICA BASELINE (CONTINGENCIA)
 # -------------------------------------------------------------
 def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026, mes_inicio=1, mes_fin=12):
     rutas_base = [
@@ -216,7 +217,7 @@ def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026, mes_inicio=1, mes
             fact_temp = 1.25 if m in [1, 7] else (1.15 if m in [2, 12] else (0.88 if m in [4, 5, 9] else 1.0))
             
             for o_cod, o_ciu, d_cod, d_ciu, r_vol in rutas_base:
-                base_pax = 24000 * r_vol * fact_ano * fact_temp
+                base_pax = 65000 * r_vol * fact_ano * fact_temp
                 
                 if y <= 2017:
                     dist_aero = [('Aerolíneas Argentinas', 0.76), ('Austral Líneas Aéreas', 0.18), ('LATAM Argentina', 0.06)]
@@ -311,8 +312,46 @@ def leer_archivo_robusto(source):
         df = pd.read_csv(path, sep=None, compression=comp, engine='python', dtype=str)
     return df
 
+def descargar_datos_sinta_online():
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+    api_url = "https://datos.yvera.gob.ar/api/3/action/package_show?id=conectividad-aerea"
+    try:
+        r = requests.get(api_url, headers=headers, timeout=12)
+        if r.status_code == 200:
+            data = r.json()
+            if data.get('success'):
+                resources = data['result'].get('resources', [])
+                for res in resources:
+                    fmt = str(res.get('format', '')).upper()
+                    nombre = str(res.get('name', '')).lower()
+                    url = res.get('url', '')
+                    if 'CSV' in fmt and ('frecuencia' in nombre or 'pasajero' in nombre or 'vuelo' in nombre or 'dia' in nombre):
+                        r_csv = requests.get(url, headers=headers, timeout=30)
+                        if r_csv.status_code == 200 and len(r_csv.content) > 500:
+                            with open('datos_cabotaje.csv', 'wb') as f_out:
+                                f_out.write(r_csv.content)
+                            return True
+    except Exception:
+        pass
+        
+    urls_directas = [
+        "https://datos.yvera.gob.ar/dataset/conectividad-aerea/archivo/03b4176f-a065-450a-b411-101d2a884720",
+        "https://datos.yvera.gob.ar/dataset/conectividad-aerea/archivo/aab49234-28c9-48ab-a978-a83485139290",
+        "https://datos.yvera.gob.ar/dataset/conectividad-aerea/archivo/d406a6fa-c209-4b15-b648-6bcceb1d040c"
+    ]
+    for u in urls_directas:
+        try:
+            r = requests.get(u, headers=headers, timeout=20)
+            if r.status_code == 200 and len(r.content) > 500 and (b',' in r.content[:500] or b';' in r.content[:500]):
+                with open('datos_cabotaje.csv', 'wb') as f_out:
+                    f_out.write(r.content)
+                return True
+        except Exception:
+            continue
+    return False
+
 @st.cache_data(show_spinner="Cargando y procesando estadísticas de vuelos...")
-def cargar_datos(archivo_subido=None, cache_buster="v7_sinta_real_uploader"):
+def cargar_datos(archivo_subido=None, cache_buster="v8_sinta_online_full"):
     es_real = False
     df = None
     
@@ -356,6 +395,15 @@ def cargar_datos(archivo_subido=None, cache_buster="v7_sinta_real_uploader"):
                     es_real = True
             except Exception:
                 df = None
+        else:
+            # Intento de descarga automática en vivo desde SINTA (en Streamlit Cloud)
+            try:
+                if descargar_datos_sinta_online():
+                    df = leer_archivo_robusto('datos_cabotaje.csv')
+                    if df is not None and not df.empty and len(df) >= 2:
+                        es_real = True
+            except Exception:
+                pass
 
     if df is None or df.empty or len(df) < 2:
         return generar_conectividad_rango(2017, 2026), False
@@ -558,13 +606,25 @@ with st.sidebar:
         """
     )
     st.markdown("---")
-    st.subheader("📂 Cargar Base Oficial SINTA / ANAC")
-    st.caption("Para comparar con los datos exactos del tablero oficial, descargue el archivo ('Descargar en csv') en el tablero SINTA y cárguelo aquí:")
+    st.subheader("📂 Sincronización de Base Oficial")
+    st.caption("Para tener los datos exactos oficiales sin descargar nada manualmente, presione el botón de sincronización automática:")
+    if st.button("🔄 Sincronizar datos oficiales desde SINTA (Online)", use_container_width=True):
+        with st.spinner("Descargando base de datos oficial en vivo desde servidores de SINTA / Turismo..."):
+            exito = descargar_datos_sinta_online()
+            if exito:
+                st.cache_data.clear()
+                st.success("¡Base oficial descargada y actualizada exitosamente!")
+                st.rerun()
+            else:
+                st.error("No se pudo conectar con el servidor oficial en este intento. Puede subir el CSV descargado abajo.")
+
+    st.markdown("---")
+    st.caption("O si prefiere, suba el archivo CSV que descargó del tablero de SINTA:")
     archivo_subido_sidebar = st.file_uploader(
         "Subir archivo CSV oficial:",
         type=["csv", "gz", "xlsx"],
         key="uploader_sinta",
-        help="Suba directamente el archivo exportado de SINTA o ANAC para ver las cifras reales exactas sin necesidad de configurar GitHub."
+        help="Suba directamente el archivo exportado de SINTA o ANAC para ver las cifras reales exactas."
     )
 
 df_raw, es_datos_reales = cargar_datos(archivo_subido=archivo_subido_sidebar)
@@ -572,7 +632,7 @@ df_raw, es_datos_reales = cargar_datos(archivo_subido=archivo_subido_sidebar)
 if es_datos_reales:
     st.success("🟢 **Fuente de Datos Activa:** Base de datos oficial conectada y cargada exitosamente.")
 else:
-    st.info("ℹ️ **Modo Demostración (Datos Estimados):** No se detectó un archivo oficial cargado en el repositorio. Para visualizar los datos 100% exactos del tablero de SINTA, puede subir el archivo CSV en la barra lateral izquierda o colocar `datos_cabotaje.csv` en su repositorio de GitHub.")
+    st.info("ℹ️ **Modo Demostración (Datos Estimados):** No se detectó un archivo oficial cargado en el repositorio. Para visualizar los datos 100% exactos del tablero de SINTA, puede presionar '🔄 Sincronizar datos oficiales desde SINTA (Online)' o subir el archivo CSV en la barra lateral izquierda.")
 
 # Listas de opciones limpias sin N/D
 rutas_disponibles = sorted([str(x) for x in df_raw['ruta_label'].dropna().unique() if 'N/D' not in str(x)])
