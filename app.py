@@ -24,13 +24,11 @@ meses_es = {
     7: 'Jul', 8: 'Ago', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dic'
 }
 
-meses_orden = {
+meses_map = {
     'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-    'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+    'julio': 7, 'agosto': 8, 'septiembre': 9, 'setiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
     'ene': 1, 'feb': 2, 'mar': 3, 'abr': 4, 'may': 5, 'jun': 6,
-    'jul': 7, 'ago': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dic': 12,
-    '1': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6,
-    '7': 7, '8': 8, '9': 9, '10': 10, '11': 11, '12': 12
+    'jul': 7, 'ago': 8, 'sep': 9, 'set': 9, 'oct': 10, 'nov': 11, 'dic': 12
 }
 
 AEROPUERTOS_INFO = {
@@ -132,73 +130,90 @@ def fmt_decimal(val):
 # -------------------------------------------------------------
 # LECTURA ROBUSTA DE ARCHIVOS (SIN INVENTAR DATOS)
 # -------------------------------------------------------------
-def leer_archivo_universal(fuente):
-    encodings = ['latin-1', 'utf-8-sig', 'utf-8', 'cp1252']
-    
+def extraer_bytes_fuente(fuente):
+    """Extrae el buffer de bytes completo sin importar el puntero o tipo de objeto."""
+    if hasattr(fuente, 'getvalue'):
+        return fuente.getvalue()
+    if hasattr(fuente, 'seek'):
+        fuente.seek(0)
     if hasattr(fuente, 'read'):
-        raw = fuente.read()
+        data = fuente.read()
         if hasattr(fuente, 'seek'):
             fuente.seek(0)
-    elif isinstance(fuente, str) and os.path.exists(fuente):
+        return data
+    if isinstance(fuente, str) and os.path.exists(fuente):
         with open(fuente, 'rb') as f:
-            raw = f.read()
-    else:
-        return None
+            return f.read()
+    return None
 
+@st.cache_data(show_spinner=False)
+def procesar_dataset_bytes(raw_bytes, nombre_fuente="datos"):
+    """
+    Procesa un buffer de bytes crudos de SINTA / ANAC.
+    Garantiza lectura sin inventar datos y con tolerancia a encodings y separadores.
+    """
+    if not raw_bytes or len(raw_bytes) == 0:
+        return pd.DataFrame()
+
+    encodings = ['latin-1', 'utf-8-sig', 'utf-8', 'cp1252']
+    separadores = [';', ',', '\t', '|']
     df = None
+
     for enc in encodings:
         try:
-            texto = raw.decode(enc)
+            texto = raw_bytes.decode(enc)
             lineas = [l for l in texto.splitlines() if l.strip()]
             if not lineas:
                 continue
             primera_linea = lineas[0]
-            sep = ';' if ';' in primera_linea else (',' if ',' in primera_linea else None)
-            
+            sep_counts = {s: primera_linea.count(s) for s in separadores}
+            mejor_sep = max(sep_counts, key=sep_counts.get)
+            sep = mejor_sep if sep_counts[mejor_sep] >= 2 else None
+
             buf = io.StringIO(texto)
-            if sep:
-                df = pd.read_csv(buf, sep=sep, engine='c', low_memory=False)
-            else:
-                df = pd.read_csv(buf, sep=None, engine='python')
-                
-            if df is not None and len(df.columns) >= 3 and len(df) > 0:
+            try:
+                if sep:
+                    df = pd.read_csv(buf, sep=sep, engine='c', low_memory=False, on_bad_lines='skip', dtype=str)
+                else:
+                    df = pd.read_csv(buf, sep=None, engine='python', on_bad_lines='skip', dtype=str)
+            except Exception:
+                buf.seek(0)
+                df = pd.read_csv(buf, sep=None, engine='python', on_bad_lines='skip', dtype=str)
+
+            if df is not None and len(df.columns) >= 2 and len(df) > 0:
                 break
         except Exception:
             continue
-            
-    return df
 
-@st.cache_data(show_spinner=False)
-def procesar_dataset_oficial(fuente):
-    df = leer_archivo_universal(fuente)
     if df is None or df.empty:
         return pd.DataFrame()
 
-    cols_map = {c: c.strip().lower() for c in df.columns}
-    df.rename(columns=cols_map, inplace=True)
+    cols_map = {c.strip(' "\'').lower(): c for c in df.columns}
+    df.rename(columns={v: k for k, v in cols_map.items()}, inplace=True)
 
     cand_aero = [c for c in df.columns if any(p in c for p in ['aerolinea', 'aerolínea', 'empresa', 'operador', 'linea', 'compania', 'compañía'])]
     if cand_aero:
-        df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip()
+        df['aerolinea'] = df[cand_aero[0]].fillna('Otras').astype(str).str.strip(' "\'')
     else:
         df['aerolinea'] = 'Todas las Aerolíneas (Total)'
 
     cand_pax = [c for c in df.columns if 'pasajero' in c or 'pax' in c]
     if cand_pax:
-        s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        s_pax = df[cand_pax[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
         df['pasajeros'] = pd.to_numeric(s_pax, errors='coerce').fillna(0).astype(np.int32)
     else:
         df['pasajeros'] = np.int32(0)
 
     cand_vue = [c for c in df.columns if 'vuelo' in c or 'movimiento' in c or 'operacion' in c]
     if cand_vue:
-        df['vuelos'] = pd.to_numeric(df[cand_vue[0]], errors='coerce').fillna(1).astype(np.int16)
+        s_vue = df[cand_vue[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
+        df['vuelos'] = pd.to_numeric(s_vue, errors='coerce').fillna(1).astype(np.int16)
     else:
         df['vuelos'] = np.int16(1)
 
     cand_asi = [c for c in df.columns if 'asiento' in c or 'plaza' in c]
     if cand_asi:
-        s_asi = df[cand_asi[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
+        s_asi = df[cand_asi[0]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip(' "\'')
         df['asientos'] = pd.to_numeric(s_asi, errors='coerce').fillna(0).astype(np.int32)
     else:
         df['asientos'] = np.int32(0)
@@ -206,18 +221,25 @@ def procesar_dataset_oficial(fuente):
     col_dia = next((c for c in df.columns if any(k in c for k in ['dia', 'día', 'day', 'da']) and 'diario' not in c), None)
     col_mes = next((c for c in df.columns if 'mes' in c or 'month' in c), None)
     col_ano = next((c for c in df.columns if any(k in c for k in ['año', 'anio', 'year', 'ano', 'ao'])), None)
+    col_fecha = next((c for c in df.columns if any(k in c for k in ['fecha', 'date', 'indice_tiempo', 'periodo'])), None)
 
-    if col_ano and col_mes and col_dia:
-        num_mes = df[col_mes].astype(str).str.strip().str.lower().map(meses_orden).fillna(1).astype(int)
-        num_dia = pd.to_numeric(df[col_dia], errors='coerce').fillna(1).astype(int)
-        num_ano = pd.to_numeric(df[col_ano], errors='coerce').fillna(0).astype(int)
+    if col_ano and col_mes:
+        s_ano_clean = df[col_ano].astype(str).str.strip(' "\'').str.replace(r'\.0$', '', regex=True).str.replace('.', '', regex=False).str.replace(',', '', regex=False)
+        s_ano_ext = s_ano_clean.str.extract(r'(20\d{2}|19\d{2})')[0]
+        num_ano = pd.to_numeric(s_ano_ext, errors='coerce')
+
+        s_mes_str = df[col_mes].astype(str).str.strip(' "\'').str.lower()
+        num_mes = s_mes_str.map(meses_map).fillna(pd.to_numeric(s_mes_str, errors='coerce')).fillna(1).clip(1, 12).astype(int)
+
+        if col_dia:
+            s_dia_num = pd.to_numeric(df[col_dia].astype(str).str.strip(' "\''), errors='coerce')
+            num_dia = s_dia_num.fillna(1).clip(1, 31).astype(int)
+        else:
+            num_dia = 1
+
         df['fecha'] = pd.to_datetime(dict(year=num_ano, month=num_mes, day=num_dia), errors='coerce')
-    elif 'fecha' in df.columns:
-        df['fecha'] = pd.to_datetime(df['fecha'], errors='coerce', dayfirst=True)
-    elif col_ano and col_mes:
-        num_mes = df[col_mes].astype(str).str.strip().str.lower().map(meses_orden).fillna(1).astype(int)
-        num_ano = pd.to_numeric(df[col_ano], errors='coerce').fillna(0).astype(int)
-        df['fecha'] = pd.to_datetime(dict(year=num_ano, month=num_mes, day=1), errors='coerce')
+    elif col_fecha:
+        df['fecha'] = pd.to_datetime(df[col_fecha], errors='coerce', dayfirst=True)
     else:
         df['fecha'] = pd.NaT
 
@@ -228,17 +250,17 @@ def procesar_dataset_oficial(fuente):
     df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
     df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
     df['periodo_orden'] = (df['ano_num'] * 100 + df['mes_num']).astype(np.int32)
-    df['periodo_mes_es'] = df['mes_num'].map(meses_es) + " " + df['ano_num'].astype(str)
+    df['periodo_mes_es'] = df['mes_num'].map(meses_es) + ' ' + df['ano_num'].astype(str)
 
     col_dest = next((c for c in df.columns if any(k in c for k in ['destino', 'llegada']) and 'origen' not in c), None)
     col_orig = next((c for c in df.columns if any(k in c for k in ['origen', 'salida']) and 'destino' not in c), None)
     cand_ruta = next((c for c in df.columns if 'ruta' in c or 'trayecto' in c or 'puente' in c), None)
 
     if col_orig and col_dest:
-        origen_raw = df[col_orig].astype(str)
-        destino_raw = df[col_dest].astype(str)
+        origen_raw = df[col_orig].astype(str).str.strip(' "\'')
+        destino_raw = df[col_dest].astype(str).str.strip(' "\'')
     elif cand_ruta:
-        partes = df[cand_ruta].astype(str).str.split(r'\s*-\s*', expand=True)
+        partes = df[cand_ruta].astype(str).str.strip(' "\'').str.split(r'\s*-\s*', expand=True)
         if partes.shape[1] >= 2:
             origen_raw = partes[0]
             destino_raw = partes[1]
@@ -309,25 +331,44 @@ st.sidebar.markdown("""
 fuente_activa = None
 df_raw = pd.DataFrame()
 
-# 1. Archivo subido por el usuario en la sesión
+# 1. Intentar con archivo subido por el usuario en la sesión
 if archivo_subido is not None:
-    df_raw = procesar_dataset_oficial(archivo_subido)
-    if not df_raw.empty:
-        fuente_activa = f"Archivo subido: '{archivo_subido.name}'"
+    raw_b = extraer_bytes_fuente(archivo_subido)
+    if raw_b and len(raw_b) > 0:
+        df_raw = procesar_dataset_bytes(raw_b, archivo_subido.name)
+        if not df_raw.empty:
+            fuente_activa = f"Archivo subido: '{archivo_subido.name}'"
+        else:
+            st.sidebar.error(f"⚠️ El archivo '{archivo_subido.name}' ({len(raw_b):,} bytes) no pudo ser procesado.")
+            try:
+                preview = raw_b[:300].decode('latin-1', errors='replace')
+                st.sidebar.caption("Primeros caracteres del archivo recibido:")
+                st.sidebar.code(preview)
+            except Exception:
+                pass
 
-# 2. Archivo oficial colocado en el repositorio de GitHub
+# 2. Si no hay archivo subido, buscar automáticamente en el repositorio GitHub
 if df_raw.empty:
-    archivos_locales = [
+    candidatos_locales = [
         'conectividad_aerea.csv', 'conectividad-aerea.csv',
-        'datos_cabotaje.csv', 'datos_sinta.csv', 'base_cabotaje.csv', 'test_raw.csv'
+        'datos_cabotaje.csv', 'datos_sinta.csv', 'base_cabotaje.csv'
     ]
-    for nom in archivos_locales:
+    try:
+        for f in os.listdir('.'):
+            if f.lower().endswith('.csv') and f not in candidatos_locales:
+                candidatos_locales.append(f)
+    except Exception:
+        pass
+
+    for nom in candidatos_locales:
         if os.path.exists(nom):
-            df_cand = procesar_dataset_oficial(nom)
-            if not df_cand.empty:
-                df_raw = df_cand
-                fuente_activa = f"Archivo local en repositorio: '{nom}'"
-                break
+            raw_b = extraer_bytes_fuente(nom)
+            if raw_b and len(raw_b) > 0:
+                df_cand = procesar_dataset_bytes(raw_b, nom)
+                if not df_cand.empty:
+                    df_raw = df_cand
+                    fuente_activa = f"Archivo local en repositorio: '{nom}'"
+                    break
 
 # -------------------------------------------------------------
 # PANTALLA PRINCIPAL
