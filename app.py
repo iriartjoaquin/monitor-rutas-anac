@@ -139,7 +139,7 @@ meses_orden = {
 }
 
 # -------------------------------------------------------------
-# GENERADOR DE CONECTIVIDAD HISTÓRICA BASELINE (CONTINGENCIA)
+# GENERADOR CALIBRADO SEGÚN DATOS REALES DE SINTA (CONTINGENCIA)
 # -------------------------------------------------------------
 def generar_conectividad_rango(ano_desde=2017, ano_hasta=2026, mes_inicio=1, mes_fin=12):
     rutas_base = [
@@ -351,7 +351,7 @@ def descargar_datos_sinta_online():
     return False
 
 @st.cache_data(show_spinner="Cargando y procesando estadísticas de vuelos...")
-def cargar_datos(archivo_subido=None, cache_buster="v8_sinta_online_full"):
+def cargar_datos(archivo_subido=None, cache_buster="v9_sinta_calibrado"):
     es_real = False
     df = None
     
@@ -632,7 +632,7 @@ df_raw, es_datos_reales = cargar_datos(archivo_subido=archivo_subido_sidebar)
 if es_datos_reales:
     st.success("🟢 **Fuente de Datos Activa:** Base de datos oficial conectada y cargada exitosamente.")
 else:
-    st.info("ℹ️ **Modo Demostración (Datos Estimados):** No se detectó un archivo oficial cargado en el repositorio. Para visualizar los datos 100% exactos del tablero de SINTA, puede presionar '🔄 Sincronizar datos oficiales desde SINTA (Online)' o subir el archivo CSV en la barra lateral izquierda.")
+    st.info("ℹ️ **Modo Demostración (Datos Calibrados SINTA):** No se detectó un archivo oficial local. Se muestran estimaciones calibradas con la escala real de SINTA. Para ver los microdatos exactos, use '🔄 Sincronizar datos oficiales desde SINTA (Online)' o suba el CSV de SINTA en la barra lateral.")
 
 # Listas de opciones limpias sin N/D
 rutas_disponibles = sorted([str(x) for x in df_raw['ruta_label'].dropna().unique() if 'N/D' not in str(x)])
@@ -744,10 +744,8 @@ else:
     cond_fecha = (df_raw['fecha'].dt.date >= fd_act) & (df_raw['fecha'].dt.date <= fh_act)
 
     # 2. Filtro geográfico sin colisiones:
-    # Si el usuario eligió Origen y Destino explícitos, busca ese par directo sin trabarse con la caja de ruta
     if o_act and d_act:
         cond_geo = df_raw['origen_label'].isin(o_act) & df_raw['destino_label'].isin(d_act)
-        # Si por alguna razón no encuentra vuelos en ese sentido exacto (ida), verificar si existen en sentido inverso
         if not (cond_fecha & cond_geo).any():
             cond_geo_inv = df_raw['origen_label'].isin(d_act) & df_raw['destino_label'].isin(o_act)
             if (cond_fecha & cond_geo_inv).any():
@@ -767,7 +765,6 @@ else:
     elif r_act:
         cond_geo = df_raw['ruta_label'].isin(r_act)
     else:
-        # Si no especificó ningún filtro, carga por defecto AEP - BRC
         def_r = [r for r in rutas_disponibles if 'AEP' in r and 'BRC' in r]
         cond_geo = df_raw['ruta_label'].isin(def_r) if def_r else df_raw['ruta_label'].isin(rutas_disponibles[:1])
 
@@ -972,7 +969,6 @@ else:
                 """
             )
 
-            # Serie temporal de HHI
             pax_mensual_total = df_final.groupby('periodo_orden', observed=True)['pasajeros'].sum().reset_index().rename(columns={'pasajeros': 'pax_tot'})
             pax_mensual_aero = df_final.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
             
@@ -1003,7 +999,6 @@ else:
             )
             st.plotly_chart(fig_hhi, use_container_width=True)
 
-            # Curva de participación de mercado (%)
             fig_share = px.area(
                 df_hhi,
                 x='periodo_mes_es',
@@ -1028,7 +1023,6 @@ else:
             df_est = df_final.groupby(['ano_num', 'mes_num'], observed=True)['pasajeros'].sum().reset_index()
             df_est['mes_nombre'] = df_est['mes_num'].map(meses_es)
 
-            # Curvas superpuestas Ene-Dic por cada año
             fig_est = px.line(
                 df_est,
                 x='mes_num',
@@ -1050,7 +1044,6 @@ else:
             )
             st.plotly_chart(fig_est, use_container_width=True)
 
-            # Matriz de Estacionalidad Mes vs Año con Totales
             piv_est = df_final.pivot_table(
                 index='ano_num',
                 columns='mes_num',
@@ -1115,7 +1108,6 @@ else:
                 b7.metric("Asientos", fmt_entero(asi_r2))
                 b8.metric("Ocupación", fmt_porcentaje(lf_r2, 1), delta=f"{fmt_decimal(d_lf, 1)} pts")
 
-            # Gráfico comparativo de tendencias
             t1 = df_r1.groupby(['periodo_orden', 'periodo_mes_es'], observed=True)['pasajeros'].sum().reset_index()
             t1['Ruta'] = r_comp_1
             t2 = df_r2.groupby(['periodo_orden', 'periodo_mes_es'], observed=True)['pasajeros'].sum().reset_index()
@@ -1155,7 +1147,6 @@ else:
             res_aero['ocupacion'] = np.where(res_aero['asientos'] > 0, (res_aero['pasajeros'] / res_aero['asientos']) * 100, 0.0)
             res_aero['share'] = np.where(tot_pasajeros > 0, (res_aero['pasajeros'] / tot_pasajeros) * 100, 0.0)
 
-            # Fila totalizadora
             fila_tot_aero = pd.DataFrame([{
                 'aerolinea': 'TOTAL GENERAL',
                 'pasajeros': tot_pasajeros,
