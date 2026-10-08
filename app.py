@@ -142,10 +142,10 @@ AEROPUERTOS_EXHAUSTIVO = {
     'OMR': {'codigo': 'OMR', 'ciudad': 'Sarmiento', 'keywords': ['SARMIENTO', 'OMR']}
 }
 
-def normalizar_texto_aeropuerto(txt):
-    if not isinstance(txt, str):
+def normalizar_texto_aeropuerto(texto):
+    if not isinstance(texto, str):
         return ""
-    txt = txt.upper().strip()
+    txt = texto.upper().strip()
     txt = txt.replace('Ã±', 'N').replace('Ã‘', 'N').replace('ñ', 'N').replace('Ñ', 'N')
     txt = re.sub(r'[ÁÀÄÂ]', 'A', txt)
     txt = re.sub(r'[ÉÈËÊ]', 'E', txt)
@@ -161,19 +161,16 @@ def obtener_sigla_y_ciudad(nombre_aeropuerto):
 
     norm = normalizar_texto_aeropuerto(nombre_aeropuerto)
 
-    # 1. Búsqueda exacta de código IATA conocido
     for iata, datos in AEROPUERTOS_EXHAUSTIVO.items():
         if re.search(r'\b' + re.escape(iata) + r'\b', norm):
             return datos['codigo'], datos['ciudad']
 
-    # 2. Búsqueda por palabras clave oficiales
     for iata, datos in AEROPUERTOS_EXHAUSTIVO.items():
         for kw in datos['keywords']:
             kw_norm = normalizar_texto_aeropuerto(kw)
             if kw_norm and re.search(r'\b' + re.escape(kw_norm) + r'\b', norm):
                 return datos['codigo'], datos['ciudad']
 
-    # 3. Fallback inteligente: buscar el nombre propio real sin tomar "AEROPUERTO"
     stopwords = {
         'AEROPUERTO', 'AERODROMO', 'AERÓDROMO', 'BASE', 'AEREA', 'AÉREA', 'MILITAR',
         'INTERNACIONAL', 'INT', 'NACIONAL', 'DE', 'DEL', 'LA', 'EL', 'LOS', 'LAS',
@@ -190,7 +187,6 @@ def obtener_sigla_y_ciudad(nombre_aeropuerto):
         ciudad_cand = palabras_resto[0].title() if palabras_resto else nombre_aeropuerto.strip().title()
         sigla_fallback = ciudad_cand[:3].upper() if len(ciudad_cand) >= 3 else "DES"
 
-    # NUNCA devolver 'AER' ni 'INT' como sigla
     if sigla_fallback in ['AER', 'INT']:
         sigla_fallback = "OTR"
 
@@ -222,7 +218,7 @@ def parsear_mes(val):
         return max(1, min(int(s), 12))
     s = s.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u')
     s = re.sub(r'[^a-z]', '', s)
-    return meses_map.get(s, 1)
+    return meses_map.get(s[:3], 1)
 
 def parsear_dia(val):
     if val is None or pd.isna(val):
@@ -265,97 +261,132 @@ def parsear_ano(val):
             return n
     except Exception:
         pass
-
-    m = re.search(r'(19\d\d|20\d\d)', s)
+    m = re.search(r'(19\d{2}|20\d{2})', s)
     if m:
         return int(m.group(1))
     return None
 
+def limpiar_mojibake_texto(val):
+    if not isinstance(val, str):
+        return val
+    txt = val
+    reemplazos = {
+        'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
+        'Ã': 'Á', 'Ã‰': 'É', 'Ã': 'Í', 'Ã“': 'Ó', 'Ãš': 'Ú',
+        'Ã±': 'ñ', 'Ã‘': 'Ñ'
+    }
+    for k, v in reemplazos.items():
+        txt = txt.replace(k, v)
+    return txt.strip()
+
+# -------------------------------------------------------------
+# DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES (OPTIMIZADO EN RAM)
+# -------------------------------------------------------------
 @st.cache_data(show_spinner=False)
-def cargar_y_limpiar_datos(archivo_path):
-    if not os.path.exists(archivo_path):
-        return None, f"No se encontró el archivo: {archivo_path}"
+def procesar_dataframe_oficial(df_in):
+    if df_in is None or df_in.empty:
+        return None, "El archivo proporcionado está vacío."
 
-    df_raw = None
+    df = df_in.copy()
     
-    # 1. Soporte para .zip
-    if archivo_path.endswith('.zip'):
-        try:
-            with zipfile.ZipFile(archivo_path, 'r') as z:
-                csv_files = [f for f in z.namelist() if f.endswith('.csv') and not f.startswith('__MACOSX')]
-                if not csv_files:
-                    return None, "El archivo .zip no contiene ningún archivo .csv válido."
-                target_csv = csv_files[0]
-                with z.open(target_csv) as f:
-                    sample = f.read(4096).decode('utf-8', errors='ignore')
-                    f.seek(0)
-                    sep = ';' if ';' in sample else (',' if ',' in sample else '\t')
-                    df_raw = pd.read_csv(f, sep=sep, low_memory=False, encoding='utf-8', encoding_errors='replace')
-        except Exception as e:
-            return None, f"Error al descomprimir y leer {archivo_path}: {e}"
-            
-    # 2. Soporte para .csv / .csv.gz
-    else:
-        for sep in [';', ',', '\t']:
-            try:
-                df_raw = pd.read_csv(archivo_path, sep=sep, nrows=10, low_memory=False, encoding='utf-8')
-                if len(df_raw.columns) > 1:
-                    df_raw = pd.read_csv(archivo_path, sep=sep, low_memory=False, encoding='utf-8', encoding_errors='replace')
-                    break
-            except Exception:
-                continue
-
-    if df_raw is None or len(df_raw.columns) <= 1:
-        return None, "No se pudo detectar el formato tabular o delimitador adecuado."
-
     col_map = {}
-    for col in df_raw.columns:
-        norm = limpiar_encabezado(col)
-        if any(k in norm for k in ['FECHA', 'DATE', 'DIA']):
-            col_map['fecha_raw'] = col
-        elif any(k in norm for k in ['ANO', 'ANIO', 'YEAR', 'A O']):
-            col_map['ano'] = col
-        elif any(k in norm for k in ['MES', 'MONTH']):
-            col_map['mes'] = col
-        elif any(k in norm for k in ['ORIGEN', 'ORIGIN', 'DESDE', 'AEROPUERTO ORIGEN']):
-            col_map['origen'] = col
-        elif any(k in norm for k in ['DESTINO', 'DESTINATION', 'HASTA', 'AEROPUERTO DESTINO']):
-            col_map['destino'] = col
+    for c in df.columns:
+        norm = limpiar_encabezado(c)
+        if any(k in norm for k in ['ANO', 'ANIO', 'YEAR']) or norm == 'A':
+            col_map[c] = 'ano_raw'
+        elif 'MES' in norm or 'MONTH' in norm:
+            col_map[c] = 'mes_raw'
+        elif 'DIA' in norm or 'DAY' in norm or norm == 'D':
+            col_map[c] = 'dia_raw'
+        elif any(k in norm for k in ['FECHA', 'DATE', 'INDICE TIEMPO', 'TIEMPO', 'PERIODO']):
+            col_map[c] = 'fecha_raw'
+        elif 'ORIGEN' in norm or 'ORIG' in norm or 'DESDE' in norm:
+            col_map[c] = 'origen_raw'
+        elif 'DESTINO' in norm or 'DEST' in norm or 'HACIA' in norm:
+            col_map[c] = 'destino_raw'
         elif any(k in norm for k in ['EMPRESA', 'AEROLINEA', 'OPERADOR', 'LINEA', 'COMPANIA']):
-            col_map['aerolinea'] = col
-        elif any(k in norm for k in ['PAX', 'PASAJERO', 'PASAJEROS', 'CANTIDAD PASAJEROS']):
-            col_map['pasajeros'] = col
-        elif any(k in norm for k in ['VUELO', 'VUELOS', 'MOVIMIENTO', 'OPERACION', 'ETAPA DE VUELO']):
-            col_map['vuelos'] = col
-        elif any(k in norm for k in ['ASIENTO', 'ASIENTOS', 'BUTACAS', 'CAPACIDAD']):
-            col_map['asientos'] = col
+            col_map[c] = 'aerolinea_raw'
+        elif 'PASAJERO' in norm or 'PAX' in norm:
+            col_map[c] = 'pasajeros_raw'
+        elif 'VUELO' in norm or 'FLIGHT' in norm or 'ETAPA' in norm or 'OPERACION' in norm or 'MOVIMIENTO' in norm:
+            col_map[c] = 'vuelos_raw'
+        elif 'ASIENTO' in norm or 'SEAT' in norm or 'CAPACIDAD' in norm or 'PLAZA' in norm:
+            col_map[c] = 'asientos_raw'
 
-    if 'origen' not in col_map or 'destino' not in col_map:
-        return None, "El archivo debe contener columnas identificables de Origen y Destino."
+    df.rename(columns=col_map, inplace=True)
 
-    df = pd.DataFrame()
-    df['origen_raw'] = df_raw[col_map['origen']].astype(str).str.strip()
-    df['destino_raw'] = df_raw[col_map['destino']].astype(str).str.strip()
-    df['aerolinea'] = df_raw[col_map['aerolinea']].astype(str).str.strip().str.title() if 'aerolinea' in col_map else 'Línea Aérea No Especificada'
+    if 'origen_raw' not in df.columns or 'destino_raw' not in df.columns:
+        return None, "El archivo debe contener columnas que indiquen el origen y destino de cada vuelo."
 
-    for dest, src in [('pasajeros', 'pasajeros'), ('asientos', 'asientos'), ('vuelos', 'vuelos')]:
-        if src in col_map:
-            s = df_raw[col_map[src]].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-            df[dest] = pd.to_numeric(s, errors='coerce').fillna(0).astype(np.int32)
-        else:
-            df[dest] = 1 if dest == 'vuelos' else 0
-
-    if 'fecha_raw' in col_map:
-        df['fecha'] = pd.to_datetime(df_raw[col_map['fecha_raw']], errors='coerce', dayfirst=True)
+    # Aerolínea
+    if 'aerolinea_raw' in df.columns:
+        df['aerolinea'] = df['aerolinea_raw'].astype(str).apply(limpiar_mojibake_texto).replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
     else:
-        df['fecha'] = pd.NaT
+        df['aerolinea'] = 'Línea Regular'
 
-    if df['fecha'].isna().all() and ('ano' in col_map or 'mes' in col_map):
-        anos = [parsear_ano(x) or 2024 for x in df_raw[col_map.get('ano', df_raw.columns[0])]]
-        meses = [parsear_mes(x) for x in df_raw[col_map.get('mes', df_raw.columns[0])]]
-        dias = [parsear_dia(x) for x in df_raw[col_map.get('dia', df_raw.columns[0])]] if 'dia' in col_map else [1] * len(df)
+    # Métricas numéricas con tipos compactos
+    for col_met, col_dest, col_type in [
+        ('pasajeros_raw', 'pasajeros', np.int32),
+        ('vuelos_raw', 'vuelos', np.int16),
+        ('asientos_raw', 'asientos', np.int32)
+    ]:
+        if col_met in df.columns:
+            s_clean = df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
+            df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0).astype(col_type)
+        else:
+            df[col_dest] = col_type(0)
+
+    # Construcción robusta de Fechas (evitando epoch 1970 por enteros o números)
+    fechas = pd.Series(pd.NaT, index=df.index)
+
+    if 'fecha_raw' in df.columns:
+        s = df['fecha_raw']
+        if pd.api.types.is_numeric_dtype(s):
+            s_str = s.fillna(0).astype(np.int64).astype(str).str.strip()
+            # YYYYMMDD (8 dígitos, ej: 20170101)
+            m8 = s_str.str.match(r'^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$')
+            if m8.any():
+                f8 = pd.to_datetime(s_str.where(m8), format='%Y%m%d', errors='coerce')
+                fechas = fechas.combine_first(f8)
+            # YYYYMM (6 dígitos, ej: 201701)
+            m6 = s_str.str.match(r'^(19\d\d|20\d\d)(0[1-9]|1[0-2])$')
+            if m6.any():
+                f6 = pd.to_datetime(s_str.where(m6) + '01', format='%Y%m%d', errors='coerce')
+                fechas = fechas.combine_first(f6)
+        else:
+            s_str = s.astype(str).str.strip().str.replace('.0', '', regex=False)
+            f_iso = pd.to_datetime(s_str, format='%Y-%m-%d', errors='coerce')
+            fechas = fechas.combine_first(f_iso)
+
+            f_dmy = pd.to_datetime(s_str, format='%d/%m/%Y', errors='coerce')
+            fechas = fechas.combine_first(f_dmy)
+
+            m8 = s_str.str.match(r'^(19\d\d|20\d\d)(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$')
+            if m8.any():
+                f8 = pd.to_datetime(s_str.where(m8), format='%Y%m%d', errors='coerce')
+                fechas = fechas.combine_first(f8)
+
+            m6 = s_str.str.match(r'^(19\d\d|20\d\d)(0[1-9]|1[0-2])$')
+            if m6.any():
+                f6 = pd.to_datetime(s_str.where(m6) + '01', format='%Y%m%d', errors='coerce')
+                fechas = fechas.combine_first(f6)
+
+            f_gen = pd.to_datetime(s_str, errors='coerce', dayfirst=True)
+            f_gen = f_gen.where(f_gen.dt.year >= 2000)
+            fechas = fechas.combine_first(f_gen)
+
+    # Filtrar estrictamente fechas erróneas (como 1970 por timestamp de época)
+    fechas = fechas.where(fechas.dt.year >= 2000)
+
+    # Si todavía faltan fechas y existen columnas de año y mes:
+    if (fechas.isna().any() or len(fechas.dropna()) == 0) and 'ano_raw' in df.columns and 'mes_raw' in df.columns:
+        anos = df['ano_raw'].apply(parsear_ano)
+        meses = df['mes_raw'].apply(parsear_mes)
+        dias = df['dia_raw'].apply(parsear_dia) if 'dia_raw' in df.columns else pd.Series(1, index=df.index)
 
         def armar_fecha(y, m, d):
+            if pd.isna(y) or y is None:
+                return pd.NaT
             try:
                 return datetime(int(y), int(m), int(d))
             except ValueError:
@@ -364,9 +395,11 @@ def cargar_y_limpiar_datos(archivo_path):
                 except Exception:
                     return pd.NaT
 
-        df['fecha'] = [armar_fecha(y, m, d) for y, m, d in zip(anos, meses, dias)]
+        fechas_fb = pd.Series([armar_fecha(y, m, d) for y, m, d in zip(anos, meses, dias)], index=df.index)
+        fechas = fechas.combine_first(fechas_fb)
 
-    df = df[df['fecha'].notna()].copy()
+    df['fecha'] = fechas
+    df = df[df['fecha'].notna() & (df['fecha'].dt.year >= 2000)].copy()
     if df.empty:
         return None, "No se pudieron construir fechas válidas a partir de los datos."
 
@@ -375,6 +408,7 @@ def cargar_y_limpiar_datos(archivo_path):
     df['periodo_orden'] = df['fecha'].dt.strftime('%Y-%m')
     df['periodo_mes_es'] = df['fecha'].apply(lambda d: f"{meses_es.get(d.month, '')}-{str(d.year)[2:]}")
 
+    # Etiquetas de aeropuertos con sigla oficial estricta
     cache_etiquetas = {}
     def cached_etiqueta(nombre):
         if nombre not in cache_etiquetas:
@@ -384,6 +418,7 @@ def cargar_y_limpiar_datos(archivo_path):
     df['origen_label'] = df['origen_raw'].apply(cached_etiqueta)
     df['destino_label'] = df['destino_raw'].apply(cached_etiqueta)
 
+    # Optimización vectorizada de pares y tramos
     o_arr = df['origen_label'].to_numpy()
     d_arr = df['destino_label'].to_numpy()
     p1 = np.where(o_arr < d_arr, o_arr, d_arr)
@@ -391,63 +426,164 @@ def cargar_y_limpiar_datos(archivo_path):
     df['ruta_label'] = pd.Series(p1 + " ⇄ " + p2, index=df.index).astype('category')
     df['tramo_label'] = pd.Series(o_arr + " ➔ " + d_arr, index=df.index).astype('category')
 
+    # Convertir columnas repetitivas a category para reducir la RAM en un 90%
     for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
         df[c] = df[c].astype('category')
 
-    return df, None
+    cols_finales = [
+        'fecha', 'ano_num', 'mes_num', 'periodo_orden', 'periodo_mes_es',
+        'aerolinea', 'origen_label', 'destino_label', 'ruta_label', 'tramo_label',
+        'pasajeros', 'vuelos', 'asientos'
+    ]
+    return df[cols_finales], None
+
+def cargar_archivo_en_memoria(archivo_bytes_o_path):
+    try:
+        es_zip = False
+        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.zip'):
+            es_zip = True
+        elif not isinstance(archivo_bytes_o_path, str):
+            archivo_bytes_o_path.seek(0)
+            magic = archivo_bytes_o_path.read(4)
+            archivo_bytes_o_path.seek(0)
+            if magic == b'PK\x03\x04':
+                es_zip = True
+
+        if es_zip:
+            with zipfile.ZipFile(archivo_bytes_o_path) as z:
+                csv_names = [n for n in z.namelist() if n.lower().endswith(('.csv', '.txt')) and not n.startswith('__MACOSX')]
+                if not csv_names:
+                    csv_names = [n for n in z.namelist() if not n.startswith('__MACOSX') and not n.endswith('/')]
+                if csv_names:
+                    with z.open(csv_names[0]) as zf:
+                        contenido_bytes = io.BytesIO(zf.read())
+                        return cargar_archivo_en_memoria(contenido_bytes)
+    except Exception:
+        pass
+
+    try:
+        es_gz = False
+        if isinstance(archivo_bytes_o_path, str) and archivo_bytes_o_path.lower().endswith('.gz'):
+            es_gz = True
+        elif not isinstance(archivo_bytes_o_path, str):
+            archivo_bytes_o_path.seek(0)
+            magic = archivo_bytes_o_path.read(2)
+            archivo_bytes_o_path.seek(0)
+            if magic == b'\x1f\x8b':
+                es_gz = True
+        if es_gz:
+            import gzip
+            with gzip.open(archivo_bytes_o_path, 'rb') as gz_f:
+                contenido_bytes = io.BytesIO(gz_f.read())
+                return cargar_archivo_en_memoria(contenido_bytes)
+    except Exception:
+        pass
+
+    encodings = ['utf-8-sig', 'utf-8', 'latin1', 'iso-8859-1', 'cp1252']
+    separadores = [',', ';', '\t']
+
+    for enc in encodings:
+        for sep in separadores:
+            try:
+                if isinstance(archivo_bytes_o_path, str):
+                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
+                else:
+                    archivo_bytes_o_path.seek(0)
+                    df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
+
+                if len(df.columns) >= 3:
+                    if isinstance(archivo_bytes_o_path, str):
+                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
+                    else:
+                        archivo_bytes_o_path.seek(0)
+                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
+                    return df_completo, None
+            except Exception:
+                continue
+
+    return None, "No se pudo interpretar el archivo (CSV/ZIP/GZ) con las codificaciones habituales."
 
 # -------------------------------------------------------------
-# INTERFAZ PRINCIPAL Y CARGA DE DATOS
+# BARRA LATERAL: FUENTES DE DATOS
 # -------------------------------------------------------------
-st.title("✈️ Monitor de Rutas Aéreas y Conectividad Argentina")
-st.markdown("Herramienta de monitoreo basada en los microdatos oficiales de la **ANAC / SINTA**.")
+st.sidebar.title("✈️ Conectividad Aérea")
+st.sidebar.markdown("**Monitor Oficial de Vuelos de Cabotaje**")
+st.sidebar.markdown("---")
 
-archivos_candidatos = [
-    'conectividad_aerea.zip',
-    'conectividad_aerea.csv.gz',
-    'conectividad_aerea.csv',
-    'datos_actualizados.csv',
-    'datos_test_large.csv',
-    'datos_sinta_ejemplo.csv',
-    'test_raw.zip',
-    'test_raw.csv'
-]
+df_raw = None
+fuente_activa = None
 
-archivo_encontrado = None
-for arc in archivos_candidatos:
-    if os.path.exists(arc) and os.path.getsize(arc) > 50:
-        archivo_encontrado = arc
-        break
-
-uploaded_file = st.sidebar.file_uploader(
-    "Cargar archivo (.zip, .csv.gz o .csv)",
-    type=['zip', 'gz', 'csv'],
-    help="Sube un archivo de microdatos de ANAC/SINTA. Se recomienda .zip para archivos grandes mayores a 25 MB."
+subido = st.sidebar.file_uploader(
+    "📂 Cargar microdatos (CSV o ZIP oficial)",
+    type=['csv', 'zip', 'gz', 'txt', 'parquet'],
+    help="Suba la base oficial descargada de ANAC o comprimida en ZIP."
 )
 
-if uploaded_file is not None:
-    temp_path = f"temp_upload_{uploaded_file.name}"
-    with open(temp_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-    archivo_encontrado = temp_path
-    fuente_activa = f"Archivo subido: `{uploaded_file.name}`"
-elif archivo_encontrado:
-    fuente_activa = f"Archivo local: `{archivo_encontrado}` ({os.path.getsize(archivo_encontrado) / (1024*1024):.1f} MB)"
+if subido is not None:
+    df_leido, err = cargar_archivo_en_memoria(subido)
+    if err:
+        st.sidebar.error(err)
+    else:
+        df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
+        if err_proc:
+            st.sidebar.error(err_proc)
+        else:
+            df_raw = df_procesado
+            fuente_activa = f"Archivo subido manualmente ({subido.name})"
 else:
-    st.error("⚠️ No se encontró ningún archivo de microdatos (`conectividad_aerea.zip` ni `.csv`).")
-    st.info("Suba el archivo de datos desde el panel lateral para iniciar.")
+    posibles_rutas = [
+        "conectividad_aerea.zip",
+        "conectividad_aerea.csv.gz",
+        "conectividad_aerea.csv",
+        "conectividad-aerea.zip",
+        "conectividad-aerea.csv",
+        "data/conectividad_aerea.zip",
+        "data/conectividad_aerea.csv",
+        "datos/conectividad_aerea.zip",
+        "datos/conectividad_aerea.csv",
+        "base_anac.zip",
+        "base_anac.csv",
+        "cabotaje.zip",
+        "cabotaje.csv"
+    ]
+    try:
+        for f in os.listdir('.'):
+            if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
+                posibles_rutas.append(f)
+    except Exception:
+        pass
+
+    for ruta in posibles_rutas:
+        if os.path.exists(ruta):
+            df_leido, err = cargar_archivo_en_memoria(ruta)
+            if not err:
+                df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
+                if not err_proc:
+                    df_raw = df_procesado
+                    fuente_activa = f"Repositorio GitHub ({ruta})"
+                    break
+
+# -------------------------------------------------------------
+# CABECERA Y REGLA ESTRICTA CONTRA DATOS INVENTADOS
+# -------------------------------------------------------------
+st.title("🛫 Monitor de Rutas Aéreas y Tráfico de Cabotaje")
+st.markdown("Herramienta de análisis analítico basada **únicamente en estadísticas oficiales reales**.")
+
+if df_raw is None or df_raw.empty:
+    st.error(
+        "⛔ **NO HAY DATOS REALES CARGADOS O VÁLIDOS**  \n\n"
+        "Esta aplicación tiene **estrictamente prohibido generar, simular o inventar datos**.  \n"
+        "Para visualizar información, realice una de las siguientes acciones:  \n"
+        "1. Asegúrese de que el archivo oficial `conectividad_aerea.zip` o `conectividad_aerea.csv` esté en la raíz del repositorio de GitHub.  \n"
+        "2. O bien, suba el archivo oficial (.csv o .zip) en el menú lateral izquierdo."
+    )
+    st.info("ℹ️ Una vez cargado el archivo oficial con columnas de fecha, aerolínea, origen, destino, pasajeros y vuelos, se habilitará el monitor.")
     st.stop()
 
-with st.spinner("Cargando y procesando base oficial..."):
-    df_raw, err = cargar_y_limpiar_datos(archivo_encontrado)
-
-if err or df_raw is None or df_raw.empty:
-    st.error(f"Error al procesar la base oficial: {err}")
-    st.stop()
-
-total_registros = len(df_raw)
+# Si hay datos reales cargados:
 f_min_total = df_raw['fecha'].min().date()
 f_max_total = df_raw['fecha'].max().date()
+total_registros = len(df_raw)
 
 st.success(
     f"🟢 **Fuente de Datos Activa:** {fuente_activa}  \n"
