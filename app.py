@@ -2,6 +2,7 @@ import os
 import io
 import re
 import calendar
+from collections import Counter
 import zipfile
 import warnings
 from datetime import datetime, date, timedelta
@@ -239,6 +240,9 @@ def normalizar_texto_aeropuerto(texto):
     txt = re.sub(r'[^A-Z0-9\s]', ' ', txt)
     return ' '.join(txt.split())
 
+# Cuántas ciudades comparten cada palabra clave (una clave repetida no identifica a una ciudad)
+_CONTEO_KW = Counter(normalizar_texto_aeropuerto(kw) for d in AEROPUERTOS_EXHAUSTIVO.values() for kw in d['keywords'])
+
 def obtener_sigla_y_ciudad(nombre_aeropuerto):
     if not isinstance(nombre_aeropuerto, str) or not nombre_aeropuerto.strip():
         return "DES", "Desconocido"
@@ -256,7 +260,7 @@ def obtener_sigla_y_ciudad(nombre_aeropuerto):
         for n_kw, kw in enumerate(datos['keywords']):
             kw_norm = normalizar_texto_aeropuerto(kw)
             if kw_norm and re.search(r'\b' + re.escape(kw_norm) + r'\b', norm):
-                puntaje += 100 if n_kw == 0 else 1
+                puntaje += 100 if (n_kw == 0 and _CONTEO_KW[kw_norm] == 1) else 1
         if puntaje > mejor_puntaje:
             mejor, mejor_puntaje = datos, puntaje
     if mejor is not None:
@@ -308,6 +312,93 @@ def dias_operados(df):
             y, m = map(int, str(po).split('-'))
             total += calendar.monthrange(y, m)[1]
     return max(total, 1)
+
+# Coordenadas (latitud, longitud) de los aeropuertos, por sigla IATA, para el mapa de conexiones
+COORDENADAS = {
+    'AEP': (-34.559, -58.416), 'EZE': (-34.822, -58.536), 'EPA': (-34.610, -58.613), 'MOR': (-34.676, -58.643),
+    'AFA': (-34.588, -68.404), 'BHI': (-38.725, -62.169), 'BRC': (-41.151, -71.158), 'CNQ': (-27.446, -58.762),
+    'COR': (-31.324, -64.208), 'CPC': (-40.075, -71.137), 'CRD': (-45.785, -67.466), 'CTC': (-28.596, -65.752),
+    'EQS': (-42.908, -71.140), 'FMA': (-26.213, -58.228), 'FTE': (-50.280, -72.053), 'IGR': (-25.737, -54.473),
+    'IRJ': (-29.382, -66.796), 'JSM': (-44.059, -70.469), 'JUJ': (-24.393, -65.098), 'LUQ': (-33.273, -66.356),
+    'MDQ': (-37.934, -57.573), 'MDZ': (-32.832, -68.793), 'MLG': (-35.494, -69.574), 'NCJ': (-30.959, -61.535),
+    'NQN': (-38.949, -68.156), 'OMR': (-45.590, -69.075), 'PMQ': (-46.538, -70.979), 'PMY': (-42.759, -65.103),
+    'PRA': (-31.795, -60.480), 'PSS': (-27.386, -55.971), 'RCQ': (-29.210, -59.680), 'RCU': (-33.085, -64.261),
+    'REL': (-43.211, -65.270), 'RES': (-27.450, -59.056), 'RGA': (-53.778, -67.749), 'RGL': (-51.609, -69.313),
+    'RHD': (-27.497, -64.936), 'RLO': (-32.385, -65.187), 'ROS': (-32.904, -60.785), 'ROY': (-45.704, -70.246),
+    'RSA': (-36.588, -64.276), 'RZA': (-50.017, -68.579), 'SDE': (-27.766, -64.310), 'SFN': (-31.712, -60.812),
+    'SLA': (-24.856, -65.486), 'UAQ': (-31.572, -68.418), 'TUC': (-26.841, -65.105), 'USH': (-54.843, -68.296), 'VDM': (-40.869, -63.000),
+}
+
+
+def construir_mapa(df, dias, por_pasajeros, vuelos_semana_min):
+    """Mapa de rutas: líneas con grosor según pasajeros o vuelos y aeropuertos con tamaño según movimiento."""
+    g = df.groupby('ruta_label', observed=True)[['pasajeros', 'vuelos']].sum().reset_index()
+    g['ruta_label'] = g['ruta_label'].astype(str)
+    g = g[g['vuelos'] > 0].copy()
+    g['vuelos_sem'] = g['vuelos'] / (dias / 7)
+    g = g[g['vuelos_sem'] >= vuelos_semana_min]
+    partes = g['ruta_label'].str.split(' ⇄ ', n=1, expand=True)
+    if partes.shape[1] < 2 or g.empty:
+        return None, 0, 0, set()
+    g['a'] = partes[0].str[:3]
+    g['b'] = partes[1].str[:3]
+    faltan = set(g['a']).union(g['b']) - set(COORDENADAS)
+    g = g[g['a'].isin(COORDENADAS) & g['b'].isin(COORDENADAS)]
+    if g.empty:
+        return None, 0, 0, faltan
+    col = 'pasajeros' if por_pasajeros else 'vuelos'
+    vmax = max(float(g[col].max()), 1.0)
+    g['nivel'] = np.clip((np.sqrt(g[col] / vmax) * 5).astype(int), 0, 4)  # 5 grosores
+
+    fig = go.Figure()
+    for nivel in range(5):
+        sub = g[g['nivel'] == nivel]
+        if sub.empty:
+            continue
+        lats, lons = [], []
+        for a, b in zip(sub['a'], sub['b']):
+            lats += [COORDENADAS[a][0], COORDENADAS[b][0], None]
+            lons += [COORDENADAS[a][1], COORDENADAS[b][1], None]
+        fig.add_trace(go.Scattergeo(lat=lats, lon=lons, mode='lines', hoverinfo='skip', showlegend=False,
+                                    line=dict(width=0.8 + nivel * 1.7, color='rgba(29,78,216,0.45)')))
+    # puntos invisibles en el centro de cada ruta, para mostrar el detalle al pasar el mouse
+    fig.add_trace(go.Scattergeo(
+        lat=[(COORDENADAS[a][0] + COORDENADAS[b][0]) / 2 for a, b in zip(g['a'], g['b'])],
+        lon=[(COORDENADAS[a][1] + COORDENADAS[b][1]) / 2 for a, b in zip(g['a'], g['b'])],
+        mode='markers', marker=dict(size=10, opacity=0), showlegend=False,
+        text=[f"<b>{r}</b><br>{int(pa):,} pasajeros<br>{int(v):,} vuelos ({vs:.1f} por semana)".replace(",", ".")
+              for r, pa, v, vs in zip(g['ruta_label'], g['pasajeros'], g['vuelos'], g['vuelos_sem'])],
+        hovertemplate='%{text}<extra></extra>'))
+
+    nodos = {}
+    for a, b, v, pa, vu in zip(g['a'], g['b'], g[col], g['pasajeros'], g['vuelos']):
+        for ap in (a, b):
+            d = nodos.setdefault(ap, {'v': 0.0, 'pax': 0, 'vue': 0, 'rutas': 0})
+            d['v'] += v
+            d['pax'] += int(pa)
+            d['vue'] += int(vu)
+            d['rutas'] += 1
+    nv = max(max(d['v'] for d in nodos.values()), 1.0)
+    siglas = list(nodos)
+    top = set(sorted(siglas, key=lambda k: -nodos[k]['v'])[:12])
+    fig.add_trace(go.Scattergeo(
+        lat=[COORDENADAS[k][0] for k in siglas], lon=[COORDENADAS[k][1] for k in siglas],
+        mode='markers+text', showlegend=False,
+        text=[k if k in top else '' for k in siglas], textposition='top right', textfont=dict(size=11, color='#0f172a'),
+        marker=dict(size=[7 + 24 * np.sqrt(nodos[k]['v'] / nv) for k in siglas],
+                    color=['#475569' if k in AMBA_SIGLAS else '#f59e0b' for k in siglas],
+                    line=dict(width=1.5, color='white')),
+        hovertext=[f"<b>{k}</b><br>{nodos[k]['rutas']} rutas<br>{nodos[k]['pax']:,} pasajeros<br>{nodos[k]['vue']:,} vuelos".replace(",", ".")
+                   for k in siglas],
+        hovertemplate='%{hovertext}<extra></extra>'))
+    fig.update_geos(
+        scope='south america', projection_type='mercator', lonaxis_range=[-76, -52], lataxis_range=[-56, -21],
+        showland=True, landcolor='#f1f5f9', showocean=True, oceancolor='#e0f2fe', showcountries=True,
+        countrycolor='#cbd5e1', showlakes=False, showcoastlines=True, coastlinecolor='#94a3b8',
+        showsubunits=True, subunitcolor='#e2e8f0', resolution=50)
+    fig.update_layout(height=760, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)')
+    return fig, len(g), len(nodos), faltan
+
 
 def mostrar_metodologia(f_desde_base, f_hasta_base):
     with st.expander("ℹ️ Metodología y definiciones"):
@@ -1109,6 +1200,32 @@ with tab_panorama:
                        f"comparado con el mismo período de {f_max_total.year - 1}. Respeta los filtros de ruta, aeropuertos y aerolínea; no el rango de fechas.")
         else:
             st.caption("La base no tiene datos del año anterior para comparar este mes.")
+    st.markdown("---")
+
+    st.subheader("Mapa de Conexiones")
+    cm1, cm2 = st.columns([1, 1])
+    with cm1:
+        base_grosor = st.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="mapa_metrica")
+    with cm2:
+        sem_min = st.slider("Frecuencia mínima por ruta (vuelos por semana)", min_value=0, max_value=30, value=1, key="mapa_sem",
+                            help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
+    fig_mapa, n_rutas_mapa, n_aero_mapa, faltan_coord = construir_mapa(df_filtrado, dias_periodo, base_grosor == "Pasajeros", sem_min)
+    if fig_mapa is None:
+        st.info("No hay rutas para mostrar con esa frecuencia mínima. Probá bajarla.")
+    else:
+        col_mapa, col_top = st.columns([3, 2])
+        with col_mapa:
+            st.plotly_chart(fig_mapa, use_container_width=True)
+        with col_top:
+            st.markdown("**Principales rutas del período**")
+            top_mapa = df_rank.head(12)[['Ruta', 'Pasajeros', 'Vuelos/día']].copy()
+            top_mapa['Vuelos/día'] = top_mapa['Vuelos/día'].round(1)
+            st.dataframe(top_mapa, use_container_width=True, hide_index=True, height=470,
+                         column_config=config_numerica(top_mapa))
+        st.caption(f"{n_rutas_mapa} rutas y {n_aero_mapa} aeropuertos. Líneas más gruesas = más {base_grosor.lower()}; "
+                   "círculos más grandes = más movimiento; gris = AMBA, naranja = interior. Pasá el mouse para ver el detalle.")
+    if faltan_coord:
+        st.caption("Sin coordenadas, no se muestran: " + ", ".join(sorted(faltan_coord)) + ".")
     st.markdown("---")
 
     # 1. Oferta vs. demanda vs. ocupación
