@@ -295,6 +295,9 @@ fmt_porcentaje = lambda x: "s/d" if pd.isna(x) else f"{x:.1f}%".replace(".", ","
 # Aeropuertos del Área Metropolitana de Buenos Aires (para medir conectividad federal)
 AMBA_SIGLAS = {'AEP', 'EZE', 'EPA', 'MOR', 'FDO'}
 
+# Una ruta se considera "activa" en un mes si tuvo al menos esta cantidad de vuelos (criterio de SINTA)
+UMBRAL_FRECUENCIAS_MES = 4
+
 def dias_operados(df):
     """Cantidad de días cubiertos por los datos (base diaria) o días calendario de cada mes (base mensual)."""
     total = 0
@@ -305,6 +308,37 @@ def dias_operados(df):
             y, m = map(int, str(po).split('-'))
             total += calendar.monthrange(y, m)[1]
     return max(total, 1)
+
+def mostrar_metodologia(f_desde_base, f_hasta_base):
+    with st.expander("ℹ️ Metodología y definiciones"):
+        st.markdown(f"""
+**Fuente de los datos.** Estadísticas oficiales de conectividad aérea del Ministerio de Turismo (SINTA, Dirección de Mercados y Estadística),
+elaboradas a partir de los registros de movimientos de vuelos de la ANAC. Esta página muestra únicamente **vuelos de cabotaje** y no genera ni
+estima datos propios. Cobertura cargada: del **{f_desde_base.strftime('%d/%m/%Y')}** al **{f_hasta_base.strftime('%d/%m/%Y')}**.
+La base se revisa automáticamente entre el 10 y el 20 de cada mes; la fuente puede corregir datos de meses anteriores.
+
+**Indicadores**
+- **Vuelos / frecuencias:** cantidad de vuelos operados. En los rankings de destinos, vuelos que llegan a ese destino.
+- **Pasajeros y asientos:** pasajeros transportados y asientos ofrecidos en esos vuelos.
+- **Ocupación (factor de ocupación):** pasajeros ÷ asientos × 100. Se muestra "s/d" cuando no hay asientos informados.
+- **Pax / vuelo y asientos / vuelo:** promedio de pasajeros y de asientos por vuelo; el segundo refleja el tamaño medio de la aeronave.
+- **Vuelos por día:** vuelos del período ÷ días con datos.
+- **Variación interanual:** compara contra el mismo período calendario del año anterior.
+
+**Rutas y sentidos**
+- **Ruta:** corredor entre dos aeropuertos, sumando ambos sentidos. **Tramo:** un sentido (origen ➔ destino).
+- **Ruta activa:** ruta con al menos **{UMBRAL_FRECUENCIAS_MES} vuelos en el mes**; evita contar vuelos sueltos o charters como rutas regulares.
+- **Ruta transversal:** ruta que no toca el AMBA (Aeroparque, Ezeiza, El Palomar, Morón ni San Fernando).
+- **Ruta con un solo operador:** ruta donde una única aerolínea transportó pasajeros en el período.
+
+**Competencia**
+- **Participación (market share):** pasajeros de la aerolínea ÷ pasajeros totales del segmento.
+- **HHI (Herfindahl-Hirschman):** suma de los cuadrados de las participaciones (en %), de 0 a 10.000.
+  Menos de 1.500: competitivo · 1.500 a 2.500: moderado · más de 2.500: concentrado.
+
+**Estacionalidad.** Índice 100 = promedio mensual del año. Se calcula solo con años completos; un año incompleto se indica en pantalla.
+""")
+
 
 def restar_ano(f):
     try:
@@ -940,6 +974,7 @@ if not st.session_state.get('busqueda_activa', False):
         st.info("Seleccione una ruta o tramo y presione 'Buscar vuelos' para ver el comportamiento estacional y los índices de temporada.")
     with tab_d:
         st.info("Seleccione una ruta o tramo y presione 'Buscar vuelos' para descargar los microdatos y reportes del segmento.")
+    mostrar_metodologia(f_min_total, f_max_total)
     st.stop()
 
 # -------------------------------------------------------------
@@ -1025,8 +1060,8 @@ df_rank['Vuelos/día'] = df_rank['Vuelos'] / dias_periodo
 
 rutas_suspendidas = []
 hay_base_prev = restar_ano(f_d_efectiva) >= f_min_total
+df_prev = filtrar_segmento(df_raw, filtros, restar_ano(f_d_efectiva), restar_ano(f_h_efectiva)) if hay_base_prev else df_filtrado.iloc[0:0]
 if hay_base_prev:
-    df_prev = filtrar_segmento(df_raw, filtros, restar_ano(f_d_efectiva), restar_ano(f_h_efectiva))
     pax_prev = df_prev.groupby('ruta_label', observed=True)['pasajeros'].sum()
     pax_prev = {str(k): v for k, v in pax_prev.items() if v > 0}
     df_rank['Pax año ant.'] = df_rank['Ruta'].map(pax_prev).fillna(0).astype(int)
@@ -1224,6 +1259,113 @@ with tab_competencia:
     )
 
 with tab_rutas:
+    st.subheader("Ranking de Destinos")
+
+    def _por_destino(df):
+        g = df.groupby('destino_label', observed=True)[['vuelos', 'pasajeros']].sum()
+        g.index = g.index.astype(str)
+        return g[g['vuelos'] > 0]
+
+    d_act = _por_destino(df_filtrado)
+    d_ant = _por_destino(df_prev) if hay_base_prev else d_act.iloc[0:0]
+    if d_act.empty:
+        st.info("No hay vuelos para armar el ranking de destinos.")
+    else:
+        d_act = d_act.sort_values('vuelos', ascending=False)
+        pos_ant = d_ant['vuelos'].rank(ascending=False, method='first').astype(int) if hay_base_prev else None
+        total_v = d_act['vuelos'].sum()
+
+        filas = []
+        for i, (dest, r) in enumerate(d_act.iterrows(), start=1):
+            fila = {'Posición': float(i), 'Destino': dest, 'Vuelos': int(r['vuelos']),
+                    'Participación': r['vuelos'] / total_v * 100, 'Pasajeros': int(r['pasajeros'])}
+            if hay_base_prev:
+                v_ant = int(d_ant['vuelos'].get(dest, 0))
+                p_ant = pos_ant.get(dest)
+                if p_ant is None:
+                    cambio = "Nuevo"
+                elif p_ant > i:
+                    cambio = f"▲ {p_ant - i}"
+                elif p_ant < i:
+                    cambio = f"▼ {i - p_ant}"
+                else:
+                    cambio = "="
+                fila.update({'Cambio': cambio, 'Vuelos año ant.': v_ant,
+                             'Var. %': ((r['vuelos'] - v_ant) / v_ant * 100) if v_ant > 0 else np.nan})
+            filas.append(fila)
+        df_dest = pd.DataFrame(filas)
+        orden_cols = ['Posición', 'Cambio', 'Destino', 'Vuelos año ant.', 'Vuelos', 'Var. %', 'Participación', 'Pasajeros']
+        df_dest = df_dest[[c for c in orden_cols if c in df_dest.columns]]
+        df_dest[['Participación'] + (['Var. %'] if 'Var. %' in df_dest.columns else [])] = \
+            df_dest[['Participación'] + (['Var. %'] if 'Var. %' in df_dest.columns else [])].round(1)
+
+        cfg_dest = config_numerica(df_dest, porcentajes=('Participación',))
+        cfg_dest['Posición'] = st.column_config.NumberColumn('Posición', format="%d")
+        if 'Var. %' in df_dest.columns:
+            cfg_dest['Var. %'] = st.column_config.NumberColumn('Var. %', format="%+.1f%%")
+
+        top_dest = df_dest.head(15).copy()
+        resto = df_dest.iloc[15:]
+        if not resto.empty:
+            fila_resto = {c: np.nan for c in top_dest.columns}
+            fila_resto.update({'Destino': f"Resto ({len(resto)} destinos)", 'Vuelos': resto['Vuelos'].sum(),
+                               'Participación': round(resto['Participación'].sum(), 1), 'Pasajeros': resto['Pasajeros'].sum()})
+            if 'Cambio' in top_dest.columns:
+                fila_resto['Cambio'] = ''
+                fila_resto['Vuelos año ant.'] = resto['Vuelos año ant.'].sum()
+                fila_resto['Var. %'] = round((resto['Vuelos'].sum() - resto['Vuelos año ant.'].sum()) / resto['Vuelos año ant.'].sum() * 100, 1) \
+                    if resto['Vuelos año ant.'].sum() > 0 else np.nan
+            top_dest = pd.concat([top_dest, pd.DataFrame([fila_resto])], ignore_index=True)
+
+        st.dataframe(top_dest, use_container_width=True, hide_index=True, column_config=cfg_dest)
+        if hay_base_prev:
+            st.caption("Vuelos = frecuencias que llegan a cada destino. ▲ ▼ indican posiciones ganadas o perdidas respecto del mismo período del año anterior; "
+                       "“Nuevo” = no recibía vuelos entonces. Podés ordenar por cualquier columna.")
+        else:
+            st.caption("Vuelos = frecuencias que llegan a cada destino. La base no tiene datos del año anterior para este período, por eso no se muestran cambios.")
+        if len(df_dest) > 15:
+            with st.expander(f"Ver los {len(df_dest)} destinos"):
+                st.dataframe(df_dest, use_container_width=True, hide_index=True, column_config=cfg_dest)
+
+    st.markdown("---")
+
+    st.subheader("Rutas Activas")
+    if len(df_rank) < 3:
+        st.info("Seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país') para ver las rutas activas.")
+    else:
+        y_ref, m_ref = map(int, str(df_filtrado['periodo_orden'].astype(str).max()).split('-'))
+        ini_ref = date(y_ref, m_ref, 1)
+        fin_ref = date(y_ref, m_ref, calendar.monthrange(y_ref, m_ref)[1])
+
+        def _rutas_activas(desde, hasta):
+            v = filtrar_segmento(df_raw, filtros, desde, hasta).groupby('ruta_label', observed=True)['vuelos'].sum()
+            return set(str(r) for r in v[v >= UMBRAL_FRECUENCIAS_MES].index)
+
+        act_set = _rutas_activas(ini_ref, fin_ref)
+        hay_ant_mes = restar_ano(ini_ref) >= f_min_total
+        ant_set = _rutas_activas(restar_ano(ini_ref), restar_ano(fin_ref)) if hay_ant_mes else set()
+        etiqueta_mes = f"{meses_es[m_ref]} {y_ref}"
+
+        c1, c2 = st.columns(2)
+        c1.metric(f"Rutas activas en {etiqueta_mes}", fmt_entero(len(act_set)),
+                  delta=(f"{len(act_set) - len(ant_set):+d} vs {meses_es[m_ref]} {y_ref - 1}" if hay_ant_mes else None),
+                  help=f"Rutas (ambos sentidos) con al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes.")
+        c2.metric(f"Rutas activas en {meses_es[m_ref]} {y_ref - 1}", fmt_entero(len(ant_set)) if hay_ant_mes else "s/d")
+
+        if hay_ant_mes:
+            nuevas_act = sorted(act_set - ant_set)
+            dejaron = sorted(ant_set - act_set)
+            if nuevas_act:
+                with st.expander(f"Pasaron a ser activas ({len(nuevas_act)})"):
+                    st.write(" · ".join(nuevas_act))
+            if dejaron:
+                with st.expander(f"Dejaron de ser activas ({len(dejaron)})"):
+                    st.write(" · ".join(dejaron))
+        st.caption(f"Se considera ruta activa a la que tuvo al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes (ambos sentidos). "
+                   "Se mide sobre el último mes del período elegido y respeta los filtros de aerolínea, ruta y aeropuertos.")
+
+    st.markdown("---")
+
     st.subheader("Conectividad Federal")
     if len(df_rank) < 3:
         st.info("Para medir conectividad federal seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país' o una aerolínea).")
@@ -1861,3 +2003,5 @@ with tab_datos:
                 file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+mostrar_metodologia(f_min_total, f_max_total)
