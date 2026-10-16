@@ -1077,6 +1077,40 @@ if hay_base_prev:
 # SECCIÓN 1: GRÁFICOS CON INFORMACIÓN BÁSICA (VERTICALES)
 # =============================================================
 with tab_panorama:
+    # Último mes publicado (respeta los filtros de ruta/aerolínea, no el rango de fechas)
+    ini_u = date(f_max_total.year, f_max_total.month, 1)
+    hay_u_prev = restar_ano(ini_u) >= f_min_total
+    seg_u = filtrar_segmento(df_raw, filtros, ini_u, f_max_total)
+    seg_u_prev = filtrar_segmento(df_raw, filtros, restar_ano(ini_u), restar_ano(f_max_total)) if hay_u_prev else seg_u.iloc[0:0]
+
+    st.subheader(f"Último Mes Publicado: {meses_es[f_max_total.month]} {f_max_total.year}")
+    if seg_u.empty:
+        st.info("El segmento seleccionado no tiene vuelos en el último mes publicado.")
+    else:
+        def _tot(df):
+            v, pxs, a = int(df['vuelos'].sum()), int(df['pasajeros'].sum()), int(df['asientos'].sum())
+            return v, pxs, a, (pxs / a * 100 if a > 0 else np.nan)
+
+        def _dp(act, ant):
+            if not hay_u_prev or not ant:
+                return None
+            return f"{(act - ant) / ant * 100:+.1f}%".replace(".", ",")
+
+        v1, p1, a1, o1 = _tot(seg_u)
+        v0, p0, a0, o0 = _tot(seg_u_prev)
+        d_ocup = f"{o1 - o0:+.1f} pp".replace(".", ",") if hay_u_prev and not pd.isna(o1) and not pd.isna(o0) else None
+        u1, u2, u3, u4 = st.columns(4)
+        u1.metric("Vuelos", fmt_entero(v1), delta=_dp(v1, v0))
+        u2.metric("Pasajeros", fmt_entero(p1), delta=_dp(p1, p0))
+        u3.metric("Asientos", fmt_entero(a1), delta=_dp(a1, a0))
+        u4.metric("Ocupación", fmt_porcentaje(o1), delta=d_ocup)
+        if hay_u_prev:
+            st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max_total.strftime('%d/%m/%Y')}, "
+                       f"comparado con el mismo período de {f_max_total.year - 1}. Respeta los filtros de ruta, aeropuertos y aerolínea; no el rango de fechas.")
+        else:
+            st.caption("La base no tiene datos del año anterior para comparar este mes.")
+    st.markdown("---")
+
     # 1. Oferta vs. demanda vs. ocupación
     st.markdown("#### Oferta, Demanda y Ocupación del Segmento")
     df_od = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es'], observed=True)[['pasajeros', 'asientos']].sum().reset_index()
@@ -1198,6 +1232,61 @@ with tab_competencia:
                                 margin=dict(l=20, r=20, t=50, b=40), legend_title_text='Aerolínea')
         st.plotly_chart(fig_share, use_container_width=True)
         st.caption("Muestra quién gana o pierde cuota a lo largo del tiempo; el HHI de arriba resume la concentración del período.")
+
+    st.markdown("---")
+
+    st.markdown("#### Concentración y Cuota de Mercado por Año")
+    if filtros.get('aerolineas'):
+        st.info("Con un filtro de aerolínea activo la concentración no es comparable. Quitá el filtro de aerolínea para ver esta sección.")
+    else:
+        opcion_acum = f"Acumulado enero–{meses_es[f_max_total.month].lower()}"
+        modo_hist = st.radio("Comparar", [opcion_acum, "Año completo"], horizontal=True, key="modo_hhi")
+        df_hist = filtrar_segmento(df_raw, filtros, f_min_total, f_max_total)
+        if modo_hist == opcion_acum:
+            df_hist = df_hist[df_hist['mes_num'] <= f_max_total.month]
+        g_h = df_hist.groupby(['ano_num', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+        g_h['ano_num'] = g_h['ano_num'].astype(int)
+        g_h['aerolinea'] = g_h['aerolinea'].astype(str)
+        g_h = g_h[g_h['pasajeros'] > 0]
+        if g_h['ano_num'].nunique() < 2:
+            st.info("Se necesitan datos de al menos dos años para ver la evolución.")
+        else:
+            g_h['share'] = g_h['pasajeros'] / g_h.groupby('ano_num')['pasajeros'].transform('sum') * 100
+            hhi_anio = (g_h['share'] ** 2).groupby(g_h['ano_num']).sum().round(0)
+
+            fig_hhi = go.Figure()
+            for y0, y1, color in [(0, 1500, 'rgba(16,185,129,.10)'), (1500, 2500, 'rgba(245,158,11,.12)'), (2500, 10000, 'rgba(239,68,68,.08)')]:
+                fig_hhi.add_hrect(y0=y0, y1=y1, fillcolor=color, line_width=0, layer='below')
+            fig_hhi.add_scatter(x=[str(a) for a in hhi_anio.index], y=hhi_anio.values, mode='lines+markers+text',
+                                text=[fmt_entero(v) for v in hhi_anio.values], textposition='top center',
+                                line=dict(color=PALETA[0], width=3), name='HHI',
+                                hovertemplate='%{x}: HHI %{y:,.0f}<extra></extra>')
+            fig_hhi.update_layout(
+                title="Índice de concentración (HHI) por año", height=380, showlegend=False,
+                margin=dict(l=20, r=20, t=50, b=40),
+                yaxis=dict(range=[0, max(10000, float(hhi_anio.max()) * 1.05)], title='HHI (0 a 10.000)'),
+                xaxis=dict(type='category')
+            )
+            st.plotly_chart(fig_hhi, use_container_width=True)
+            st.caption("Franjas: verde = competitivo (menos de 1.500), amarillo = moderado (1.500 a 2.500), rojo = concentrado (más de 2.500).")
+
+            # Cuota por aerolínea y año (las aerolíneas con menos de 1% en todos los años se agrupan)
+            piv = g_h.pivot_table(index='aerolinea', columns='ano_num', values='share', aggfunc='sum', fill_value=0)
+            grandes = piv.index[piv.max(axis=1) >= 1]
+            piv_t = piv.loc[grandes].copy()
+            otras = piv.drop(index=grandes).sum(axis=0)
+            if otras.sum() > 0:
+                piv_t.loc['Otras aerolíneas'] = otras
+            piv_t = piv_t.sort_values(piv_t.columns[-1], ascending=False).round(1)
+            piv_t.columns = [str(c) for c in piv_t.columns]
+            piv_t = piv_t.reset_index().rename(columns={'aerolinea': 'Aerolínea', 'index': 'Aerolínea'})
+            st.markdown("**Cuota de mercado por aerolínea (% de pasajeros)**")
+            st.dataframe(piv_t, use_container_width=True, hide_index=True,
+                         column_config=config_numerica(piv_t, porcentajes=tuple(c for c in piv_t.columns if c != 'Aerolínea')))
+            nota_inc = ""
+            if modo_hist == "Año completo" and f_max_total.month < 12:
+                nota_inc = f" {f_max_total.year} está incompleto (hasta el {f_max_total.strftime('%d/%m/%Y')})."
+            st.caption("Cada columna es un año; con “Acumulado” se comparan los mismos meses de todos los años." + nota_inc)
     st.markdown("---")
 
     # 2. Factor de Ocupación mensual por aerolínea (Curva individual por cada aerolínea)
@@ -1326,6 +1415,61 @@ with tab_rutas:
         if len(df_dest) > 15:
             with st.expander(f"Ver los {len(df_dest)} destinos"):
                 st.dataframe(df_dest, use_container_width=True, hide_index=True, column_config=cfg_dest)
+
+    st.markdown("---")
+
+    st.subheader("Pasajeros por Localidad")
+
+    def _mov_pax(df):
+        o = df.groupby('origen_label', observed=True)['pasajeros'].sum()
+        d = df.groupby('destino_label', observed=True)['pasajeros'].sum()
+        o.index, d.index = o.index.astype(str), d.index.astype(str)
+        return o.add(d, fill_value=0)
+
+    m_act = _mov_pax(df_filtrado)
+    m_act = m_act[m_act > 0]
+    if m_act.empty:
+        st.info("No hay pasajeros para el segmento seleccionado.")
+    elif not hay_base_prev:
+        st.info("La base no tiene datos del año anterior para este período, por eso no se calcula la variación por localidad.")
+    else:
+        m_ant = _mov_pax(df_prev)
+        df_loc = pd.DataFrame({'Localidad': m_act.index,
+                               'Pasajeros año ant.': m_ant.reindex(m_act.index).fillna(0).astype(int).values,
+                               'Pasajeros': m_act.astype(int).values})
+        df_loc['Var. %'] = np.where(df_loc['Pasajeros año ant.'] > 0,
+                                    (df_loc['Pasajeros'] - df_loc['Pasajeros año ant.']) / df_loc['Pasajeros año ant.'].replace(0, np.nan) * 100,
+                                    np.nan).round(1)
+        df_loc['Participación'] = (df_loc['Pasajeros'] / df_loc['Pasajeros'].sum() * 100).round(1)
+        df_loc = df_loc.sort_values('Pasajeros', ascending=False).reset_index(drop=True)
+
+        min_loc = st.number_input("Mínimo de pasajeros del año anterior para destacar variaciones", min_value=0,
+                                  max_value=10_000_000, value=10000, step=5000, key="min_loc",
+                                  help="Evita que localidades con muy poco movimiento aparezcan como las que más crecen o caen.")
+        elegibles = df_loc[(df_loc['Pasajeros año ant.'] >= min_loc)].dropna(subset=['Var. %'])
+        if len(elegibles) >= 2:
+            n_g = min(8, max(1, len(elegibles) // 2))
+            destacados = pd.concat([elegibles.nlargest(n_g, 'Var. %'), elegibles.nsmallest(n_g, 'Var. %')]).drop_duplicates('Localidad')
+            destacados = destacados.sort_values('Var. %')
+            destacados['Tendencia'] = np.where(destacados['Var. %'] >= 0, 'Crece', 'Cae')
+            fig_loc = px.bar(
+                destacados, x='Var. %', y='Localidad', orientation='h', color='Tendencia',
+                color_discrete_map={'Crece': '#10b981', 'Cae': '#ef4444'},
+                text=destacados['Var. %'].apply(lambda v: f"{v:+.1f}%".replace(".", ",")),
+                title="Localidades que más crecen y más caen (pasajeros que salen + llegan)"
+            )
+            fig_loc.update_traces(textposition='outside', cliponaxis=False)
+            fig_loc.update_layout(height=max(320, 30 * len(destacados) + 100), margin=dict(l=20, r=60, t=50, b=40),
+                                  yaxis_title=None, xaxis_ticksuffix='%', legend_title_text='')
+            st.plotly_chart(fig_loc, use_container_width=True)
+        else:
+            st.info("Ninguna localidad alcanza el mínimo de pasajeros del año anterior; bajá el valor para ver variaciones.")
+
+        st.dataframe(df_loc, use_container_width=True, hide_index=True,
+                     column_config={**config_numerica(df_loc, porcentajes=('Participación',)),
+                                    'Var. %': st.column_config.NumberColumn('Var. %', format="%+.1f%%")})
+        st.caption(f"Pasajeros que salen y llegan de cada localidad, de {f_d_efectiva.strftime('%d/%m/%Y')} a {f_h_efectiva.strftime('%d/%m/%Y')}, "
+                   f"contra el mismo período del año anterior. Un pasajero cuenta en la localidad de origen y en la de destino.")
 
     st.markdown("---")
 
