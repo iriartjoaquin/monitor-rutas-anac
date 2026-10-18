@@ -392,12 +392,28 @@ def construir_mapa(df, dias, por_pasajeros, vuelos_semana_min):
                    for k in siglas],
         hovertemplate='%{hovertext}<extra></extra>'))
     fig.update_geos(
-        scope='south america', projection_type='mercator', lonaxis_range=[-76, -52], lataxis_range=[-56, -21],
+        scope='south america', projection_type='mercator', lonaxis_range=[-76, -50], lataxis_range=[-57, -21],
         showland=True, landcolor='#f1f5f9', showocean=True, oceancolor='#e0f2fe', showcountries=True,
         countrycolor='#cbd5e1', showlakes=False, showcoastlines=True, coastlinecolor='#94a3b8',
         showsubunits=True, subunitcolor='#e2e8f0', resolution=50)
     fig.update_layout(height=760, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)')
     return fig, len(g), len(nodos), faltan
+
+
+def graficar(fig, mapa=False, leyenda_abajo=False):
+    """Muestra un gráfico Plotly pensado también para pantallas chicas: sin título interno ni barra de
+    herramientas (salvo el mapa, que la necesita para hacer zoom)."""
+    if not mapa:
+        fig.update_layout(title_text=None)
+        lg = fig.layout.legend
+        arriba = lg.orientation == 'h' and lg.y is not None and lg.y >= 1
+        if leyenda_abajo:
+            fig.update_layout(height=(fig.layout.height or 450) + 120,
+                              legend=dict(orientation='h', yanchor='top', y=-0.4, xanchor='left', x=0, title_text=''),
+                              margin=dict(t=30, b=190))
+        else:
+            fig.update_layout(margin=dict(t=90 if arriba else 30))
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': bool(mapa), 'displaylogo': False})
 
 
 def mostrar_metodologia(f_desde_base, f_hasta_base):
@@ -1044,7 +1060,7 @@ if not st.session_state.get('busqueda_activa', False):
     k3.metric("Asientos", "0")
     k4.metric("Ocupación", "0,0%")
     k5.metric("Pax / Vuelo", "0,0")
-    k6.metric("Concentración (HHI)", "-")
+    k6.metric("HHI", "-")
 
     st.info("💡 **El monitor está listo y en espera.** Seleccione una **Ruta**, **Origen y Destino** o **Aerolínea** en los filtros superiores y presione **🔍 Buscar vuelos** para comenzar el análisis.")
 
@@ -1121,7 +1137,7 @@ kpi2.metric("Vuelos", fmt_entero(vuelos_total))
 kpi3.metric("Asientos", fmt_entero(asientos_total))
 kpi4.metric("Ocupación", fmt_porcentaje(factor_ocupacion))
 kpi5.metric("Pax / Vuelo", fmt_decimal(pax_por_vuelo))
-kpi6.metric("Concentración (HHI)", f"{hhi_val:,}".replace(",", "."), delta=hhi_desc, delta_color="off", delta_arrow="off",
+kpi6.metric("HHI", f"{hhi_val:,}".replace(",", "."), delta=hhi_desc, delta_color="off", delta_arrow="off",
             help="Índice Herfindahl-Hirschman sobre pasajeros: menos de 1.500 = competitivo, 1.500 a 2.500 = moderado, más de 2.500 = concentrado.")
 
 # -------------------------------------------------------------
@@ -1163,6 +1179,12 @@ if hay_base_prev:
     )
     df_rank['Estado'] = np.where(df_rank['Pax año ant.'] == 0, 'Nueva', '')
     rutas_suspendidas = sorted(set(pax_prev) - set(df_rank['Ruta']))
+
+# Para los gráficos por aerolínea: las 8 con más pasajeros y el resto agrupado (leyendas legibles, también en celular)
+_top_aero = df_filtrado.groupby('aerolinea', observed=True)['pasajeros'].sum().nlargest(8).index
+df_top8 = df_filtrado[['periodo_orden', 'periodo_mes_es', 'aerolinea', 'pasajeros', 'asientos']].copy()
+_en_top = df_top8['aerolinea'].isin(_top_aero)
+df_top8['aerolinea'] = df_top8['aerolinea'].astype(str).where(_en_top, 'Otras aerolíneas')
 
 # =============================================================
 # SECCIÓN 1: GRÁFICOS CON INFORMACIÓN BÁSICA (VERTICALES)
@@ -1215,11 +1237,11 @@ with tab_panorama:
     else:
         col_mapa, col_top = st.columns([3, 2])
         with col_mapa:
-            st.plotly_chart(fig_mapa, use_container_width=True)
+            graficar(fig_mapa, mapa=True)
         with col_top:
             st.markdown("**Principales rutas del período**")
-            top_mapa = df_rank.head(12)[['Ruta', 'Pasajeros', 'Vuelos/día']].copy()
-            top_mapa['Vuelos/día'] = top_mapa['Vuelos/día'].round(1)
+            top_mapa = df_rank.head(12)[['Ruta', 'Pasajeros']].copy()
+            top_mapa['Ruta'] = top_mapa['Ruta'].str.replace(r'(\w{3}) \([^⇄]*?\)(?= ⇄|$)', r'\1', regex=True)
             st.dataframe(top_mapa, use_container_width=True, hide_index=True, height=470,
                          column_config=config_numerica(top_mapa))
         st.caption(f"{n_rutas_mapa} rutas y {n_aero_mapa} aeropuertos. Líneas más gruesas = más {base_grosor.lower()}; "
@@ -1249,7 +1271,7 @@ with tab_panorama:
         yaxis2=dict(title='Ocupación', overlaying='y', side='right', range=[0, 105], tickvals=[0, 25, 50, 75, 100], ticksuffix='%', showgrid=False),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0)
     )
-    st.plotly_chart(fig_od, use_container_width=True)
+    graficar(fig_od)
     st.caption("Si las barras grises superan mucho a las azules, hay capacidad ociosa; si se igualan y la ocupación se acerca al 100%, la ruta está saturada.")
 
     st.markdown("---")
@@ -1290,7 +1312,7 @@ with tab_panorama:
             yaxis=dict(range=[0, 105]) if med_anual == "Ocupación" else dict(),
             xaxis=dict(type='category'),
             title=f"{med_anual} por año")
-        st.plotly_chart(fig_anual, use_container_width=True)
+        graficar(fig_anual)
         nota_anual = ""
         if incompleto.any():
             nota_anual = f" {f_max_total.year} está incompleto (hasta el {f_max_total.strftime('%d/%m/%Y')}) y se muestra más claro; usá el acumulado para comparar sin sesgo."
@@ -1330,7 +1352,7 @@ with tab_panorama:
         yaxis2=dict(title='Asientos por vuelo', overlaying='y', side='right', showgrid=False, rangemode='tozero'),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0)
     )
-    st.plotly_chart(fig_fq, use_container_width=True)
+    graficar(fig_fq)
     st.caption("Barras: frecuencia operada (vuelos por día). Línea: tamaño promedio de la aeronave. "
                "Si suben las barras, la ruta crece con más frecuencias; si sube la línea, con aviones más grandes.")
 
@@ -1338,7 +1360,7 @@ with tab_panorama:
 
     # 2. Pasajeros mensuales por aerolínea
     st.markdown("#### Evolución Mensual de Pasajeros por Operador")
-    df_mes_aero = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    df_mes_aero = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
     df_mes_aero = df_mes_aero.sort_values(by=['periodo_orden', 'pasajeros'], ascending=[True, False])
     
     fig_bar = px.bar(
@@ -1356,7 +1378,7 @@ with tab_panorama:
         height=480,
         margin=dict(l=20, r=20, t=50, b=40)
     )
-    st.plotly_chart(fig_bar, use_container_width=True)
+    graficar(fig_bar, leyenda_abajo=True)
 
     st.markdown("---")
 
@@ -1371,12 +1393,12 @@ with tab_panorama:
         fig_top.update_traces(textposition='outside', marker_color=PALETA[0], cliponaxis=False)
         fig_top.update_layout(height=max(320, 32 * len(top_rutas) + 100), margin=dict(l=20, r=60, t=50, b=40),
                               yaxis_title=None)
-        st.plotly_chart(fig_top, use_container_width=True)
+        graficar(fig_top)
 
 with tab_competencia:
     # Participación de mercado en el tiempo (100% apilado)
     st.markdown("#### Participación de Mercado Mes a Mes")
-    df_share = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    df_share = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
     df_share['periodo_orden'] = df_share['periodo_orden'].astype(str)
     df_share['periodo_mes_es'] = df_share['periodo_mes_es'].astype(str)
     df_share['aerolinea'] = df_share['aerolinea'].astype(str)
@@ -1391,7 +1413,7 @@ with tab_competencia:
         )
         fig_share.update_layout(barmode='stack', barnorm='percent', yaxis_ticksuffix='%', xaxis_tickangle=-45, height=440,
                                 margin=dict(l=20, r=20, t=50, b=40), legend_title_text='Aerolínea')
-        st.plotly_chart(fig_share, use_container_width=True)
+        graficar(fig_share, leyenda_abajo=True)
         st.caption("Muestra quién gana o pierde cuota a lo largo del tiempo; el HHI de arriba resume la concentración del período.")
 
     st.markdown("---")
@@ -1428,7 +1450,7 @@ with tab_competencia:
                 yaxis=dict(range=[0, max(10000, float(hhi_anio.max()) * 1.05)], title='HHI (0 a 10.000)'),
                 xaxis=dict(type='category')
             )
-            st.plotly_chart(fig_hhi, use_container_width=True)
+            graficar(fig_hhi)
             st.caption("Franjas: verde = competitivo (menos de 1.500), amarillo = moderado (1.500 a 2.500), rojo = concentrado (más de 2.500).")
 
             # Cuota por aerolínea y año (las aerolíneas con menos de 1% en todos los años se agrupan)
@@ -1452,7 +1474,7 @@ with tab_competencia:
 
     # 2. Factor de Ocupación mensual por aerolínea (Curva individual por cada aerolínea)
     st.markdown("#### Factor de Ocupación (%) por Aerolínea Mes a Mes")
-    df_mes_ocup = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True).agg(
+    df_mes_ocup = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True).agg(
         pasajeros=('pasajeros', 'sum'),
         asientos=('asientos', 'sum')
     ).reset_index()
@@ -1478,7 +1500,7 @@ with tab_competencia:
             height=480,
             margin=dict(l=20, r=20, t=50, b=40)
         )
-        st.plotly_chart(fig_line, use_container_width=True)
+        graficar(fig_line, leyenda_abajo=True)
     else:
         st.info("No se registran asientos ofertados para calcular el factor de ocupación en este segmento.")
 
@@ -1544,7 +1566,7 @@ with tab_rutas:
                              'Var. %': ((r['vuelos'] - v_ant) / v_ant * 100) if v_ant > 0 else np.nan})
             filas.append(fila)
         df_dest = pd.DataFrame(filas)
-        orden_cols = ['Posición', 'Cambio', 'Destino', 'Vuelos año ant.', 'Vuelos', 'Var. %', 'Participación', 'Pasajeros']
+        orden_cols = ['Posición', 'Cambio', 'Destino', 'Vuelos', 'Var. %', 'Participación', 'Vuelos año ant.', 'Pasajeros']
         df_dest = df_dest[[c for c in orden_cols if c in df_dest.columns]]
         df_dest[['Participación'] + (['Var. %'] if 'Var. %' in df_dest.columns else [])] = \
             df_dest[['Participación'] + (['Var. %'] if 'Var. %' in df_dest.columns else [])].round(1)
@@ -1621,13 +1643,14 @@ with tab_rutas:
             )
             fig_loc.update_traces(textposition='outside', cliponaxis=False)
             fig_loc.update_layout(height=max(320, 30 * len(destacados) + 100), margin=dict(l=20, r=60, t=50, b=40),
-                                  yaxis_title=None, xaxis_ticksuffix='%', legend_title_text='')
-            st.plotly_chart(fig_loc, use_container_width=True)
+                                  yaxis_title=None, xaxis_ticksuffix='%', showlegend=False)
+            graficar(fig_loc)
         else:
             st.info("Ninguna localidad alcanza el mínimo de pasajeros del año anterior; bajá el valor para ver variaciones.")
 
-        st.dataframe(df_loc, use_container_width=True, hide_index=True,
-                     column_config={**config_numerica(df_loc, porcentajes=('Participación',)),
+        df_loc_v = df_loc[['Localidad', 'Pasajeros', 'Var. %', 'Participación', 'Pasajeros año ant.']]
+        st.dataframe(df_loc_v, use_container_width=True, hide_index=True,
+                     column_config={**config_numerica(df_loc_v, porcentajes=('Participación',)),
                                     'Var. %': st.column_config.NumberColumn('Var. %', format="%+.1f%%")})
         st.caption(f"Pasajeros que salen y llegan de cada localidad, de {f_d_efectiva.strftime('%d/%m/%Y')} a {f_h_efectiva.strftime('%d/%m/%Y')}, "
                    f"contra el mismo período del año anterior. Un pasajero cuenta en la localidad de origen y en la de destino.")
@@ -1652,10 +1675,10 @@ with tab_rutas:
         etiqueta_mes = f"{meses_es[m_ref]} {y_ref}"
 
         c1, c2 = st.columns(2)
-        c1.metric(f"Rutas activas en {etiqueta_mes}", fmt_entero(len(act_set)),
+        c1.metric(f"Activas {meses_es[m_ref]} {y_ref}", fmt_entero(len(act_set)),
                   delta=(f"{len(act_set) - len(ant_set):+d} vs {meses_es[m_ref]} {y_ref - 1}" if hay_ant_mes else None),
                   help=f"Rutas (ambos sentidos) con al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes.")
-        c2.metric(f"Rutas activas en {meses_es[m_ref]} {y_ref - 1}", fmt_entero(len(ant_set)) if hay_ant_mes else "s/d")
+        c2.metric(f"Activas {meses_es[m_ref]} {y_ref - 1}", fmt_entero(len(ant_set)) if hay_ant_mes else "s/d")
 
         if hay_ant_mes:
             nuevas_act = sorted(act_set - ant_set)
@@ -1686,8 +1709,8 @@ with tab_rutas:
         m1, m2, m3 = st.columns(3)
         m1.metric("Rutas operadas", fmt_entero(len(df_rank)),
                   help="Corredores (ambos sentidos) con al menos un vuelo en el período.")
-        m2.metric("Aeropuertos conectados", fmt_entero(n_aeropuertos))
-        m3.metric("Pasajeros sin pasar por el AMBA", fmt_porcentaje(pct_transv),
+        m2.metric("Aeropuertos", fmt_entero(n_aeropuertos))
+        m3.metric("Sin pasar por AMBA", fmt_porcentaje(pct_transv),
                   help="Porcentaje de pasajeros en rutas que no tocan Aeroparque, Ezeiza, El Palomar, Morón ni San Fernando (rutas transversales).")
 
         # Evolución de la participación de rutas transversales
@@ -1706,7 +1729,7 @@ with tab_rutas:
             )
             fig_fed.update_layout(yaxis_ticksuffix='%', xaxis_tickangle=-45, height=380,
                                   margin=dict(l=20, r=20, t=50, b=40))
-            st.plotly_chart(fig_fed, use_container_width=True)
+            graficar(fig_fed)
 
         # Aeropuertos con más movimiento de pasajeros
         mov_o = df_filtrado.groupby('origen_label', observed=True)['pasajeros'].sum()
@@ -1722,7 +1745,7 @@ with tab_rutas:
         )
         fig_mov.update_layout(height=max(320, 32 * len(df_mov) + 100), margin=dict(l=20, r=20, t=50, b=40),
                               yaxis_title=None, legend_title_text='')
-        st.plotly_chart(fig_mov, use_container_width=True)
+        graficar(fig_mov)
 
     st.markdown("---")
 
@@ -1738,8 +1761,8 @@ with tab_rutas:
         pax_mono = int(base_mono['pasajeros'].sum())
 
         c1, c2 = st.columns(2)
-        c1.metric("Rutas con un único operador", f"{int((ops_ruta == 1).sum())} de {len(ops_ruta)}")
-        c2.metric("Pasajeros en esas rutas", fmt_porcentaje(pax_mono / pax_total * 100 if pax_total > 0 else 0),
+        c1.metric("Rutas de un operador", f"{int((ops_ruta == 1).sum())} de {len(ops_ruta)}")
+        c2.metric("Sus pasajeros", fmt_porcentaje(pax_mono / pax_total * 100 if pax_total > 0 else 0),
                   help="Porcentaje de los pasajeros del segmento que viaja en rutas donde una sola aerolínea opera.")
 
         if base_mono.empty:
@@ -1825,7 +1848,7 @@ with tab_rutas:
         height=480,
         margin=dict(l=20, r=20, t=50, b=40)
     )
-    st.plotly_chart(fig_tramo, use_container_width=True)
+    graficar(fig_tramo)
     st.markdown("---")
 
     # Cuadro 2: Desempeño por Sentido de Vuelo
@@ -1893,7 +1916,13 @@ with tab_estacionalidad:
     df_est_total = df_raw[mascara_est]
 
     meses_por_ano = df_est_total.groupby('ano_num', observed=True)['mes_num'].nunique()
-    anos_completos = sorted(meses_por_ano[meses_por_ano == 12].index.tolist())
+    anos_completos_todos = sorted(meses_por_ano[meses_por_ano == 12].index.tolist())
+    incluir_pandemia = st.checkbox("Incluir 2020 y 2021 (pandemia)", value=False, key="est_pandemia",
+                                   help="La pandemia distorsiona la estacionalidad: en 2020 casi no hubo vuelos entre abril y septiembre. "
+                                        "Por eso se excluyen por defecto de las curvas y del promedio histórico.")
+    anos_completos = [a for a in anos_completos_todos if incluir_pandemia or a not in (2020, 2021)]
+    if not anos_completos:
+        anos_completos = anos_completos_todos
     anos_disp_est = sorted(df_est_total['ano_num'].unique().tolist(), reverse=True)
 
     # Años superpuestos (índice 100 = promedio mensual del propio año)
@@ -1910,7 +1939,7 @@ with tab_estacionalidad:
         )
         fig_sup.add_hline(y=100, line_dash='dot', line_color='#94a3b8')
         fig_sup.update_layout(height=420, margin=dict(l=20, r=20, t=50, b=40))
-        st.plotly_chart(fig_sup, use_container_width=True)
+        graficar(fig_sup)
         st.caption("Líneas que se superponen indican una estacionalidad estable; un año que se separa del resto marca un quiebre (shock, nueva oferta o crisis).")
 
     # Día de la semana x mes
@@ -1928,7 +1957,7 @@ with tab_estacionalidad:
         ))
         fig_dow.update_layout(title="Pasajeros promedio por día de la semana y mes", height=360,
                               margin=dict(l=20, r=20, t=50, b=40), yaxis=dict(autorange='reversed'))
-        st.plotly_chart(fig_dow, use_container_width=True)
+        graficar(fig_dow)
 
     st.markdown("---")
     st.markdown("#### Detalle por año")
@@ -1955,11 +1984,11 @@ with tab_estacionalidad:
                 vuelos=('vuelos', lambda x: x.sum() / cant_anos),
                 asientos=('asientos', lambda x: x.sum() / cant_anos)
             ).reset_index()
-            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años completos)"
+            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años completos" + ("" if incluir_pandemia else ", sin 2020 ni 2021") + ")"
         else:
             ano_int = int(ano_est_sel)
             df_est_base = df_est_total[df_est_total['ano_num'] == ano_int].copy()
-            if ano_int not in anos_completos:
+            if ano_int not in anos_completos_todos:
                 st.caption(f"⚠️ {ano_int} es un año incompleto ({int(meses_por_ano.get(ano_int, 0))} de 12 meses): el índice se calcula sobre los meses disponibles.")
             titulo_graf = f"Curva de Estacionalidad Mensual - Año {ano_int}"
             df_est = df_est_base.groupby('mes_num', observed=True).agg(
@@ -1989,7 +2018,7 @@ with tab_estacionalidad:
                 )
                 fig_est.update_traces(textposition='outside')
                 fig_est.update_layout(bargap=0.2)
-                st.plotly_chart(fig_est, use_container_width=True)
+                graficar(fig_est)
 
             with col_est2:
                 st.markdown(f"#### {subtitulo_tabla}")
@@ -2233,7 +2262,7 @@ with tab_competencia:
                     height=480,
                     margin=dict(l=20, r=20, t=50, b=40)
                 )
-                st.plotly_chart(fig_pax_comp, use_container_width=True)
+                graficar(fig_pax_comp)
 
                 st.markdown("---")
 
@@ -2257,7 +2286,7 @@ with tab_competencia:
                     height=450,
                     margin=dict(l=20, r=20, t=50, b=40)
                 )
-                st.plotly_chart(fig_shift, use_container_width=True)
+                graficar(fig_shift)
 
             else:
                 st.warning("No se encontraron vuelos para la combinación de fechas y filtros seleccionada.")
