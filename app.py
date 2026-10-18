@@ -1254,6 +1254,50 @@ with tab_panorama:
 
     st.markdown("---")
 
+    # Evolución anual (usa todos los años de la base; respeta ruta/aeropuertos/aerolínea, no el rango de fechas)
+    st.markdown("#### Evolución Anual")
+    ea1, ea2 = st.columns(2)
+    opc_anual = ["Año calendario", f"Acumulado enero–{meses_es[f_max_total.month].lower()}"]
+    with ea1:
+        med_anual = st.radio("Medir", ["Pasajeros", "Vuelos", "Ocupación"], horizontal=True, key="anual_med")
+    with ea2:
+        modo_anual = st.radio("Comparar", opc_anual, horizontal=True, key="anual_modo",
+                              help="El acumulado compara los mismos meses de todos los años, para que el año en curso no quede en desventaja.")
+    seg_anual = filtrar_segmento(df_raw, filtros, f_min_total, f_max_total)
+    if modo_anual != opc_anual[0]:
+        seg_anual = seg_anual[seg_anual['mes_num'] <= f_max_total.month]
+    g_anual = seg_anual.groupby('ano_num', observed=True)[['pasajeros', 'vuelos', 'asientos']].sum().reset_index()
+    g_anual['ano_num'] = g_anual['ano_num'].astype(int)
+    g_anual['Ocupación'] = np.where(g_anual['asientos'] > 0, g_anual['pasajeros'] / g_anual['asientos'] * 100, np.nan)
+    if len(g_anual) < 2:
+        st.info("Se necesitan datos de al menos dos años para ver la evolución anual.")
+    else:
+        col_anual = {'Pasajeros': 'pasajeros', 'Vuelos': 'vuelos', 'Ocupación': 'Ocupación'}[med_anual]
+        vals = g_anual[col_anual]
+        var_prev = vals.pct_change() * 100
+        incompleto = (g_anual['ano_num'] == f_max_total.year) & (modo_anual == opc_anual[0]) & (f_max_total < date(f_max_total.year, 12, 31))
+        if med_anual == "Ocupación":
+            etiquetas = [fmt_porcentaje(v) for v in vals]
+        else:
+            etiquetas = [fmt_entero(v) for v in vals]
+        fig_anual = go.Figure(go.Bar(
+            x=g_anual['ano_num'].astype(str), y=vals, text=etiquetas, textposition='outside', cliponaxis=False,
+            marker=dict(color=PALETA[0], opacity=[0.45 if i else 1 for i in incompleto]),
+            customdata=[("s/d" if pd.isna(v) else f"{v:+.1f}%".replace(".", ",")) for v in var_prev],
+            hovertemplate='%{x}: %{text}<br>Variación vs. año anterior: %{customdata}<extra></extra>'))
+        fig_anual.update_layout(
+            height=420, margin=dict(l=20, r=20, t=40, b=40), yaxis_title=med_anual,
+            yaxis=dict(range=[0, 105]) if med_anual == "Ocupación" else dict(),
+            xaxis=dict(type='category'),
+            title=f"{med_anual} por año")
+        st.plotly_chart(fig_anual, use_container_width=True)
+        nota_anual = ""
+        if incompleto.any():
+            nota_anual = f" {f_max_total.year} está incompleto (hasta el {f_max_total.strftime('%d/%m/%Y')}) y se muestra más claro; usá el acumulado para comparar sin sesgo."
+        st.caption("Pasá el mouse sobre cada barra para ver la variación contra el año anterior. Respeta los filtros de ruta, aeropuertos y aerolínea; no el rango de fechas." + nota_anual)
+
+    st.markdown("---")
+
     # Frecuencias y tamaño de aeronave
     st.markdown("#### Frecuencias y Tamaño de Aeronave")
     g_fq = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es'], observed=True).agg(
