@@ -1552,7 +1552,7 @@ with tab_rutas:
 
         filas = []
         for i, (dest, r) in enumerate(d_act.iterrows(), start=1):
-            fila = {'Posición': float(i), 'Destino': dest, 'Vuelos': int(r['vuelos']),
+            fila = {'Posición': str(i), 'Destino': dest, 'Vuelos': int(r['vuelos']),
                     'Participación': r['vuelos'] / total_v * 100, 'Pasajeros': int(r['pasajeros'])}
             if hay_base_prev:
                 v_ant = int(d_ant['vuelos'].get(dest, 0))
@@ -1575,7 +1575,7 @@ with tab_rutas:
             df_dest[['Participación'] + (['Var. %'] if 'Var. %' in df_dest.columns else [])].round(1)
 
         cfg_dest = config_numerica(df_dest, porcentajes=('Participación',))
-        cfg_dest['Posición'] = st.column_config.NumberColumn('Posición', format="%d")
+        cfg_dest['Posición'] = st.column_config.TextColumn('Posición', width='small')
         if 'Var. %' in df_dest.columns:
             cfg_dest['Var. %'] = st.column_config.NumberColumn('Var. %', format="%+.1f%%")
 
@@ -1583,7 +1583,7 @@ with tab_rutas:
         resto = df_dest.iloc[15:]
         if not resto.empty:
             fila_resto = {c: np.nan for c in top_dest.columns}
-            fila_resto.update({'Destino': f"Resto ({len(resto)} destinos)", 'Vuelos': resto['Vuelos'].sum(),
+            fila_resto.update({'Posición': f"16–{len(df_dest)}", 'Destino': f"Resto ({len(resto)} destinos)", 'Vuelos': resto['Vuelos'].sum(),
                                'Participación': round(resto['Participación'].sum(), 1), 'Pasajeros': resto['Pasajeros'].sum()})
             if 'Cambio' in top_dest.columns:
                 fila_resto['Cambio'] = ''
@@ -1592,15 +1592,18 @@ with tab_rutas:
                     if resto['Vuelos año ant.'].sum() > 0 else np.nan
             top_dest = pd.concat([top_dest, pd.DataFrame([fila_resto])], ignore_index=True)
 
-        st.dataframe(top_dest, use_container_width=True, hide_index=True, column_config=cfg_dest)
+        ver_todos = False
+        if len(df_dest) > 15:
+            ver_todos = st.toggle(f"Mostrar los {len(df_dest)} destinos", key="dest_todos",
+                                  help="Amplía esta misma tabla para ver todos los destinos, sin el grupo «Resto».")
+        tabla_dest = df_dest if ver_todos else top_dest
+        st.dataframe(tabla_dest, use_container_width=True, hide_index=True, column_config=cfg_dest,
+                     height=int((len(tabla_dest) + 1) * 35 + 3))
         if hay_base_prev:
             st.caption("Vuelos = frecuencias que llegan a cada destino. ▲ ▼ indican posiciones ganadas o perdidas respecto del mismo período del año anterior; "
                        "“Nuevo” = no recibía vuelos entonces. Podés ordenar por cualquier columna.")
         else:
             st.caption("Vuelos = frecuencias que llegan a cada destino. La base no tiene datos del año anterior para este período, por eso no se muestran cambios.")
-        if len(df_dest) > 15:
-            with st.expander(f"Ver los {len(df_dest)} destinos"):
-                st.dataframe(df_dest, use_container_width=True, hide_index=True, column_config=cfg_dest)
 
     st.markdown("---")
 
