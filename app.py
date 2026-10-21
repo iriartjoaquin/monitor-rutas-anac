@@ -44,7 +44,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-.block-container { padding-top: 2rem; padding-bottom: 4rem; max-width: 1280px; }
+.block-container { padding-top: 2rem; padding-bottom: 4rem; max-width: 1400px; }
 header[data-testid="stHeader"] { background: transparent; }
 h1, h2, h3, h4 { letter-spacing: -0.01em; color: #0f172a; }
 h3 { margin-top: .5rem; }
@@ -70,7 +70,11 @@ div[data-testid="stMetric"] {
     padding: .9rem 1rem; box-shadow: 0 1px 3px rgba(15, 23, 42, .06);
 }
 div[data-testid="stMetricLabel"] p { color: #64748b; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
-div[data-testid="stMetricValue"] { color: #0f172a; font-weight: 700; }
+div[data-testid="stColumn"]:has(div[data-testid="stMetric"]) { container-type: inline-size; }
+/* El número se achica según el ancho de la tarjeta, así siempre se ve completo */
+div[data-testid="stMetricValue"] { color: #0f172a; font-weight: 700; font-size: clamp(0.9rem, 12cqw, 2.25rem); line-height: 1.2; }
+div[data-testid="stMetricValue"] > div { overflow: visible !important; text-overflow: clip !important; white-space: nowrap !important; }
+div[data-testid="stMetricLabel"] *, div[data-testid="stMetricDelta"] * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
 
 /* Pestañas */
 button[data-baseweb="tab"] { font-weight: 600; padding: .7rem 1rem; }
@@ -93,7 +97,6 @@ section[data-testid="stSidebar"] { background: #fff; border-right: 1px solid #e2
     .hero { padding: 1.2rem 1.1rem; border-radius: 14px; }
     .hero h1 { font-size: 1.35rem; }
     .hero p { font-size: .88rem; }
-    div[data-testid="stMetricValue"] { font-size: 1.5rem; }
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) { flex-wrap: wrap; gap: .6rem; }
     div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) > div[data-testid="stColumn"] {
         min-width: calc(50% - .6rem); flex: 1 1 calc(50% - .6rem);
