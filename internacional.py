@@ -500,7 +500,7 @@ def mostrar(h):
     f_min, f_max = df['fecha'].min().date(), df['fecha'].max().date()
     st.markdown(
         '<div class="chips" style="margin:-.4rem 0 1.2rem 0;">'
-        '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📡 Fuente: SINTA (Turismo) con datos de ANAC</span>'
+        '<a class="chip" href="https://tableros.yvera.tur.ar/conectividad/" target="_blank" title="Abrir el tablero de conectividad aérea de SINTA" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;text-decoration:none;">📡 Fuente: SINTA (Turismo) con datos de ANAC ↗</a>'
         f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 Datos del {f_min.strftime("%d/%m/%Y")} al {f_max.strftime("%d/%m/%Y")}</span>'
         '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🌎 Todas las rutas entre Argentina y el resto de América</span>'
         '</div>', unsafe_allow_html=True)

@@ -34,6 +34,7 @@ menos de 1% de diferencia.
 - Cada pestaña termina con una aclaración en letra chica que dice qué muestra y qué filtros respeta.
 - **↺ Restablecer** vuelve todos los filtros a como estaban al entrar.
 - **ℹ️ Metodología**, al final de cada sección, tiene todas las definiciones.
+- **📚 Fuentes de datos**, al pie de cada sección, tiene los links al tablero de SINTA, a los datos de ANAC y a los archivos del monitor.
 - **Mapas:** se mueven arrastrando y se acercan con la rueda del mouse (o con dos dedos en el celular). Pasando el mouse por el
   medio de una línea ves el detalle de esa ruta, y con **Destacar las rutas de…** elegís un aeropuerto o ciudad: sus rutas
   quedan en naranja y al costado aparece la tabla con cada una.

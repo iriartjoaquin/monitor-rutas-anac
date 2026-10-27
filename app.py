@@ -411,6 +411,25 @@ La base se revisa automáticamente entre el 10 y el 20 de cada mes; la fuente pu
 """)
 
 
+URL_SINTA = "https://tableros.yvera.tur.ar/conectividad/"
+URL_ANAC = "https://datos.gob.ar/dataset/aterrizajes-y-despegues-procesados-por-la-administracion-nacional-de-aviacion-civil-anac"
+URL_REPO = "https://github.com/iriartjoaquin/monitor-rutas-anac"
+
+
+def mostrar_fuentes():
+    """Links a las fuentes de datos, al pie de cada sección."""
+    st.markdown("---")
+    st.markdown(f"""
+#### 📚 Fuentes de datos
+- **[Tablero de conectividad aérea de SINTA]({URL_SINTA})** (Ministerio de Turismo): de acá salen todos los vuelos, pasajeros y
+  asientos de cabotaje e internacionales, armados con los registros de ANAC. Se usa la sección "Conectividad".
+- **[Aterrizajes y despegues procesados por ANAC]({URL_ANAC})** (datos.gob.ar): sirven para separar JetSMART Argentina de
+  JetSMART Chile y para controlar los datos de SINTA (coinciden con menos de 1% de diferencia por mes).
+- **[Archivos de datos y código del monitor]({URL_REPO})** (GitHub): las bases que usa esta página, tal como se descargan cada mes.
+""")
+    st.caption("Las distancias de las rutas las calcula el monitor en línea recta entre aeropuertos.")
+
+
 def restar_ano(f):
     try:
         return f.replace(year=f.year - 1)
@@ -857,6 +876,7 @@ UTILES = SimpleNamespace(
 
 if seccion == SECCIONES[1]:
     internacional.mostrar(UTILES)
+    mostrar_fuentes()
     st.stop()
 
 # -------------------------------------------------------------
@@ -912,7 +932,7 @@ total_registros = len(df_raw)
 
 st.markdown(
     '<div class="chips" style="margin:-.4rem 0 1.2rem 0;">'
-    '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📡 Fuente: SINTA (Turismo) con datos de ANAC</span>'
+    f'<a class="chip" href="{URL_SINTA}" target="_blank" title="Abrir el tablero de conectividad aérea de SINTA" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;text-decoration:none;">📡 Fuente: SINTA (Turismo) con datos de ANAC ↗</a>'
     f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 Datos del {f_min_total.strftime("%d/%m/%Y")} al {f_max_total.strftime("%d/%m/%Y")}</span>'
     '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🔄 Se actualiza cada mes</span>'
     '</div>',
@@ -1128,6 +1148,7 @@ if not st.session_state.get('busqueda_activa', False):
     with tab_d:
         st.info("Elegí una ruta o un tramo y tocá 'Buscar vuelos' para descargar los microdatos y reportes del segmento.")
     mostrar_metodologia(f_min_total, f_max_total)
+    mostrar_fuentes()
     st.stop()
 
 # -------------------------------------------------------------
@@ -1153,6 +1174,7 @@ df_filtrado = df_raw[mascara].copy()
 
 if df_filtrado.empty:
     st.warning("⚠️ No se encontraron vuelos para los criterios seleccionados. Ajustá los filtros y tocá **Buscar vuelos**.")
+    mostrar_fuentes()
     st.stop()
 
 # KPIs Reales del Segmento Filtrado
@@ -2191,3 +2213,4 @@ with tab_datos:
         )
 
 mostrar_metodologia(f_min_total, f_max_total)
+mostrar_fuentes()
