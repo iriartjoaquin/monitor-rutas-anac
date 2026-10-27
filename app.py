@@ -79,7 +79,7 @@ div[data-testid="stMetricValue"] > div { overflow: visible !important; text-over
 div[data-testid="stMetricLabel"] *, div[data-testid="stMetricDelta"] * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; }
 
 /* Pestañas */
-button[data-baseweb="tab"] { font-weight: 600; padding: .7rem 1rem; }
+button[data-baseweb="tab"] { font-weight: 600; padding: .7rem .8rem; }
 div[data-baseweb="tab-list"] { gap: .25rem; border-bottom: 1px solid #e2e8f0; }
 
 /* Botones, inputs, tablas y gráficos */
@@ -501,6 +501,39 @@ def filtrar_segmento(df, filtros, desde, hasta):
         m &= df['aerolinea'].isin(filtros['aerolineas'])
     return df[m]
 
+def _formateador_es(formato, serie):
+    """Convierte un formato de columna ("localized", "%.1f%%", "%+d"…) en una función que escribe 1.234,5."""
+    m = re.fullmatch(r'%(\+?)(?:\.(\d+))?([df])(.*)', str(formato))
+    if m:
+        signo, decimales, sufijo = m.group(1), int(m.group(2) or 0), m.group(4).replace('%%', '%')
+    else:  # "localized": sin decimales si la columna es entera; si no, 1 (o 2 para valores chicos, como 1,09)
+        s = pd.to_numeric(serie, errors='coerce').dropna()
+        entera = s.empty or bool((s == s.round()).all())
+        signo, sufijo = '', ''
+        decimales = 0 if entera else (2 if s.abs().max() < 10 else 1)
+
+    def formatear(x):
+        if pd.isna(x):
+            return ''
+        texto = f"{x:{signo},.{decimales}f}"
+        return texto.replace(',', '_').replace('.', ',').replace('_', '.') + sufijo
+    return formatear
+
+
+def tabla(data, column_config=None, **kwargs):
+    """st.dataframe con los números en formato argentino (1.234,5) que se siguen ordenando como números."""
+    if isinstance(data, pd.DataFrame) and column_config and data.size <= 200_000 and data.columns.is_unique and data.index.is_unique:
+        formatos, cfg = {}, dict(column_config)
+        for c, conf in column_config.items():
+            tc = conf.get('type_config') if isinstance(conf, dict) else None
+            if c in data.columns and tc and tc.get('type') == 'number' and tc.get('format') and pd.api.types.is_numeric_dtype(data[c]):
+                formatos[c] = _formateador_es(tc['format'], data[c])
+                cfg[c] = {**conf, 'type_config': {**tc, 'format': None}}
+        if formatos:
+            data, column_config = data.style.format(formatos, na_rep=''), cfg
+    return st.dataframe(data, column_config=column_config, **kwargs)
+
+
 def config_numerica(df, porcentajes=(), deltas=(), deltas_pts=()):
     """column_config para mostrar números ordenables (sin convertirlos a texto)."""
     cfg = {}
@@ -878,7 +911,7 @@ st.query_params['seccion'] = 'internacional' if seccion == SECCIONES[1] else 'ca
 if seccion == SECCIONES[1]:
     import internacional
     internacional.mostrar(SimpleNamespace(
-        graficar=graficar, config_numerica=config_numerica, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
+        graficar=graficar, config_numerica=config_numerica, tabla=tabla, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
         fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
         construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
         COORDENADAS=COORDENADAS, COLORES_AEROLINEAS=COLORES_AEROLINEAS, PALETA=PALETA))
@@ -1312,7 +1345,7 @@ with tab_panorama:
             st.markdown("**Principales rutas del período**")
             top_mapa = df_rank.head(12)[['Ruta', 'Pasajeros']].copy()
             top_mapa['Ruta'] = top_mapa['Ruta'].str.replace(r'(\w{3}) \([^⇄]*?\)(?= ⇄|$)', r'\1', regex=True)
-            st.dataframe(top_mapa, use_container_width=True, hide_index=True, height=470,
+            tabla(top_mapa, use_container_width=True, hide_index=True, height=470,
                          column_config=config_numerica(top_mapa))
         st.caption(f"{n_rutas_mapa} rutas y {n_aero_mapa} aeropuertos. Líneas más gruesas = más {base_grosor.lower()}; "
                    "círculos más grandes = más movimiento; gris = AMBA, naranja = interior. Pasá el mouse para ver el detalle.")
@@ -1524,7 +1557,7 @@ with tab_competencia:
             piv_t.columns = [str(c) for c in piv_t.columns]
             piv_t = piv_t.reset_index().rename(columns={'aerolinea': 'Aerolínea', 'index': 'Aerolínea'})
             st.markdown("**Cuota de mercado por aerolínea (% de pasajeros)**")
-            st.dataframe(piv_t, use_container_width=True, hide_index=True,
+            tabla(piv_t, use_container_width=True, hide_index=True,
                          column_config=config_numerica(piv_t, porcentajes=tuple(c for c in piv_t.columns if c != 'Aerolínea')))
             nota_inc = ""
             if modo_hist == "Año completo" and f_max_total.month < 12:
@@ -1585,7 +1618,7 @@ with tab_competencia:
     df_aero_disp = df_aero.rename(columns={'aerolinea': 'Aerolínea'}).copy()
     cols_dec = ['Market Share', 'Factor Ocupación', 'Pax / Vuelo', 'Asientos / Vuelo', 'Vuelos / día']
     df_aero_disp[cols_dec] = df_aero_disp[cols_dec].round(1)
-    st.dataframe(
+    tabla(
         df_aero_disp, use_container_width=True, hide_index=True,
         column_config=config_numerica(df_aero_disp, porcentajes=('Market Share', 'Factor Ocupación'))
     )
@@ -1654,7 +1687,7 @@ with tab_destinos:
             ver_todos = st.toggle(f"Mostrar los {len(df_dest)} destinos", key="dest_todos",
                                   help="Amplía esta misma tabla para ver todos los destinos, sin el grupo «Resto».")
         tabla_dest = df_dest if ver_todos else top_dest
-        st.dataframe(tabla_dest, use_container_width=True, hide_index=True, column_config=cfg_dest,
+        tabla(tabla_dest, use_container_width=True, hide_index=True, column_config=cfg_dest,
                      height=int((len(tabla_dest) + 1) * 35 + 3))
         if hay_base_prev:
             st.caption("Vuelos = frecuencias que llegan a cada destino. ▲ ▼ indican posiciones ganadas o perdidas respecto del mismo período del año anterior; "
@@ -1712,7 +1745,7 @@ with tab_destinos:
             st.info("Ninguna localidad alcanza el mínimo de pasajeros del año anterior; bajá el valor para ver variaciones.")
 
         df_loc_v = df_loc[['Localidad', 'Pasajeros', 'Var. %', 'Participación', 'Pasajeros año ant.']]
-        st.dataframe(df_loc_v, use_container_width=True, hide_index=True,
+        tabla(df_loc_v, use_container_width=True, hide_index=True,
                      column_config={**config_numerica(df_loc_v, porcentajes=('Participación',)),
                                     'Var. %': st.column_config.NumberColumn('Var. %', format="%+.1f%%")})
         st.caption(f"Pasajeros que salen y llegan de cada localidad, de {f_d_efectiva.strftime('%d/%m/%Y')} a {f_h_efectiva.strftime('%d/%m/%Y')}, "
@@ -1780,7 +1813,7 @@ with tab_rutas:
     df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
     if 'Δ% vs año ant.' in df_rank_disp.columns:
         df_rank_disp['Δ% vs año ant.'] = df_rank_disp['Δ% vs año ant.'].round(1)
-    st.dataframe(
+    tabla(
         df_rank_disp, use_container_width=True, hide_index=True,
         column_config=config_numerica(df_rank_disp, porcentajes=('Share', 'Ocupación'))
     )
@@ -1867,13 +1900,13 @@ with tab_rutas:
             res['% de sus pasajeros'] = (res['Pasajeros en rutas exclusivas'] / res['aerolinea'].map(pax_aero_total) * 100).round(1)
             res = res.sort_values('Pasajeros en rutas exclusivas', ascending=False).rename(columns={'aerolinea': 'Aerolínea'})
             st.markdown("**Por aerolínea**")
-            st.dataframe(res, use_container_width=True, hide_index=True,
+            tabla(res, use_container_width=True, hide_index=True,
                          column_config=config_numerica(res, porcentajes=('% de sus pasajeros',)))
 
             top_mono = g_mono.sort_values('Pasajeros', ascending=False).head(25).rename(columns={'ruta_label': 'Ruta', 'aerolinea': 'Operador único'})
             top_mono['Ocupación'] = np.where(top_mono['Asientos'] > 0, top_mono['Pasajeros'] / top_mono['Asientos'] * 100, np.nan).round(1)
             st.markdown("**Rutas más grandes con un solo operador**")
-            st.dataframe(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], use_container_width=True, hide_index=True,
+            tabla(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], use_container_width=True, hide_index=True,
                          column_config=config_numerica(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], porcentajes=('Ocupación',)))
             st.caption("Son las rutas más frágiles: si esa aerolínea se retira o reduce frecuencias, el corredor queda sin servicio.")
 
@@ -1935,7 +1968,7 @@ with tab_rutas:
         columns={'tramo_label': 'Tramo Operado', 'aerolinea': 'Aerolínea'}
     ).copy()
     df_t_disp[['Ocupación', 'Pax/Vuelo']] = df_t_disp[['Ocupación', 'Pax/Vuelo']].round(1)
-    st.dataframe(
+    tabla(
         df_t_disp, use_container_width=True, hide_index=True,
         column_config=config_numerica(df_t_disp, porcentajes=('Ocupación',))
     )
@@ -1962,7 +1995,7 @@ with tab_datos:
     fila_total.name = 'Total Mercado'
     pivot_pax_con_total = pd.concat([pivot_pax_con_total, fila_total.to_frame().T])
 
-    st.dataframe(pivot_pax_con_total, use_container_width=True, column_config=config_numerica(pivot_pax_con_total))
+    tabla(pivot_pax_con_total, use_container_width=True, column_config=config_numerica(pivot_pax_con_total))
     st.markdown("---")
 
 # =============================================================
@@ -2098,7 +2131,7 @@ with tab_estacionalidad:
                     'Ocupación': df_est['ocupacion_%'].round(1),
                     'Índice estacional': df_est['indice_estacionalidad_%'].round(1),
                 })
-                st.dataframe(
+                tabla(
                     df_est_disp, use_container_width=True, hide_index=True,
                     column_config=config_numerica(df_est_disp, porcentajes=('Ocupación', 'Índice estacional'))
                 )
@@ -2157,7 +2190,7 @@ with tab_competencia:
         tabla_yoy = tabla_yoy.sort_values(['_orden', 'Pasajeros'], ascending=[True, False]).drop(columns='_orden')
         cfg_yoy = config_numerica(tabla_yoy, porcentajes=('Cuota año ant.', 'Cuota'))
         cfg_yoy['Cambio de cuota'] = st.column_config.NumberColumn('Cambio de cuota', format="%+.1f pp")
-        st.dataframe(tabla_yoy, use_container_width=True, hide_index=True, column_config=cfg_yoy,
+        tabla(tabla_yoy, use_container_width=True, hide_index=True, column_config=cfg_yoy,
                      height=int((len(tabla_yoy) + 1) * 35 + 3))
         st.caption("Cuota = porcentaje de los pasajeros del segmento. Cambio de cuota = puntos porcentuales (pp) que cada aerolínea "
                    "ganó o perdió. Las aerolíneas con menos del 1% en ambos períodos se agrupan en “Otras aerolíneas”.")
