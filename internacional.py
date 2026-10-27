@@ -12,7 +12,7 @@ mensual (actualizar_zip.py --tipo internacional) en internacional_america.zip.
 La función principal es mostrar(h), donde h trae las utilidades compartidas con la sección de cabotaje.
 """
 import os
-from datetime import date
+from datetime import date, timedelta
 
 import numpy as np
 import pandas as pd
@@ -478,7 +478,7 @@ def mostrar(h):
     tabs = st.tabs(["📊 Panorama", "🛫 Ficha de ruta", "🏢 Competidores", "📦 Capacidad", "💡 Oportunidades",
                     "🏙️ Destinos", "🔁 Escalas", "📋 Datos"])
     with tabs[0]:
-        _panorama(h, df, actual, filtros, f_min, f_max, dias)
+        _panorama(h, df, actual, filtros, f_min, f_max, dias, rc)
     with tabs[1]:
         _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f_min, f_max)
     with tabs[2]:
@@ -496,25 +496,154 @@ def mostrar(h):
 
 
 # ---------------------------------------------------------------------------------------------- pestañas
-def _panorama(h, df, actual, filtros, f_min, f_max, dias):
+def _num(x, signo=False):
+    """1234.5 -> '1.235' (o '+1.235')."""
+    return f"{x:{'+' if signo else ''},.0f}".replace(",", ".")
+
+
+def _barras_cambio(serie, etiquetas, sufijo, alto_min=220):
+    """Barras horizontales verdes (sube) y rojas (baja), de mayor a menor."""
+    serie = serie.sort_values()
+    fig = go.Figure(go.Bar(
+        x=serie.values, y=serie.index, orientation='h', text=[etiquetas[k] for k in serie.index], textposition='outside',
+        cliponaxis=False, marker_color=['#16a34a' if v >= 0 else '#dc2626' for v in serie.values],
+        hovertemplate='%{y}: %{text}<extra></extra>'))
+    bajo, alto = min(float(serie.min()), 0.0), max(float(serie.max()), 0.0)
+    margen = (alto - bajo) * 0.45 or 1.0  # lugar para que las etiquetas no pisen los nombres
+    fig.update_layout(height=max(alto_min, 34 * len(serie) + 60), showlegend=False, margin=dict(l=10, r=10),
+                      xaxis=dict(title=sufijo, zeroline=True, zerolinecolor='#94a3b8',
+                                 range=[bajo - margen if bajo < 0 else 0, alto + margen if alto > 0 else 0]),
+                      yaxis=dict(title=''))
+    return fig
+
+
+def _resumen_mes(h, df, filtros, f_min, f_max, rc):
+    """Lo que cambió en el último mes publicado: el bloque que se mira cuando sale un mes nuevo."""
     ini_u = date(f_max.year, f_max.month, 1)
+    mes_txt = f"{h.meses_es[f_max.month]} {f_max.year}"
     u = _filtrar(df, ini_u, f_max, filtros)
-    up = _filtrar(df, h.restar_ano(ini_u), h.restar_ano(f_max), filtros) if h.restar_ano(ini_u) >= f_min else u.iloc[0:0]
-    st.subheader(f"Último mes publicado: {h.meses_es[f_max.month]} {f_max.year}")
+    hay_ly = h.restar_ano(ini_u) >= f_min
+    up = _filtrar(df, h.restar_ano(ini_u), h.restar_ano(f_max), filtros) if hay_ly else u.iloc[0:0]
+    ini_m = (pd.Timestamp(ini_u) - pd.DateOffset(months=1)).date()
+    um = _filtrar(df, ini_m, ini_u - timedelta(days=1), filtros) if ini_m >= f_min else u.iloc[0:0]
+    mes_ant_txt = f"{h.meses_es[ini_m.month]} {ini_m.year}"
+    ly_txt = f"{h.meses_es[f_max.month]} {f_max.year - 1}"
+
+    st.subheader(f"📰 Resumen de {mes_txt}, el último mes publicado")
     if u.empty:
         st.info("Los filtros elegidos no tienen vuelos en el último mes publicado.")
-    else:
-        def _d(a, b):
-            return None if up.empty or not b else f"{_var(a, b):+.1f}%".replace(".", ",")
-        uc = st.columns(4)
-        uc[0].metric("Vuelos", h.fmt_entero(u['vuelos'].sum()), delta=_d(u['vuelos'].sum(), up['vuelos'].sum()))
-        uc[1].metric("Pasajeros", h.fmt_entero(u['pasajeros'].sum()), delta=_d(u['pasajeros'].sum(), up['pasajeros'].sum()))
-        uc[2].metric("Asientos", h.fmt_entero(u['asientos'].sum()), delta=_d(u['asientos'].sum(), up['asientos'].sum()))
-        ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
-        uc[3].metric("Cuota argentina", h.fmt_porcentaje(ca), delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
-        st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max.strftime('%d/%m/%Y')}, comparado con el mismo período de {f_max.year - 1}. "
-                   "Respeta los filtros, salvo las fechas.")
+        st.markdown("---")
+        return
+
+    def _d(a, b):
+        return None if up.empty or not b else f"{_var(a, b):+.1f}%".replace(".", ",")
+    pax, asi = u['pasajeros'].sum(), u['asientos'].sum()
+    uc = st.columns(5)
+    uc[0].metric("Vuelos", h.fmt_entero(u['vuelos'].sum()), delta=_d(u['vuelos'].sum(), up['vuelos'].sum()))
+    uc[1].metric("Pasajeros", h.fmt_entero(pax), delta=_d(pax, up['pasajeros'].sum()))
+    uc[2].metric("Asientos", h.fmt_entero(asi), delta=_d(asi, up['asientos'].sum()))
+    oc = pax / asi * 100 if asi else np.nan
+    ocp = up['pasajeros'].sum() / up['asientos'].sum() * 100 if not up.empty and up['asientos'].sum() else np.nan
+    uc[3].metric("Ocupación", h.fmt_porcentaje(oc), delta=None if pd.isna(ocp) else f"{oc - ocp:+.1f} pp".replace(".", ","))
+    ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
+    uc[4].metric("Cuota argentina", h.fmt_porcentaje(ca), delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
+    st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max.strftime('%d/%m/%Y')}, comparado con {ly_txt} "
+               "(el mismo mes del año anterior, para no confundir cambios con temporada). Respeta los filtros, salvo las fechas.")
+
+    # 1) aerolíneas: capacidad y cuota contra el mismo mes del año anterior
+    if not up.empty:
+        a, b = _por(u, 'aerolinea'), _por(up, 'aerolinea')
+        t = a[['asientos', 'pasajeros']].join(b[['asientos', 'pasajeros']], rsuffix='_ant', how='outer').fillna(0)
+        t['d_asientos'] = t['asientos'] - t['asientos_ant']
+        t['d_cuota'] = t['pasajeros'] / max(t['pasajeros'].sum(), 1) * 100 - t['pasajeros_ant'] / max(t['pasajeros_ant'].sum(), 1) * 100
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("#### Quién agregó o sacó asientos")
+            cambio = t.loc[t['d_asientos'] != 0, 'd_asientos']
+            cambio = cambio.loc[cambio.abs().sort_values(ascending=False).index[:8]]
+            if cambio.empty:
+                st.caption("Nadie cambió su capacidad.")
+            else:
+                etiq = {k: _num(v, True) + (f" ({_var(t.at[k, 'asientos'], t.at[k, 'asientos_ant']):+.0f}%)"
+                                             if t.at[k, 'asientos_ant'] else " (nueva)") for k, v in cambio.items()}
+                h.graficar(_barras_cambio(cambio, etiq, f"Asientos frente a {ly_txt}"))
+        with c2:
+            st.markdown("#### Quién ganó o perdió cuota")
+            cambio = t['d_cuota'].round(1)
+            cambio = cambio[cambio != 0]
+            cambio = cambio.loc[cambio.abs().sort_values(ascending=False).index[:8]]
+            if cambio.empty:
+                st.caption("Las cuotas no cambiaron.")
+            else:
+                etiq = {k: f"{v:+.1f} pp".replace(".", ",") for k, v in cambio.items()}
+                h.graficar(_barras_cambio(cambio, etiq, f"Puntos de cuota de pasajeros frente a {ly_txt}"))
+        st.caption("Las 8 aerolíneas con el cambio más grande. Asientos: diferencia de asientos ofrecidos (entre paréntesis, en %). "
+                   "Cuota: puntos porcentuales de participación en los pasajeros.")
+
+    # 2) aerolíneas que empezaron o dejaron de volar una ruta, contra el mes anterior
+    if not um.empty:
+        st.markdown(f"#### Novedades frente a {mes_ant_txt}: quién empezó o dejó de volar cada ruta")
+        ahora = u.groupby([rc, 'aerolinea'], observed=True)[['vuelos', 'pasajeros']].sum()
+        antes = um.groupby([rc, 'aerolinea'], observed=True)[['vuelos', 'pasajeros']].sum()
+        m = ahora.join(antes, rsuffix='_ant', how='outer').fillna(0).reset_index()
+        m[rc], m['aerolinea'] = m[rc].astype(str), m['aerolinea'].astype(str)
+        altas = m[(m['vuelos'] >= 4) & (m['vuelos_ant'] == 0)].sort_values('pasajeros', ascending=False)
+        bajas = m[(m['vuelos_ant'] >= 4) & (m['vuelos'] == 0)].sort_values('pasajeros_ant', ascending=False)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown(f"**🟢 Empezaron a volar ({len(altas)})**")
+            if altas.empty:
+                st.caption("Ninguna aerolínea empezó a volar una ruta nueva para ella.")
+            else:
+                _tabla(h, altas.rename(columns={'aerolinea': 'Aerolínea', rc: 'Ruta', 'vuelos': 'Vuelos', 'pasajeros': 'Pasajeros'})[
+                    ['Aerolínea', 'Ruta', 'Vuelos', 'Pasajeros']].astype({'Vuelos': int, 'Pasajeros': int}), alto_max=8)
+        with c2:
+            st.markdown(f"**🔴 Dejaron de volar ({len(bajas)})**")
+            if bajas.empty:
+                st.caption("Ninguna aerolínea dejó de volar una ruta.")
+            else:
+                _tabla(h, bajas.rename(columns={'aerolinea': 'Aerolínea', rc: 'Ruta', 'vuelos_ant': f'Vuelos en {mes_ant_txt}',
+                                                'pasajeros_ant': f'Pasajeros en {mes_ant_txt}'})[
+                    ['Aerolínea', 'Ruta', f'Vuelos en {mes_ant_txt}', f'Pasajeros en {mes_ant_txt}']].astype(
+                    {f'Vuelos en {mes_ant_txt}': int, f'Pasajeros en {mes_ant_txt}': int}), alto_max=8)
+        st.caption(f"Aerolíneas con al menos 4 vuelos en una ruta en {mes_txt} que no la volaron en {mes_ant_txt}, y al revés. "
+                   "Acá se compara con el mes anterior para ver los cambios apenas pasan; pueden ser rutas de temporada.")
+
+    # 3) rutas: las que más cambiaron y las más llenas o vacías
+    rt = _por(u, rc)
+    rt = rt[(rt['vuelos'] >= 8) & (rt['pasajeros'] >= 3000)]
+    if not rt.empty:
+        c1, c2 = st.columns(2)
+        if not up.empty:
+            with c1:
+                st.markdown("#### Rutas que más crecieron y más cayeron")
+                rp = _por(up, rc)['pasajeros']
+                v = pd.DataFrame({'Ruta': rt.index, 'Pasajeros': rt['pasajeros'].values,
+                                  f'Pasajeros {f_max.year - 1}': [int(rp.get(k, 0)) for k in rt.index]})
+                v = v[v[f'Pasajeros {f_max.year - 1}'] >= 3000]
+                v['Δ% pasajeros'] = ((v['Pasajeros'] / v[f'Pasajeros {f_max.year - 1}'] - 1) * 100).round(1)
+                v = v.sort_values('Δ% pasajeros', ascending=False)
+                cambio = pd.concat([v.head(5), v.tail(5)]).drop_duplicates('Ruta')
+                _tabla(h, cambio, alto_max=10)
+                st.caption(f"Las 5 que más crecieron y las 5 que más cayeron frente a {ly_txt}, entre las rutas con al menos 3.000 "
+                           "pasajeros en los dos meses.")
+        with c2:
+            st.markdown("#### Rutas más llenas y más vacías")
+            o = pd.DataFrame({'Ruta': rt.index, 'Pasajeros': rt['pasajeros'].values,
+                              'Ocupación': (rt['pasajeros'] / rt['asientos'].replace(0, np.nan) * 100).round(1).values})
+            if not up.empty:
+                pp = _por(up, rc)
+                ant = (pp['pasajeros'] / pp['asientos'].replace(0, np.nan) * 100)
+                o['Δ ocupación (pp)'] = (o['Ocupación'] - o['Ruta'].map(ant)).round(1)
+            o = o.dropna(subset=['Ocupación']).sort_values('Ocupación', ascending=False)
+            _tabla(h, pd.concat([o.head(5), o.tail(5)]).drop_duplicates('Ruta'), porcentajes=('Ocupación',), alto_max=10)
+            st.caption("Las 5 rutas con más ocupación y las 5 con menos, entre las que tuvieron al menos 8 vuelos y 3.000 pasajeros. "
+                       f"Δ ocupación: puntos frente a {ly_txt}.")
     st.markdown("---")
+
+
+def _panorama(h, df, actual, filtros, f_min, f_max, dias, rc):
+    _resumen_mes(h, df, filtros, f_min, f_max, rc)
 
     st.subheader("Mapa de conexiones")
     mc1, mc2 = st.columns(2)
