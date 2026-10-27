@@ -358,7 +358,9 @@ def mostrar(h):
     st.session_state.setdefault('int_hasta', f_max)
     st.session_state['int_desde'] = h.sanitizar_fecha(st.session_state['int_desde'], def_desde, f_min, f_max)
     st.session_state['int_hasta'] = h.sanitizar_fecha(st.session_state['int_hasta'], f_max, f_min, f_max)
-    niveles = {"Aeropuerto argentino ⇄ ciudad": 'ruta', "Ciudad ⇄ ciudad (mercado)": 'ruta_mercado',
+    # por defecto, rutas por mercado (ciudad ⇄ ciudad): es la vista estándar para analizar competencia y no se corta
+    # cuando una aerolínea muda sus vuelos de aeropuerto (por ejemplo, de Aeroparque a Ezeiza)
+    niveles = {"Ciudad ⇄ ciudad (mercado)": 'ruta_mercado', "Aeropuerto argentino ⇄ ciudad": 'ruta',
                "Aeropuerto ⇄ aeropuerto": 'ruta_aeropuerto'}
 
     def _restablecer():
@@ -694,7 +696,7 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
                                    marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],
                                    text=[f"{v:+.1f} pp".replace(".", ",") for v in cambios['Cambio de cuota']],
                                    textposition='outside', cliponaxis=False))
-            fig.update_layout(height=max(240, 34 * len(cambios) + 100), showlegend=False,
+            fig.update_layout(height=max(240, 34 * len(cambios) + 100), showlegend=False, margin=dict(l=20, r=70),
                               xaxis_title='Cambio de cuota (puntos porcentuales)', yaxis_title=None)
             h.graficar(fig)
     st.markdown("---")
@@ -866,7 +868,7 @@ def _capacidad(h, actual, previo, rc, hay_prev, dias):
                            text=[("+" if v >= 0 else "") + h.fmt_entero(v) for v in top['Diferencia de asientos']],
                            textposition='outside', cliponaxis=False))
     fig.update_layout(height=max(260, 34 * len(top) + 100), showlegend=False, xaxis_title='Asientos agregados o quitados',
-                      yaxis_title=None)
+                      yaxis_title=None, margin=dict(l=20, r=90))
     h.graficar(fig)
     _tabla(h, c.sort_values('Asientos', ascending=False), porcentajes=('Cuota de asientos',), alto_max=12)
     st.caption("Asientos ofrecidos en el período contra el mismo período del año anterior.")
