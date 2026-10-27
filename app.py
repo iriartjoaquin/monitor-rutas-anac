@@ -104,6 +104,7 @@ section[data-testid="stSidebar"] { background: #fff; border-right: 1px solid #e2
     button[data-baseweb="tab"] { padding: .5rem .6rem; font-size: .85rem; }
 }
 #MainMenu, footer { visibility: hidden; }
+[data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"] { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -833,67 +834,41 @@ def cargar_base_repositorio(ruta, modificado):
     return procesar_dataframe_oficial(df_leido)
 
 
-@st.cache_resource(show_spinner="Procesando el archivo…", max_entries=2)
-def cargar_base_subida(contenido):
-    df_leido, err = cargar_archivo_en_memoria(io.BytesIO(contenido))
-    if err:
-        return None, err
-    return procesar_dataframe_oficial(df_leido)
-
-
 # -------------------------------------------------------------
-# BARRA LATERAL: FUENTES DE DATOS
+# FUENTE DE DATOS: archivo oficial del repositorio (lo actualiza el agente mensual)
 # -------------------------------------------------------------
-st.sidebar.title("✈️ Conectividad Aérea")
-st.sidebar.markdown("**Monitor Oficial de Vuelos de Cabotaje**")
-st.sidebar.markdown("---")
-
 df_raw = None
 fuente_activa = None
 
-subido = st.sidebar.file_uploader(
-    "📂 Cargar microdatos (CSV o ZIP oficial)",
-    type=['csv', 'zip', 'gz', 'txt', 'parquet'],
-    help="Subí la base oficial descargada (CSV o ZIP)."
-)
+posibles_rutas = [
+    "conectividad_aerea.zip",
+    "conectividad_aerea.csv.gz",
+    "conectividad_aerea.csv",
+    "conectividad-aerea.zip",
+    "conectividad-aerea.csv",
+    "data/conectividad_aerea.zip",
+    "data/conectividad_aerea.csv",
+    "datos/conectividad_aerea.zip",
+    "datos/conectividad_aerea.csv",
+    "base_anac.zip",
+    "base_anac.csv",
+    "cabotaje.zip",
+    "cabotaje.csv"
+]
+try:
+    for f in os.listdir('.'):
+        if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
+            posibles_rutas.append(f)
+except Exception:
+    pass
 
-if subido is not None:
-    df_procesado, err_proc = cargar_base_subida(subido.getvalue())
-    if err_proc:
-        st.sidebar.error(err_proc)
-    else:
-        df_raw = df_procesado
-        fuente_activa = f"Archivo subido manualmente ({subido.name})"
-else:
-    posibles_rutas = [
-        "conectividad_aerea.zip",
-        "conectividad_aerea.csv.gz",
-        "conectividad_aerea.csv",
-        "conectividad-aerea.zip",
-        "conectividad-aerea.csv",
-        "data/conectividad_aerea.zip",
-        "data/conectividad_aerea.csv",
-        "datos/conectividad_aerea.zip",
-        "datos/conectividad_aerea.csv",
-        "base_anac.zip",
-        "base_anac.csv",
-        "cabotaje.zip",
-        "cabotaje.csv"
-    ]
-    try:
-        for f in os.listdir('.'):
-            if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
-                posibles_rutas.append(f)
-    except Exception:
-        pass
-
-    for ruta in posibles_rutas:
-        if os.path.exists(ruta):
-            df_procesado, err_proc = cargar_base_repositorio(ruta, os.path.getmtime(ruta))
-            if not err_proc and df_procesado is not None:
-                df_raw = df_procesado
-                fuente_activa = f"Repositorio GitHub ({ruta})"
-                break
+for ruta in posibles_rutas:
+    if os.path.exists(ruta):
+        df_procesado, err_proc = cargar_base_repositorio(ruta, os.path.getmtime(ruta))
+        if not err_proc and df_procesado is not None:
+            df_raw = df_procesado
+            fuente_activa = f"Repositorio GitHub ({ruta})"
+            break
 
 # -------------------------------------------------------------
 # CABECERA Y REGLA ESTRICTA CONTRA DATOS INVENTADOS
@@ -910,9 +885,8 @@ if df_raw is None or df_raw.empty:
     st.error(
         "⛔ **NO HAY DATOS REALES CARGADOS O VÁLIDOS**  \n\n"
         "Esta aplicación tiene **estrictamente prohibido generar, simular o inventar datos**.  \n"
-        "Para ver información, hacé una de estas dos cosas:  \n"
-        "1. Asegurate de que el archivo oficial `conectividad_aerea.zip` o `conectividad_aerea.csv` esté en la raíz del repositorio de GitHub.  \n"
-        "2. O bien, subí el archivo oficial (.csv o .zip) en el menú lateral izquierdo."
+        "Para ver información:  \n"
+        "Asegurate de que el archivo oficial `conectividad_aerea.zip` esté en la raíz del repositorio de GitHub."
     )
     st.info("ℹ️ Una vez cargado el archivo oficial con columnas de fecha, aerolínea, origen, destino, pasajeros y vuelos, se habilitará el monitor.")
     st.stop()
@@ -924,9 +898,9 @@ total_registros = len(df_raw)
 
 st.markdown(
     '<div class="chips" style="margin:-.4rem 0 1.2rem 0;">'
-    f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🟢 {fuente_activa}</span>'
-    f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📊 {fmt_entero(total_registros)} registros</span>'
-    f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 {f_min_total.strftime("%d/%m/%Y")} → {f_max_total.strftime("%d/%m/%Y")}</span>'
+    '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📡 Fuente: SINTA (Turismo) con datos de ANAC</span>'
+    f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 Datos del {f_min_total.strftime("%d/%m/%Y")} al {f_max_total.strftime("%d/%m/%Y")}</span>'
+    '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🔄 Se actualiza cada mes</span>'
     '</div>',
     unsafe_allow_html=True
 )
@@ -940,6 +914,21 @@ origenes_disponibles = sorted(df_raw['origen_label'].dropna().unique().tolist())
 destinos_disponibles = sorted(df_raw['destino_label'].dropna().unique().tolist())
 aerolineas_disponibles = sorted(df_raw['aerolinea'].dropna().unique().tolist())
 
+def restablecer_filtros():
+    st.session_state['sel_origenes_key'] = []
+    st.session_state['sel_destinos_key'] = []
+    st.session_state['sel_rutas_key'] = []
+    st.session_state['sel_aerolineas_key'] = []
+    st.session_state['chk_pais_key'] = True
+    st.session_state['f_desde_key'] = def_desde
+    st.session_state['f_hasta_key'] = def_hasta
+    st.session_state['criterios_activos'] = {
+        'rutas': [], 'origenes': [], 'destinos': [], 'aerolineas': [],
+        'desde': def_desde, 'hasta': def_hasta, 'todo_el_pais': True
+    }
+    st.session_state['busqueda_activa'] = True
+
+
 def intercambiar_origen_destino():
     st.session_state['sel_origenes_key'], st.session_state['sel_destinos_key'] = (
         st.session_state.get('sel_destinos_key', []),
@@ -950,7 +939,7 @@ def intercambiar_origen_destino():
         st.session_state['criterios_activos']['destinos'] = st.session_state['sel_destinos_key']
 
 if 'busqueda_activa' not in st.session_state:
-    st.session_state['busqueda_activa'] = False
+    st.session_state['busqueda_activa'] = True  # la página abre mostrando el total país
 if 'sel_origenes_key' not in st.session_state:
     st.session_state['sel_origenes_key'] = []
 if 'sel_destinos_key' not in st.session_state:
@@ -967,7 +956,7 @@ if 'criterios_activos' not in st.session_state or not isinstance(st.session_stat
         'aerolineas': [],
         'desde': def_desde,
         'hasta': def_hasta,
-        'todo_el_pais': False
+        'todo_el_pais': True
     }
 else:
     st.session_state['criterios_activos']['desde'] = sanitizar_fecha(
@@ -977,6 +966,13 @@ else:
         st.session_state['criterios_activos'].get('hasta'), def_hasta, f_min_total, f_max_total
     )
 
+# Valores iniciales de los controles del panel (se guardan con clave para poder restablecerlos)
+st.session_state.setdefault('chk_pais_key', st.session_state['criterios_activos'].get('todo_el_pais', True))
+st.session_state.setdefault('sel_rutas_key', list(st.session_state['criterios_activos'].get('rutas', [])))
+st.session_state.setdefault('sel_aerolineas_key', list(st.session_state['criterios_activos'].get('aerolineas', [])))
+st.session_state['f_desde_key'] = sanitizar_fecha(st.session_state.get('f_desde_key', def_desde), def_desde, f_min_total, f_max_total)
+st.session_state['f_hasta_key'] = sanitizar_fecha(st.session_state.get('f_hasta_key', def_hasta), def_hasta, f_min_total, f_max_total)
+
 # --- Panel de filtros ---
 with st.container(border=True):
     col_t1, col_t2 = st.columns([6, 4], vertical_alignment="center")
@@ -985,7 +981,7 @@ with st.container(border=True):
     with col_t2:
         chk_pais = st.toggle(
             "Analizar total país (todas las rutas)",
-            value=st.session_state['criterios_activos'].get('todo_el_pais', False),
+            key='chk_pais_key',
             help="Ignora los filtros de ruta y aeropuertos y analiza todo el cabotaje. La aerolínea y las fechas siguen aplicando."
         )
 
@@ -995,7 +991,7 @@ with st.container(border=True):
         sel_rutas = st.multiselect(
             "Ruta (ida y vuelta)",
             options=rutas_disponibles,
-            default=st.session_state['criterios_activos'].get('rutas', []),
+            key='sel_rutas_key',
             placeholder="Elegí uno o más corredores",
             disabled=chk_pais,
             help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye idas y vueltas)."
@@ -1004,7 +1000,7 @@ with st.container(border=True):
         sel_aerolineas = st.multiselect(
             "Aerolínea / operador",
             options=aerolineas_disponibles,
-            default=st.session_state['criterios_activos'].get('aerolineas', []),
+            key='sel_aerolineas_key',
             placeholder="Todas",
             help="Si lo dejás vacío, incluye todas las aerolíneas."
         )
@@ -1034,18 +1030,16 @@ with st.container(border=True):
         )
 
     # 3. Período
-    val_desde_input = sanitizar_fecha(st.session_state['criterios_activos'].get('desde'), def_desde, f_min_total, f_max_total)
-    val_hasta_input = sanitizar_fecha(st.session_state['criterios_activos'].get('hasta'), def_hasta, f_min_total, f_max_total)
     col_d1, col_d2, col_b1, col_b2 = st.columns([3, 3, 3, 3], vertical_alignment="bottom")
     with col_d1:
         f_desde = st.date_input(
-            "📅 Desde", value=val_desde_input, min_value=f_min_total, max_value=f_max_total,
+            "📅 Desde", key='f_desde_key', min_value=f_min_total, max_value=f_max_total,
             format="DD/MM/YYYY",
             help=f"Base disponible: {f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}."
         )
     with col_d2:
         f_hasta = st.date_input(
-            "📅 Hasta", value=val_hasta_input, min_value=f_min_total, max_value=f_max_total,
+            "📅 Hasta", key='f_hasta_key', min_value=f_min_total, max_value=f_max_total,
             format="DD/MM/YYYY",
             help=f"Base disponible: {f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}."
         )
@@ -1056,26 +1050,12 @@ with st.container(border=True):
     with col_b1:
         btn_buscar = st.button("🔍 Buscar vuelos", type="primary", use_container_width=True)
     with col_b2:
-        btn_reset = st.button("↺ Restablecer", use_container_width=True)
+        st.button("↺ Restablecer", use_container_width=True, on_click=restablecer_filtros,
+                  help="Vuelve a la vista inicial: total país en el período por defecto.")
 
     if f_desde > f_hasta:
         st.warning("La fecha inicial es posterior a la final: ajustá el período.")
 
-
-if btn_reset:
-    st.session_state['sel_origenes_key'] = []
-    st.session_state['sel_destinos_key'] = []
-    st.session_state['criterios_activos'] = {
-        'rutas': [],
-        'origenes': [],
-        'destinos': [],
-        'aerolineas': [],
-        'desde': def_desde,
-        'hasta': def_hasta,
-        'todo_el_pais': False
-    }
-    st.session_state['busqueda_activa'] = False
-    st.rerun()
 
 if btn_buscar:
     tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or sel_aerolineas or chk_pais)
@@ -1111,10 +1091,11 @@ if not st.session_state.get('busqueda_activa', False):
 
     st.info("💡 **El monitor está listo.** Elegí una **ruta**, un **origen y destino** o una **aerolínea** en los filtros de arriba (o activá **Analizar total país**) y tocá **🔍 Buscar vuelos**.")
 
-    tab_g, tab_c, tab_r, tab_e, tab_d = st.tabs([
+    tab_g, tab_c, tab_dest, tab_r, tab_e, tab_d = st.tabs([
         "📊 Panorama",
         "⚖️ Competencia",
-        "🗺️ Rutas y sentidos",
+        "🛬 Destinos y aeropuertos",
+        "🗺️ Rutas",
         "📅 Estacionalidad",
         "📋 Datos y descargas"
     ])
@@ -1122,6 +1103,8 @@ if not st.session_state.get('busqueda_activa', False):
         st.info("Elegí una ruta o un tramo y tocá 'Buscar vuelos' para visualizar la evolución de oferta, demanda y ocupación.")
     with tab_c:
         st.info("Elegí una ruta o un tramo y tocá 'Buscar vuelos' para ver cuotas de mercado y comparación interanual por aerolínea.")
+    with tab_dest:
+        st.info("Elegí una ruta o un tramo y tocá 'Buscar vuelos' para ver destinos, aeropuertos y conectividad federal.")
     with tab_r:
         st.info("Elegí una ruta o un tramo y tocá 'Buscar vuelos' para ver el ranking de rutas y el balance entre sentidos.")
     with tab_e:
@@ -1190,10 +1173,11 @@ kpi6.metric("HHI", f"{hhi_val:,}".replace(",", "."), delta=hhi_desc, delta_color
 # -------------------------------------------------------------
 # ESTRUCTURA ORGANIZADA POR PESTAÑAS FUNCIONALES
 # -------------------------------------------------------------
-tab_panorama, tab_competencia, tab_rutas, tab_estacionalidad, tab_datos = st.tabs([
+tab_panorama, tab_competencia, tab_destinos, tab_rutas, tab_estacionalidad, tab_datos = st.tabs([
     "📊 Panorama",
     "⚖️ Competencia",
-    "🗺️ Rutas y sentidos",
+    "🛬 Destinos y aeropuertos",
+    "🗺️ Rutas",
     "📅 Estacionalidad",
     "📋 Datos y descargas"
 ])
@@ -1403,8 +1387,7 @@ with tab_panorama:
     st.caption("Barras: frecuencia operada (vuelos por día). Línea: tamaño promedio de la aeronave. "
                "Si suben las barras, la ruta crece con más frecuencias; si sube la línea, con aviones más grandes.")
 
-    st.markdown("---")
-
+with tab_competencia:
     # 2. Pasajeros mensuales por aerolínea
     st.markdown("#### Evolución Mensual de Pasajeros por Operador")
     df_mes_aero = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
@@ -1429,20 +1412,6 @@ with tab_panorama:
 
     st.markdown("---")
 
-    if len(df_rank) > 1:
-        st.markdown("#### Principales Rutas por Pasajeros")
-        top_rutas = df_rank.head(15).iloc[::-1]
-        fig_top = px.bar(
-            top_rutas, x='Pasajeros', y='Ruta', orientation='h',
-            title=f"Top {len(top_rutas)} rutas del segmento (ambos sentidos)",
-            text=top_rutas['Pasajeros'].apply(fmt_entero)
-        )
-        fig_top.update_traces(textposition='outside', marker_color=PALETA[0], cliponaxis=False)
-        fig_top.update_layout(height=max(320, 32 * len(top_rutas) + 100), margin=dict(l=20, r=60, t=50, b=40),
-                              yaxis_title=None)
-        graficar(fig_top)
-
-with tab_competencia:
     # Participación de mercado en el tiempo (100% apilado)
     st.markdown("#### Participación de Mercado Mes a Mes")
     df_share = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
@@ -1577,7 +1546,7 @@ with tab_competencia:
         column_config=config_numerica(df_aero_disp, porcentajes=('Market Share', 'Factor Ocupación'))
     )
 
-with tab_rutas:
+with tab_destinos:
     st.subheader("Ranking de Destinos")
 
     def _por_destino(df):
@@ -1707,43 +1676,6 @@ with tab_rutas:
 
     st.markdown("---")
 
-    st.subheader("Rutas Activas")
-    if len(df_rank) < 3:
-        st.info("Seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país') para ver las rutas activas.")
-    else:
-        y_ref, m_ref = map(int, str(df_filtrado['periodo_orden'].astype(str).max()).split('-'))
-        ini_ref = date(y_ref, m_ref, 1)
-        fin_ref = date(y_ref, m_ref, calendar.monthrange(y_ref, m_ref)[1])
-
-        def _rutas_activas(desde, hasta):
-            v = filtrar_segmento(df_raw, filtros, desde, hasta).groupby('ruta_label', observed=True)['vuelos'].sum()
-            return set(str(r) for r in v[v >= UMBRAL_FRECUENCIAS_MES].index)
-
-        act_set = _rutas_activas(ini_ref, fin_ref)
-        hay_ant_mes = restar_ano(ini_ref) >= f_min_total
-        ant_set = _rutas_activas(restar_ano(ini_ref), restar_ano(fin_ref)) if hay_ant_mes else set()
-        etiqueta_mes = f"{meses_es[m_ref]} {y_ref}"
-
-        c1, c2 = st.columns(2)
-        c1.metric(f"Activas {meses_es[m_ref]} {y_ref}", fmt_entero(len(act_set)),
-                  delta=(f"{len(act_set) - len(ant_set):+d} vs {meses_es[m_ref]} {y_ref - 1}" if hay_ant_mes else None),
-                  help=f"Rutas (ambos sentidos) con al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes.")
-        c2.metric(f"Activas {meses_es[m_ref]} {y_ref - 1}", fmt_entero(len(ant_set)) if hay_ant_mes else "s/d")
-
-        if hay_ant_mes:
-            nuevas_act = sorted(act_set - ant_set)
-            dejaron = sorted(ant_set - act_set)
-            if nuevas_act:
-                with st.expander(f"Pasaron a ser activas ({len(nuevas_act)})"):
-                    st.write(" · ".join(nuevas_act))
-            if dejaron:
-                with st.expander(f"Dejaron de ser activas ({len(dejaron)})"):
-                    st.write(" · ".join(dejaron))
-        st.caption(f"Se considera ruta activa a la que tuvo al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes (ambos sentidos). "
-                   "Se mide sobre el último mes del período elegido y respeta los filtros de aerolínea, ruta y aeropuertos.")
-
-    st.markdown("---")
-
     st.subheader("Conectividad Federal")
     if len(df_rank) < 3:
         st.info("Para medir conectividad federal seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país' o una aerolínea).")
@@ -1797,6 +1729,65 @@ with tab_rutas:
                               yaxis_title=None, legend_title_text='')
         graficar(fig_mov)
 
+with tab_rutas:
+    # Cuadro 1: Ranking de rutas
+    st.subheader("Ranking de Rutas")
+    df_rank_disp = df_rank.copy()
+    df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
+    if 'Δ% vs año ant.' in df_rank_disp.columns:
+        df_rank_disp['Δ% vs año ant.'] = df_rank_disp['Δ% vs año ant.'].round(1)
+    st.dataframe(
+        df_rank_disp, use_container_width=True, hide_index=True,
+        column_config=config_numerica(df_rank_disp, porcentajes=('Share', 'Ocupación'))
+    )
+    if hay_base_prev:
+        st.caption(
+            f"Δ% compara con el mismo período del año anterior ({restar_ano(f_d_efectiva).strftime('%d/%m/%Y')} a "
+            f"{restar_ano(f_h_efectiva).strftime('%d/%m/%Y')}). “Nueva” = ruta sin pasajeros en ese período."
+        )
+        if rutas_suspendidas:
+            with st.expander(f"Rutas que operaban el año anterior y hoy no registran vuelos ({len(rutas_suspendidas)})"):
+                st.write(" · ".join(rutas_suspendidas))
+    else:
+        st.caption("La base no tiene datos del año anterior para este período, por eso no se calcula la variación.")
+
+    st.markdown("---")
+
+    st.subheader("Rutas Activas")
+    if len(df_rank) < 3:
+        st.info("Seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país') para ver las rutas activas.")
+    else:
+        y_ref, m_ref = map(int, str(df_filtrado['periodo_orden'].astype(str).max()).split('-'))
+        ini_ref = date(y_ref, m_ref, 1)
+        fin_ref = date(y_ref, m_ref, calendar.monthrange(y_ref, m_ref)[1])
+
+        def _rutas_activas(desde, hasta):
+            v = filtrar_segmento(df_raw, filtros, desde, hasta).groupby('ruta_label', observed=True)['vuelos'].sum()
+            return set(str(r) for r in v[v >= UMBRAL_FRECUENCIAS_MES].index)
+
+        act_set = _rutas_activas(ini_ref, fin_ref)
+        hay_ant_mes = restar_ano(ini_ref) >= f_min_total
+        ant_set = _rutas_activas(restar_ano(ini_ref), restar_ano(fin_ref)) if hay_ant_mes else set()
+        etiqueta_mes = f"{meses_es[m_ref]} {y_ref}"
+
+        c1, c2 = st.columns(2)
+        c1.metric(f"Activas {meses_es[m_ref]} {y_ref}", fmt_entero(len(act_set)),
+                  delta=(f"{len(act_set) - len(ant_set):+d} vs {meses_es[m_ref]} {y_ref - 1}" if hay_ant_mes else None),
+                  help=f"Rutas (ambos sentidos) con al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes.")
+        c2.metric(f"Activas {meses_es[m_ref]} {y_ref - 1}", fmt_entero(len(ant_set)) if hay_ant_mes else "s/d")
+
+        if hay_ant_mes:
+            nuevas_act = sorted(act_set - ant_set)
+            dejaron = sorted(ant_set - act_set)
+            if nuevas_act:
+                with st.expander(f"Pasaron a ser activas ({len(nuevas_act)})"):
+                    st.write(" · ".join(nuevas_act))
+            if dejaron:
+                with st.expander(f"Dejaron de ser activas ({len(dejaron)})"):
+                    st.write(" · ".join(dejaron))
+        st.caption(f"Se considera ruta activa a la que tuvo al menos {UMBRAL_FRECUENCIAS_MES} vuelos en el mes (ambos sentidos). "
+                   "Se mide sobre el último mes del período elegido y respeta los filtros de aerolínea, ruta y aeropuertos.")
+
     st.markdown("---")
 
     st.subheader("Dependencia de un Solo Operador")
@@ -1844,28 +1835,6 @@ with tab_rutas:
 
     st.markdown("---")
 
-    # Cuadro 1: Ranking de rutas
-    st.subheader("Ranking de Rutas")
-    df_rank_disp = df_rank.copy()
-    df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
-    if 'Δ% vs año ant.' in df_rank_disp.columns:
-        df_rank_disp['Δ% vs año ant.'] = df_rank_disp['Δ% vs año ant.'].round(1)
-    st.dataframe(
-        df_rank_disp, use_container_width=True, hide_index=True,
-        column_config=config_numerica(df_rank_disp, porcentajes=('Share', 'Ocupación'))
-    )
-    if hay_base_prev:
-        st.caption(
-            f"Δ% compara con el mismo período del año anterior ({restar_ano(f_d_efectiva).strftime('%d/%m/%Y')} a "
-            f"{restar_ano(f_h_efectiva).strftime('%d/%m/%Y')}). “Nueva” = ruta sin pasajeros en ese período."
-        )
-        if rutas_suspendidas:
-            with st.expander(f"Rutas que operaban el año anterior y hoy no registran vuelos ({len(rutas_suspendidas)})"):
-                st.write(" · ".join(rutas_suspendidas))
-    else:
-        st.caption("La base no tiene datos del año anterior para este período, por eso no se calcula la variación.")
-    st.markdown("---")
-
     # Balance entre sentidos: qué parte de los pasajeros de cada ruta viaja en cada dirección
     st.markdown("#### Balance entre Sentidos (Ida vs. Vuelta)")
     g_sent = df_filtrado.groupby(['ruta_label', 'origen_label'], observed=True)['pasajeros'].sum().reset_index()
@@ -1904,6 +1873,7 @@ with tab_rutas:
         st.caption("Rutas con más pasajeros del período. La línea punteada marca el 50%: cerca de ella, la ruta está balanceada. "
                    "Un desbalance marcado suele deberse a flujos de una sola dirección (por ejemplo, inicio o fin de temporada) "
                    "o a vuelos que regresan por otra ruta. Pasá el mouse para ver pasajeros por sentido.")
+
     st.markdown("---")
 
     # Cuadro 2: Desempeño por Sentido de Vuelo
