@@ -456,9 +456,15 @@ def restar_ano(f):
     except ValueError:
         return f.replace(year=f.year - 1, day=28)
 
+def entre_fechas(fechas, desde, hasta):
+    """Máscara de fechas entre 'desde' y 'hasta' (ambos incluidos), comparando directamente las fechas
+    (mucho más rápido que convertir cada fila con .dt.date)."""
+    return (fechas >= pd.Timestamp(desde)) & (fechas < pd.Timestamp(hasta) + pd.Timedelta(days=1))
+
+
 def filtrar_segmento(df, filtros, desde, hasta):
     """Aplica los filtros activos de ruta/aeropuertos/aerolínea y un rango de fechas."""
-    m = (df['fecha'].dt.date >= desde) & (df['fecha'].dt.date <= hasta)
+    m = entre_fechas(df['fecha'], desde, hasta)
     if not filtros.get('todo_el_pais', False):
         if filtros.get('rutas'):
             m &= df['ruta_label'].isin(filtros['rutas'])
@@ -567,10 +573,18 @@ def limpiar_mojibake_texto(val):
         txt = txt.replace(k, v)
     return txt.strip()
 
+def aplicar_unicos(serie, func):
+    """Aplica 'func' una sola vez por cada valor distinto de la serie (en vez de fila por fila)."""
+    codigos, unicos = pd.factorize(serie, use_na_sentinel=True)
+    valores = np.empty(len(unicos) + 1, dtype=object)
+    valores[:len(unicos)] = [func(u) for u in unicos]
+    valores[-1] = func(np.nan)  # código -1 = valores vacíos
+    return pd.Series(valores[codigos], index=serie.index)
+
+
 # -------------------------------------------------------------
 # DETECCIÓN Y PROCESAMIENTO ESTRICTO DE DATOS REALES (OPTIMIZADO EN RAM)
 # -------------------------------------------------------------
-@st.cache_data(show_spinner=False)
 def procesar_dataframe_oficial(df_in):
     if df_in is None or df_in.empty:
         return None, "El archivo proporcionado está vacío."
@@ -608,7 +622,7 @@ def procesar_dataframe_oficial(df_in):
 
     # Aerolínea
     if 'aerolinea_raw' in df.columns:
-        df['aerolinea'] = df['aerolinea_raw'].astype(str).apply(limpiar_mojibake_texto).replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
+        df['aerolinea'] = aplicar_unicos(df['aerolinea_raw'].astype(str), limpiar_mojibake_texto).replace({'nan': 'Otras Aerolíneas', '': 'Otras Aerolíneas'})
     else:
         df['aerolinea'] = 'Línea Regular'
 
@@ -618,7 +632,9 @@ def procesar_dataframe_oficial(df_in):
         ('vuelos_raw', 'vuelos', np.int16),
         ('asientos_raw', 'asientos', np.int32)
     ]:
-        if col_met in df.columns:
+        if col_met in df.columns and pd.api.types.is_integer_dtype(df[col_met]):
+            df[col_dest] = df[col_met].fillna(0).astype(col_type)  # ya viene como número entero
+        elif col_met in df.columns:
             s_clean = df[col_met].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False).str.strip()
             df[col_dest] = pd.to_numeric(s_clean, errors='coerce').fillna(0).astype(col_type)
         else:
@@ -668,22 +684,16 @@ def procesar_dataframe_oficial(df_in):
 
     # Si todavía faltan fechas y existen columnas de año y mes:
     if (fechas.isna().any() or len(fechas.dropna()) == 0) and 'ano_raw' in df.columns and 'mes_raw' in df.columns:
-        anos = df['ano_raw'].apply(parsear_ano)
-        meses = df['mes_raw'].apply(parsear_mes)
-        dias = df['dia_raw'].apply(parsear_dia) if 'dia_raw' in df.columns else pd.Series(1, index=df.index)
+        anos = pd.to_numeric(aplicar_unicos(df['ano_raw'], parsear_ano), errors='coerce')
+        meses = pd.to_numeric(aplicar_unicos(df['mes_raw'], parsear_mes), errors='coerce')
+        dias = pd.to_numeric(aplicar_unicos(df['dia_raw'], parsear_dia), errors='coerce') if 'dia_raw' in df.columns else pd.Series(1, index=df.index)
 
-        def armar_fecha(y, m, d):
-            if pd.isna(y) or y is None:
-                return pd.NaT
-            try:
-                return datetime(int(y), int(m), int(d))
-            except ValueError:
-                try:
-                    return datetime(int(y), int(m), 28)
-                except Exception:
-                    return pd.NaT
-
-        fechas_fb = pd.Series([armar_fecha(y, m, d) for y, m, d in zip(anos, meses, dias)], index=df.index)
+        # Fecha año/mes/día; si el día no existe en ese mes (ej. 31/04), se usa el 28, como antes
+        hay_ano = anos.notna()
+        base_ano = anos.where(hay_ano, 2000)
+        f_exacta = pd.to_datetime(pd.DataFrame({'year': base_ano, 'month': meses, 'day': dias}), errors='coerce')
+        f_dia28 = pd.to_datetime(pd.DataFrame({'year': base_ano, 'month': meses, 'day': 28}), errors='coerce')
+        fechas_fb = f_exacta.fillna(f_dia28).where(hay_ano)
         fechas = fechas.combine_first(fechas_fb)
 
     df['fecha'] = fechas
@@ -693,8 +703,9 @@ def procesar_dataframe_oficial(df_in):
 
     df['ano_num'] = df['fecha'].dt.year.astype(np.int16)
     df['mes_num'] = df['fecha'].dt.month.astype(np.int8)
-    df['periodo_orden'] = df['fecha'].dt.strftime('%Y-%m')
-    df['periodo_mes_es'] = df['fecha'].apply(lambda d: f"{meses_es.get(d.month, '')}-{str(d.year)[2:]}")
+    anio_txt = df['ano_num'].astype(str)
+    df['periodo_orden'] = anio_txt + '-' + df['mes_num'].astype(str).str.zfill(2)
+    df['periodo_mes_es'] = df['mes_num'].map(meses_es) + '-' + anio_txt.str[2:]
 
     # Etiquetas de aeropuertos con sigla oficial estricta
     cache_etiquetas = {}
@@ -703,8 +714,8 @@ def procesar_dataframe_oficial(df_in):
             cache_etiquetas[nombre] = construir_etiqueta_aeropuerto(nombre)
         return cache_etiquetas[nombre]
 
-    df['origen_label'] = df['origen_raw'].apply(cached_etiqueta)
-    df['destino_label'] = df['destino_raw'].apply(cached_etiqueta)
+    df['origen_label'] = aplicar_unicos(df['origen_raw'], cached_etiqueta)
+    df['destino_label'] = aplicar_unicos(df['destino_raw'], cached_etiqueta)
 
     # Optimización vectorizada de pares y tramos
     o_arr = df['origen_label'].to_numpy()
@@ -791,6 +802,24 @@ def cargar_archivo_en_memoria(archivo_bytes_o_path):
 
     return None, "No se pudo interpretar el archivo (CSV/ZIP/GZ) con las codificaciones habituales."
 
+@st.cache_resource(show_spinner="Cargando la base de datos…")
+def cargar_base_repositorio(ruta, modificado):
+    """Lee y procesa la base del repositorio una sola vez y la comparte entre visitas.
+    'modificado' (fecha del archivo) hace que se vuelva a leer sólo cuando el archivo cambia."""
+    df_leido, err = cargar_archivo_en_memoria(ruta)
+    if err:
+        return None, err
+    return procesar_dataframe_oficial(df_leido)
+
+
+@st.cache_resource(show_spinner="Procesando el archivo…", max_entries=2)
+def cargar_base_subida(contenido):
+    df_leido, err = cargar_archivo_en_memoria(io.BytesIO(contenido))
+    if err:
+        return None, err
+    return procesar_dataframe_oficial(df_leido)
+
+
 # -------------------------------------------------------------
 # BARRA LATERAL: FUENTES DE DATOS
 # -------------------------------------------------------------
@@ -808,16 +837,12 @@ subido = st.sidebar.file_uploader(
 )
 
 if subido is not None:
-    df_leido, err = cargar_archivo_en_memoria(subido)
-    if err:
-        st.sidebar.error(err)
+    df_procesado, err_proc = cargar_base_subida(subido.getvalue())
+    if err_proc:
+        st.sidebar.error(err_proc)
     else:
-        df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
-        if err_proc:
-            st.sidebar.error(err_proc)
-        else:
-            df_raw = df_procesado
-            fuente_activa = f"Archivo subido manualmente ({subido.name})"
+        df_raw = df_procesado
+        fuente_activa = f"Archivo subido manualmente ({subido.name})"
 else:
     posibles_rutas = [
         "conectividad_aerea.zip",
@@ -843,13 +868,11 @@ else:
 
     for ruta in posibles_rutas:
         if os.path.exists(ruta):
-            df_leido, err = cargar_archivo_en_memoria(ruta)
-            if not err:
-                df_procesado, err_proc = procesar_dataframe_oficial(df_leido)
-                if not err_proc:
-                    df_raw = df_procesado
-                    fuente_activa = f"Repositorio GitHub ({ruta})"
-                    break
+            df_procesado, err_proc = cargar_base_repositorio(ruta, os.path.getmtime(ruta))
+            if not err_proc and df_procesado is not None:
+                df_raw = df_procesado
+                fuente_activa = f"Repositorio GitHub ({ruta})"
+                break
 
 # -------------------------------------------------------------
 # CABECERA Y REGLA ESTRICTA CONTRA DATOS INVENTADOS
@@ -1093,7 +1116,7 @@ if not st.session_state.get('busqueda_activa', False):
 filtros = st.session_state['criterios_activos']
 f_d_efectiva = sanitizar_fecha(filtros.get('desde'), def_desde, f_min_total, f_max_total)
 f_h_efectiva = sanitizar_fecha(filtros.get('hasta'), def_hasta, f_min_total, f_max_total)
-mascara = (df_raw['fecha'].dt.date >= f_d_efectiva) & (df_raw['fecha'].dt.date <= f_h_efectiva)
+mascara = entre_fechas(df_raw['fecha'], f_d_efectiva, f_h_efectiva)
 
 if not filtros.get('todo_el_pais', False):
     if filtros.get('rutas'):
@@ -2140,8 +2163,8 @@ with tab_competencia:
                 f"⚖️ **Período Base Homólogo ({ano_base}):** del **{f_base_desde.strftime('%d/%m/%Y')}** al **{f_base_hasta.strftime('%d/%m/%Y')}**"
             )
 
-            mask_reciente = (df_raw['fecha'].dt.date >= f_yoy_desde) & (df_raw['fecha'].dt.date <= f_yoy_hasta)
-            mask_base = (df_raw['fecha'].dt.date >= f_base_desde) & (df_raw['fecha'].dt.date <= f_base_hasta)
+            mask_reciente = entre_fechas(df_raw['fecha'], f_yoy_desde, f_yoy_hasta)
+            mask_base = entre_fechas(df_raw['fecha'], f_base_desde, f_base_hasta)
 
             if not filtros.get('todo_el_pais', False):
                 if filtros.get('rutas'):
@@ -2309,39 +2332,40 @@ with tab_datos:
     st.markdown("Exporte los microdatos reales correspondientes al filtro aplicado para su análisis en Excel o Python.")
 
     col_exp1, col_exp2 = st.columns(2)
-    
-    csv_bytes = df_filtrado.to_csv(index=False, sep=';', encoding='utf-8-sig').encode('utf-8-sig')
+
+    def generar_csv(df_f=df_filtrado):
+        return df_f.to_csv(index=False, sep=';').encode('utf-8-sig')
+
+    def generar_excel(df_f=df_filtrado, pivot_f=pivot_pax_con_total, aero_f=df_aero):
+        salida = io.BytesIO()
+        try:
+            import xlsxwriter  # noqa: F401  (más rápido que openpyxl para archivos grandes)
+            motor = 'xlsxwriter'
+        except ImportError:
+            motor = 'openpyxl'
+        with pd.ExcelWriter(salida, engine=motor) as writer:
+            if len(df_f) > 100000:
+                df_f.head(100000).to_excel(writer, sheet_name='Microdatos_Muestra', index=False)
+            else:
+                df_f.to_excel(writer, sheet_name='Microdatos', index=False)
+            pivot_f.to_excel(writer, sheet_name='Matriz_Pasajeros')
+            aero_f.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
+        return salida.getvalue()
+
     with col_exp1:
         st.download_button(
             label="📥 Descargar Microdatos Oficiales (CSV)",
-            data=csv_bytes,
+            data=generar_csv,
             file_name=f"conectividad_oficial_filtrada_{datetime.now().strftime('%Y%m%d')}.csv",
             mime="text/csv"
         )
-
-    @st.cache_data(show_spinner=False)
-    def generar_excel_bytes(df_f, pivot_f, aero_f):
-        output_excel = io.BytesIO()
-        try:
-            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                if len(df_f) > 100000:
-                    df_f.head(100000).to_excel(writer, sheet_name='Microdatos_Muestra', index=False)
-                else:
-                    df_f.to_excel(writer, sheet_name='Microdatos', index=False)
-                pivot_f.to_excel(writer, sheet_name='Matriz_Pasajeros')
-                aero_f.to_excel(writer, sheet_name='Resumen_Operadores', index=False)
-            return output_excel.getvalue()
-        except Exception:
-            return None
-
-    excel_bytes = generar_excel_bytes(df_filtrado, pivot_pax_con_total, df_aero)
     with col_exp2:
-        if excel_bytes:
-            st.download_button(
-                label="📥 Descargar Reporte Completo (Excel)",
-                data=excel_bytes,
-                file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+        st.download_button(
+            label="📥 Descargar Reporte Completo (Excel)",
+            data=generar_excel,
+            file_name=f"reporte_conectividad_oficial_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            help="El archivo se arma al tocar el botón; con muchos datos puede tardar unos segundos."
+        )
 
 mostrar_metodologia(f_min_total, f_max_total)
