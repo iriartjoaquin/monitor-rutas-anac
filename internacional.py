@@ -483,20 +483,19 @@ def mostrar(h):
         st.warning("No hay vuelos para los filtros elegidos. Probá ampliar el período o quitar algún filtro.")
         return
     dias = max((hasta - desde).days + 1, 1)
-    meses = max(dias / 30.44, 1)
 
     # ------------------------------------------------------------------ indicadores
     pax, vue, asi = int(actual['pasajeros'].sum()), int(actual['vuelos'].sum()), int(actual['asientos'].sum())
-    vuelos_ciudad = actual.groupby('destino', observed=True)['vuelos'].sum() / meses
+    frec_ciudad = _frecuencia(actual.groupby('destino', observed=True)['vuelos'].sum(), dias)
     st.subheader("📌 Resumen del período")
     k = st.columns(6)
     k[0].metric("Pasajeros", h.fmt_entero(pax))
     k[1].metric("Vuelos", h.fmt_entero(vue))
     k[2].metric("Asientos", h.fmt_entero(asi))
     k[3].metric("Ocupación", h.fmt_porcentaje(pax / asi * 100 if asi else np.nan))
-    k[4].metric("Destinos regulares", h.fmt_entero((vuelos_ciudad >= 4).sum()),
-                help=f"Ciudades con al menos 4 vuelos por mes en promedio. Con algún vuelo (incluye chárters y desvíos): "
-                     f"{(vuelos_ciudad > 0).sum()}.")
+    k[4].metric("Destinos regulares", h.fmt_entero((frec_ciudad >= 1).sum()),
+                help=f"Ciudades con al menos una frecuencia semanal (un vuelo por semana en cada sentido) en promedio en el "
+                     f"período. Con algún vuelo (incluye chárters, vuelos de temporada y desvíos): {(frec_ciudad > 0).sum()}.")
     k[5].metric("Cuota argentina", h.fmt_porcentaje(_cuota_arg(actual)),
                 help="Porcentaje de los pasajeros transportados por aerolíneas argentinas (incluye JetSMART Argentina).")
 
@@ -508,6 +507,7 @@ def mostrar(h):
         _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f_min, f_max)
     with tabs[2]:
         _competidores(h, actual, previo, rc, hay_prev, dias)
+        _cuota_mensual(h, df, actual, filtros, f_min, f_max)
     with tabs[3]:
         _capacidad(h, actual, previo, rc, hay_prev, dias)
     with tabs[4]:
@@ -782,8 +782,6 @@ def _panorama(h, df, actual, filtros, f_min, f_max, dias, rc):
     nota = f" {f_max.year} está incompleto (hasta el {f_max.strftime('%d/%m/%Y')}) y se muestra más claro." if incompleto else ""
     st.caption("Respeta los filtros, salvo las fechas: muestra todos los años de la base." + nota)
     st.markdown("---")
-
-    _cuota_mensual(h, df, actual, filtros, f_min, f_max)
 
     st.subheader("Puertas de entrada: aeropuertos argentinos")
     pa = _ranking(actual, actual.iloc[0:0], 'aeropuerto_arg', False, dias).rename(columns={'clave': 'Aeropuerto'})
@@ -1130,6 +1128,7 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
                  labels={'periodo_mes_es': 'Período', 'pasajeros': 'Participación', 'aerolinea': ''})
     fig.update_layout(barmode='stack', barnorm='percent', yaxis_ticksuffix='%', xaxis_tickangle=-45, height=440)
     h.graficar(fig, leyenda_abajo=True)
+    st.markdown("---")
 
 
 def _capacidad(h, actual, previo, rc, hay_prev, dias):
