@@ -948,9 +948,6 @@ def intercambiar_origen_destino():
         st.session_state.get('sel_destinos_key', []),
         st.session_state.get('sel_origenes_key', [])
     )
-    if 'criterios_activos' in st.session_state:
-        st.session_state['criterios_activos']['origenes'] = st.session_state['sel_origenes_key']
-        st.session_state['criterios_activos']['destinos'] = st.session_state['sel_destinos_key']
 
 if 'busqueda_activa' not in st.session_state:
     st.session_state['busqueda_activa'] = True  # la página abre mostrando el total país
@@ -988,105 +985,107 @@ st.session_state['f_desde_key'] = sanitizar_fecha(st.session_state.get('f_desde_
 st.session_state['f_hasta_key'] = sanitizar_fecha(st.session_state.get('f_hasta_key', def_hasta), def_hasta, f_min_total, f_max_total)
 
 # --- Panel de filtros ---
-with st.container(border=True):
-    col_t1, col_t2 = st.columns([6, 4], vertical_alignment="center")
-    with col_t1:
-        st.markdown("#### 🔍 Filtros de búsqueda")
-    with col_t2:
-        chk_pais = st.toggle(
-            "Analizar total país (todas las rutas)",
-            key='chk_pais_key',
-            help="Ignora los filtros de ruta y aeropuertos y analiza todo el cabotaje. La aerolínea y las fechas siguen aplicando."
-        )
-
-    # 1. Ruta y aerolínea
-    col_r1, col_r2 = st.columns([7, 5])
-    with col_r1:
-        sel_rutas = st.multiselect(
-            "Ruta (ida y vuelta)",
-            options=rutas_disponibles,
-            key='sel_rutas_key',
-            placeholder="Elegí uno o más corredores",
-            disabled=chk_pais,
-            help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye idas y vueltas)."
-        )
-    with col_r2:
-        sel_aerolineas = st.multiselect(
-            "Aerolínea / operador",
-            options=aerolineas_disponibles,
-            key='sel_aerolineas_key',
-            placeholder="Todas",
-            help="Si lo dejás vacío, incluye todas las aerolíneas."
-        )
-
-    # 2. Origen ⇄ Destino
-    col_orig, col_inv, col_dest = st.columns([10, 2, 10], vertical_alignment="bottom")
-    with col_orig:
-        sel_origenes = st.multiselect(
-            "🛫 Origen",
-            options=origenes_disponibles,
-            key='sel_origenes_key',
-            placeholder="Aeropuerto de salida",
-            disabled=chk_pais,
-            help="Filtra los despegues desde este aeropuerto."
-        )
-    with col_inv:
-        st.button("⇄", on_click=intercambiar_origen_destino, width='stretch',
-                  disabled=chk_pais, help="Invertir origen y destino")
-    with col_dest:
-        sel_destinos = st.multiselect(
-            "🛬 Destino",
-            options=destinos_disponibles,
-            key='sel_destinos_key',
-            placeholder="Aeropuerto de llegada",
-            disabled=chk_pais,
-            help="Filtra los aterrizajes en este aeropuerto."
-        )
-
-    # 3. Período
-    col_d1, col_d2, col_b1, col_b2 = st.columns([3, 3, 3, 3], vertical_alignment="bottom")
-    with col_d1:
-        f_desde = st.date_input(
-            "📅 Desde", key='f_desde_key', min_value=f_min_total, max_value=f_max_total,
-            format="DD/MM/YYYY",
-            help=f"Base disponible: {f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}."
-        )
-    with col_d2:
-        f_hasta = st.date_input(
-            "📅 Hasta", key='f_hasta_key', min_value=f_min_total, max_value=f_max_total,
-            format="DD/MM/YYYY",
-            help=f"Base disponible: {f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}."
-        )
-    f_desde = sanitizar_fecha(f_desde, def_desde, f_min_total, f_max_total)
-    f_hasta = sanitizar_fecha(f_hasta, def_hasta, f_min_total, f_max_total)
-
-    # 4. Acciones
-    with col_b1:
-        btn_buscar = st.button("🔍 Buscar vuelos", type="primary", width='stretch')
-    with col_b2:
-        st.button("↺ Restablecer", width='stretch', on_click=restablecer_filtros,
-                  help="Vuelve a la vista inicial: total país en el período por defecto.")
-
-    if f_desde > f_hasta:
-        st.warning("La fecha inicial es posterior a la final: ajustá el período.")
-
-
-if btn_buscar:
-    tiene_criterios = bool(sel_rutas or st.session_state['sel_origenes_key'] or st.session_state['sel_destinos_key'] or sel_aerolineas or chk_pais)
-    if tiene_criterios:
-        st.session_state['criterios_activos'] = {
-            'rutas': sel_rutas,
-            'origenes': st.session_state['sel_origenes_key'],
-            'destinos': st.session_state['sel_destinos_key'],
-            'aerolineas': sel_aerolineas,
-            'desde': sanitizar_fecha(f_desde, def_desde, f_min_total, f_max_total),
-            'hasta': sanitizar_fecha(f_hasta, def_hasta, f_min_total, f_max_total),
-            'todo_el_pais': chk_pais
-        }
-        st.session_state['busqueda_activa'] = True
+def describir_busqueda(c):
+    """Texto corto de lo que se está mostrando."""
+    if c.get('todo_el_pais'):
+        partes = ["Total país"]
     else:
-        st.session_state['busqueda_activa'] = False
-        st.warning("⚠️ Elegí una ruta, un aeropuerto de origen o destino o una aerolínea (o activá 'Analizar total país') y tocá 'Buscar vuelos'.")
+        partes = []
+        if c.get('rutas'):
+            partes.append(", ".join(c['rutas']))
+        if c.get('origenes'):
+            partes.append("desde " + ", ".join(c['origenes']))
+        if c.get('destinos'):
+            partes.append("hacia " + ", ".join(c['destinos']))
+    if c.get('aerolineas'):
+        partes.append(", ".join(c['aerolineas']))
+    partes.append(f"{c['desde'].strftime('%d/%m/%Y')} al {c['hasta'].strftime('%d/%m/%Y')}")
+    return " · ".join(partes)
+
+
+@st.fragment
+def panel_filtros():
+    """Tocar un filtro recarga solo este panel (al instante); la página se recalcula con Buscar vuelos o Restablecer."""
+    with st.container(border=True):
+        col_t1, col_t2 = st.columns([6, 4], vertical_alignment="center")
+        with col_t1:
+            st.markdown("#### 🔍 Filtros de búsqueda")
+        with col_t2:
+            chk_pais = st.toggle(
+                "Analizar total país (todas las rutas)",
+                key='chk_pais_key',
+                help="Ignora los filtros de ruta y aeropuertos y analiza todo el cabotaje. La aerolínea y las fechas siguen aplicando."
+            )
+
+        # 1. Ruta y aerolínea
+        col_r1, col_r2 = st.columns([7, 5])
+        with col_r1:
+            sel_rutas = st.multiselect(
+                "Ruta (ida y vuelta)", options=rutas_disponibles, key='sel_rutas_key',
+                placeholder="Elegí uno o más corredores", disabled=chk_pais,
+                help="Agrupa ambos sentidos de vuelo del corredor (ej. Aeroparque ⇄ Bariloche incluye idas y vueltas)."
+            )
+        with col_r2:
+            sel_aerolineas = st.multiselect(
+                "Aerolínea / operador", options=aerolineas_disponibles, key='sel_aerolineas_key',
+                placeholder="Todas", help="Si lo dejás vacío, incluye todas las aerolíneas."
+            )
+
+        # 2. Origen ⇄ Destino
+        col_orig, col_inv, col_dest = st.columns([10, 2, 10], vertical_alignment="bottom")
+        with col_orig:
+            st.multiselect("🛫 Origen", options=origenes_disponibles, key='sel_origenes_key',
+                           placeholder="Aeropuerto de salida", disabled=chk_pais,
+                           help="Filtra los despegues desde este aeropuerto.")
+        with col_inv:
+            st.button("⇄", on_click=intercambiar_origen_destino, width='stretch',
+                      disabled=chk_pais, help="Invertir origen y destino")
+        with col_dest:
+            st.multiselect("🛬 Destino", options=destinos_disponibles, key='sel_destinos_key',
+                           placeholder="Aeropuerto de llegada", disabled=chk_pais,
+                           help="Filtra los aterrizajes en este aeropuerto.")
+
+        # 3. Período y acciones
+        col_d1, col_d2, col_b1, col_b2 = st.columns([3, 3, 3, 3], vertical_alignment="bottom")
+        ayuda_fechas = f"Base disponible: {f_min_total.strftime('%d/%m/%Y')} a {f_max_total.strftime('%d/%m/%Y')}."
+        with col_d1:
+            f_desde = st.date_input("📅 Desde", key='f_desde_key', min_value=f_min_total, max_value=f_max_total,
+                                    format="DD/MM/YYYY", help=ayuda_fechas)
+        with col_d2:
+            f_hasta = st.date_input("📅 Hasta", key='f_hasta_key', min_value=f_min_total, max_value=f_max_total,
+                                    format="DD/MM/YYYY", help=ayuda_fechas)
+        f_desde = sanitizar_fecha(f_desde, def_desde, f_min_total, f_max_total)
+        f_hasta = sanitizar_fecha(f_hasta, def_hasta, f_min_total, f_max_total)
+        with col_b1:
+            btn_buscar = st.button("🔍 Buscar vuelos", type="primary", width='stretch')
+        with col_b2:
+            if st.button("↺ Restablecer", width='stretch', on_click=restablecer_filtros,
+                         help="Vuelve a la vista inicial: total país en el período por defecto."):
+                st.rerun(scope="app")
+
+        elegidos = {
+            'rutas': sel_rutas, 'origenes': st.session_state['sel_origenes_key'],
+            'destinos': st.session_state['sel_destinos_key'], 'aerolineas': sel_aerolineas,
+            'desde': f_desde, 'hasta': f_hasta, 'todo_el_pais': chk_pais
+        }
+        if btn_buscar:
+            if f_desde > f_hasta:
+                st.warning("La fecha inicial es posterior a la final: ajustá el período.")
+            elif sel_rutas or elegidos['origenes'] or elegidos['destinos'] or sel_aerolineas or chk_pais:
+                st.session_state['criterios_activos'] = elegidos
+                st.session_state['busqueda_activa'] = True
+                st.rerun(scope="app")
+            else:
+                st.warning("⚠️ Elegí una ruta, un aeropuerto de origen o destino o una aerolínea (o activá "
+                           "'Analizar total país') y tocá 'Buscar vuelos'.")
+
+        activos = st.session_state['criterios_activos']
+        st.caption(f"**Mostrando:** {describir_busqueda(activos)}")
+        if elegidos != {k: activos.get(k) for k in elegidos}:
+            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
+
+
+panel_filtros()
 
 # -------------------------------------------------------------
 # ESTADO INICIAL EN CERO (SIN PESAR LA PÁGINA)

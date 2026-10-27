@@ -417,6 +417,73 @@ def _lista_aerolineas(df, col):
     return s
 
 
+# Por defecto, rutas por mercado (ciudad ⇄ ciudad): es la vista estándar para analizar competencia y no se corta
+# cuando una aerolínea muda sus vuelos de aeropuerto (por ejemplo, de Aeroparque a Ezeiza)
+NIVELES = {"Ciudad ⇄ ciudad (mercado)": 'ruta_mercado', "Aeropuerto argentino ⇄ ciudad": 'ruta',
+           "Aeropuerto ⇄ aeropuerto": 'ruta_aeropuerto'}
+
+
+def _describir(a):
+    """Texto corto de lo que se está mostrando."""
+    partes = ["Toda América"] if a['todo'] else [", ".join(a['regiones'] + a['paises'] + a['aeropuertos']) or "Toda América"]
+    partes += [", ".join(a['grupos'])] if a['grupos'] else []
+    partes += [", ".join(a['aerolineas'])] if a['aerolineas'] else []
+    partes.append(f"{a['desde'].strftime('%d/%m/%Y')} al {a['hasta'].strftime('%d/%m/%Y')}")
+    return " · ".join(partes)
+
+
+@st.fragment
+def _panel_filtros(df, f_min, f_max, def_desde):
+    """Tocar un filtro recarga solo este panel (al instante); la página se recalcula con Buscar vuelos o Restablecer."""
+    def _restablecer():
+        for k in ('int_regiones', 'int_paises', 'int_aerolineas', 'int_grupos', 'int_aeropuertos'):
+            st.session_state[k] = []
+        st.session_state['int_todo'] = True
+        st.session_state['int_desde'], st.session_state['int_hasta'] = def_desde, f_max
+        st.session_state['int_nivel'] = list(NIVELES)[0]
+        st.session_state['int_aplicado'] = {'todo': True, 'regiones': [], 'paises': [], 'aerolineas': [], 'grupos': [],
+                                            'aeropuertos': [], 'desde': def_desde, 'hasta': f_max}
+
+    with st.container(border=True):
+        t1, t2 = st.columns([3, 2], vertical_alignment="center")
+        t1.markdown("#### 🔍 Filtros")
+        todo = t2.toggle("Analizar todas las rutas (toda América)", key='int_todo',
+                         help="Ignora los filtros de región, país y aeropuerto argentino. La aerolínea, el tipo de aerolínea y "
+                              "las fechas siguen aplicando.")
+        c1, c2, c3 = st.columns(3)
+        regiones = c1.multiselect("Región", sorted(df['region'].astype(str).unique()), key='int_regiones', placeholder="Toda América",
+                                  disabled=todo)
+        base_paises = df[df['region'].isin(regiones)] if regiones else df
+        paises = c2.multiselect("País", sorted(base_paises['pais'].astype(str).unique()), key='int_paises', placeholder="Todos",
+                                disabled=todo)
+        grupos = c3.multiselect("Tipo de aerolínea", GRUPOS, key='int_grupos', placeholder="Todas",
+                                help="Argentinas: con certificado argentino (incluye JetSMART Argentina; JetSMART Chile cuenta como extranjera). "
+                                     "Las de fuera de América llegan con escala en otra ciudad de América.")
+        c4, c5, c6, c7 = st.columns([3, 3, 2, 2])
+        aerolineas = c4.multiselect("Aerolínea", sorted(df['aerolinea'].astype(str).unique()), key='int_aerolineas', placeholder="Todas")
+        aeropuertos = c5.multiselect("Aeropuerto argentino", sorted(df['aeropuerto_arg'].astype(str).unique()), key='int_aeropuertos',
+                                     placeholder="Todos", disabled=todo)
+        c6.date_input("📅 Desde", key='int_desde', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
+        c7.date_input("📅 Hasta", key='int_hasta', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
+        c8, c9, c10 = st.columns([6, 2, 2], vertical_alignment="bottom")
+        buscar = c9.button("🔍 Buscar vuelos", type="primary", width='stretch', key='int_buscar')
+        if c10.button("↺ Restablecer", on_click=_restablecer, width='stretch', key='int_reset'):
+            st.rerun(scope="app")
+
+        elegidos = {'todo': todo, 'regiones': regiones, 'paises': paises, 'aerolineas': aerolineas, 'grupos': grupos,
+                    'aeropuertos': aeropuertos, 'desde': st.session_state['int_desde'], 'hasta': st.session_state['int_hasta']}
+        if buscar:
+            if elegidos['desde'] > elegidos['hasta']:
+                st.warning("La fecha inicial es posterior a la final: ajustá el período.")
+            else:
+                st.session_state['int_aplicado'] = elegidos
+                st.rerun(scope="app")
+        aplicado = st.session_state['int_aplicado']
+        c8.caption(f"**Mostrando:** {_describir(aplicado)}")
+        if elegidos != aplicado:
+            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
+
+
 # ---------------------------------------------------------------------------------------------- página
 def mostrar(h):
     h.COLORES_AEROLINEAS.update(COLORES_INTERNACIONALES)
@@ -442,57 +509,16 @@ def mostrar(h):
     st.session_state.setdefault('int_hasta', f_max)
     st.session_state['int_desde'] = h.sanitizar_fecha(st.session_state['int_desde'], def_desde, f_min, f_max)
     st.session_state['int_hasta'] = h.sanitizar_fecha(st.session_state['int_hasta'], f_max, f_min, f_max)
-    # por defecto, rutas por mercado (ciudad ⇄ ciudad): es la vista estándar para analizar competencia y no se corta
-    # cuando una aerolínea muda sus vuelos de aeropuerto (por ejemplo, de Aeroparque a Ezeiza)
-    niveles = {"Ciudad ⇄ ciudad (mercado)": 'ruta_mercado', "Aeropuerto argentino ⇄ ciudad": 'ruta',
-               "Aeropuerto ⇄ aeropuerto": 'ruta_aeropuerto'}
-
-    def _restablecer():
-        for k in ('int_regiones', 'int_paises', 'int_aerolineas', 'int_grupos', 'int_aeropuertos'):
-            st.session_state[k] = []
-        st.session_state['int_todo'] = True
-        st.session_state['int_desde'], st.session_state['int_hasta'] = def_desde, f_max
-        st.session_state['int_nivel'] = list(niveles)[0]
-        st.session_state.pop('int_aplicado', None)
 
     st.session_state.setdefault('int_todo', True)
-    with st.container(border=True):
-        t1, t2 = st.columns([3, 2], vertical_alignment="center")
-        t1.markdown("#### 🔍 Filtros")
-        todo = t2.toggle("Analizar todas las rutas (toda América)", key='int_todo',
-                         help="Ignora los filtros de región, país y aeropuerto argentino. La aerolínea, el tipo de aerolínea y "
-                              "las fechas siguen aplicando.")
-        c1, c2, c3 = st.columns(3)
-        regiones = c1.multiselect("Región", sorted(df['region'].astype(str).unique()), key='int_regiones', placeholder="Toda América",
-                                  disabled=todo)
-        base_paises = df[df['region'].isin(regiones)] if regiones else df
-        paises = c2.multiselect("País", sorted(base_paises['pais'].astype(str).unique()), key='int_paises', placeholder="Todos",
-                                disabled=todo)
-        grupos = c3.multiselect("Tipo de aerolínea", GRUPOS, key='int_grupos', placeholder="Todas",
-                                help="Argentinas: con certificado argentino (incluye JetSMART Argentina; JetSMART Chile cuenta como extranjera). "
-                                     "Las de fuera de América llegan con escala en otra ciudad de América.")
-        c4, c5, c6, c7 = st.columns([3, 3, 2, 2])
-        aerolineas = c4.multiselect("Aerolínea", sorted(df['aerolinea'].astype(str).unique()), key='int_aerolineas', placeholder="Todas")
-        aeropuertos = c5.multiselect("Aeropuerto argentino", sorted(df['aeropuerto_arg'].astype(str).unique()), key='int_aeropuertos',
-                                     placeholder="Todos", disabled=todo)
-        c6.date_input("📅 Desde", key='int_desde', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
-        c7.date_input("📅 Hasta", key='int_hasta', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
-        c8, c9, c10 = st.columns([6, 2, 2], vertical_alignment="bottom")
-        nivel_txt = c8.radio("Ver las rutas como", list(niveles), horizontal=True, key='int_nivel',
-                             help="Se aplica al instante. Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, "
-                                  "Buenos Aires = Aeroparque + Ezeiza y San Pablo = Guarulhos + Viracopos + Congonhas.")
-        buscar = c9.button("🔍 Buscar vuelos", type="primary", width='stretch', key='int_buscar')
-        c10.button("↺ Restablecer", on_click=_restablecer, width='stretch', key='int_reset')
-
-        # los filtros se aplican recién al tocar "Buscar vuelos" (al entrar, todas las rutas en lo que va del año)
-        elegidos = {'todo': todo, 'regiones': regiones, 'paises': paises, 'aerolineas': aerolineas, 'grupos': grupos,
-                    'aeropuertos': aeropuertos, 'desde': st.session_state['int_desde'], 'hasta': st.session_state['int_hasta']}
-        if buscar or 'int_aplicado' not in st.session_state:
-            st.session_state['int_aplicado'] = elegidos
-        aplicado = st.session_state['int_aplicado']
-        if elegidos != aplicado:
-            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
-    rc = niveles[nivel_txt]
+    st.session_state.setdefault('int_aplicado', {'todo': True, 'regiones': [], 'paises': [], 'aerolineas': [], 'grupos': [],
+                                                 'aeropuertos': [], 'desde': def_desde, 'hasta': f_max})
+    _panel_filtros(df, f_min, f_max, def_desde)
+    nivel_txt = st.radio("Ver las rutas como", list(NIVELES), horizontal=True, key='int_nivel',
+                         help="Se aplica al instante. Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, "
+                              "Buenos Aires = Aeroparque + Ezeiza y San Pablo = Guarulhos + Viracopos + Congonhas.")
+    rc = NIVELES[nivel_txt]
+    aplicado = st.session_state['int_aplicado']
 
     desde, hasta = aplicado['desde'], aplicado['hasta']
     if desde > hasta:
