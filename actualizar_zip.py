@@ -1,14 +1,19 @@
 """
-Actualiza conectividad_aerea.zip desde el tablero de SINTA (https://tableros.yvera.tur.ar/conectividad/).
+Actualiza las bases de datos desde el tablero de SINTA (https://tableros.yvera.tur.ar/conectividad/).
 
-Hace lo mismo que hacés a mano: en la sección "Conectividad" elige Cabotaje, todas las clases de vuelo,
-todo el período disponible y el desglose Año / Mes / Día / Empresa agrupada / Ruta / Origen / Destino,
+Hace lo mismo que hacés a mano: en la sección "Conectividad" elige la clasificación (cabotaje o internacional),
+todas las clases de vuelo, todo el período disponible y el desglose por día, aerolínea, ruta, origen y destino,
 y descarga el CSV. Antes de reemplazar el zip valida que el archivo nuevo sea consistente.
 
+Hay dos bases:
+  - cabotaje       -> conectividad_aerea.zip    (vuelos dentro de Argentina)
+  - internacional  -> internacional_america.zip (vuelos entre Argentina y el resto de América)
+
 Uso:
-    python actualizar_zip.py                 # solo actualiza si el tablero tiene datos más nuevos
-    python actualizar_zip.py --forzar        # descarga y reemplaza aunque no haya datos más nuevos
-    python actualizar_zip.py --salida X.zip  # escribe en otro archivo (para pruebas)
+    python actualizar_zip.py                          # cabotaje; solo actualiza si hay datos más nuevos
+    python actualizar_zip.py --tipo internacional     # base internacional (América)
+    python actualizar_zip.py --forzar                 # descarga y reemplaza aunque no haya datos más nuevos
+    python actualizar_zip.py --salida X.zip           # escribe en otro archivo (para pruebas)
 """
 import argparse
 import io
@@ -22,12 +27,33 @@ import pandas as pd
 from playwright.sync_api import sync_playwright
 
 URL = "https://tableros.yvera.tur.ar/conectividad/"
-ZIP_PATH = "conectividad_aerea.zip"
-CSV_EN_ZIP = "conectividad_aerea.csv"
-DESGLOSE = ["Año", "Mes", "Dia", "Empresa agrupada", "Ruta", "Origen aeropuerto", "Destino aeropuerto"]
-COLUMNAS = DESGLOSE + ["Vuelos", "Pasajeros", "Asientos"]
 MESES = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7,
          "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+METRICAS = ["Vuelos", "Pasajeros", "Asientos"]
+
+BASES = {
+    "cabotaje": {
+        "zip": "conectividad_aerea.zip",
+        "csv": "conectividad_aerea.csv",
+        "clasificacion": "Cabotaje",
+        "desglose": ["Año", "Mes", "Dia", "Empresa agrupada", "Ruta", "Origen aeropuerto", "Destino aeropuerto"],
+    },
+    "internacional": {
+        "zip": "internacional_america.zip",
+        "csv": "internacional_america.csv",
+        "clasificacion": "Internacional",
+        "desglose": ["Año", "Mes", "Dia", "Empresa agrupada", "Ruta",
+                     "Origen aeropuerto", "Origen localidad", "Origen país", "Origen continente",
+                     "Destino aeropuerto", "Destino localidad", "Destino país", "Destino continente"],
+    },
+}
+
+
+def solo_america(df):
+    """Vuelos internacionales en los que el otro extremo del viaje está en América."""
+    en_america = df["Origen continente"].astype(str).str.startswith("América") & \
+        df["Destino continente"].astype(str).str.startswith("América")
+    return df[en_america].reset_index(drop=True)
 
 
 def leer_zip(path):
@@ -52,14 +78,17 @@ def marcar_salida(**kv):
                 f.write(f"{k}={v}\n")
 
 
-def validar(df_nuevo, df_actual, max_tablero):
+def validar(df_nuevo, df_actual, max_tablero, columnas):
     problemas = []
-    if list(df_nuevo.columns) != COLUMNAS:
+    if list(df_nuevo.columns) != columnas:
         problemas.append(f"Columnas distintas a las esperadas: {list(df_nuevo.columns)}")
         return problemas
-    if df_nuevo[["Vuelos", "Pasajeros", "Asientos"]].isna().any().any():
+    if df_nuevo.empty:
+        problemas.append("El archivo descargado no tiene filas.")
+        return problemas
+    if df_nuevo[METRICAS].isna().any().any():
         problemas.append("Hay valores vacíos en Vuelos/Pasajeros/Asientos.")
-    if (df_nuevo[["Vuelos", "Pasajeros", "Asientos"]] < 0).any().any():
+    if (df_nuevo[METRICAS] < 0).any().any():
         problemas.append("Hay valores negativos en Vuelos/Pasajeros/Asientos.")
     if df_actual is not None and len(df_nuevo) < 0.95 * len(df_actual):
         problemas.append(f"El archivo nuevo tiene {len(df_nuevo):,} filas y el actual {len(df_actual):,} (caída > 5%).")
@@ -71,7 +100,7 @@ def validar(df_nuevo, df_actual, max_tablero):
     return problemas
 
 
-def descargar(destino):
+def descargar(destino, base):
     """Abre el tablero, aplica los filtros y descarga el CSV. Devuelve la fecha máxima disponible."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -93,11 +122,11 @@ def descargar(destino):
             browser.close()
             return max_tablero, None
 
-        page.evaluate("""([cols]) => {
-            jQuery('#clasificacion')[0].selectize.setValue('Cabotaje');
+        page.evaluate("""([clasif, cols]) => {
+            jQuery('#clasificacion')[0].selectize.setValue(clasif);
             jQuery('#claseVuelo')[0].selectize.setValue('Todos');
             jQuery('#agrup3')[0].selectize.setValue(cols);
-        }""", [DESGLOSE])
+        }""", [base["clasificacion"], base["desglose"]])
         page.evaluate("""([a, b]) => {
             const inp = jQuery('#fecha_conec input');
             inp.eq(0).bsDatepicker('setDate', new Date(a[0], a[1], a[2]));
@@ -106,7 +135,7 @@ def descargar(destino):
                [max_tablero.year, max_tablero.month - 1, max_tablero.day]])
         page.wait_for_timeout(5000)  # el servidor recalcula los filtros
 
-        with page.expect_download(timeout=300_000) as d:
+        with page.expect_download(timeout=600_000) as d:
             page.click("#downloadCSVConec")
         d.value.save_as(destino)
         browser.close()
@@ -115,17 +144,21 @@ def descargar(destino):
 
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--tipo", choices=sorted(BASES), default="cabotaje")
     ap.add_argument("--forzar", action="store_true")
-    ap.add_argument("--salida", default=ZIP_PATH)
+    ap.add_argument("--salida", default=None)
     args = ap.parse_args()
+    base = BASES[args.tipo]
+    salida = args.salida or base["zip"]
+    columnas = base["desglose"] + METRICAS
 
     df_actual, f_actual = None, None
-    if os.path.exists(ZIP_PATH):
-        df_actual = leer_zip(ZIP_PATH)
+    if os.path.exists(base["zip"]):
+        df_actual = leer_zip(base["zip"])
         f_actual = ultima_fecha(df_actual)
-        print(f"Zip actual: {len(df_actual):,} filas, última fecha {f_actual}")
+        print(f"Zip actual ({args.tipo}): {len(df_actual):,} filas, última fecha {f_actual}")
 
-    max_tablero, _ = descargar(None)
+    max_tablero, _ = descargar(None, base)
     if not args.forzar and f_actual is not None and max_tablero <= f_actual:
         print("Sin novedades: el tablero no tiene datos más nuevos que el zip.")
         marcar_salida(changed="false")
@@ -133,11 +166,15 @@ def main():
 
     with tempfile.TemporaryDirectory() as tmp:
         csv_tmp = os.path.join(tmp, "descarga.csv")
-        max_tablero, _ = descargar(csv_tmp)
+        max_tablero, _ = descargar(csv_tmp, base)
         df_nuevo = pd.read_csv(csv_tmp)
+        if args.tipo == "internacional":
+            total = len(df_nuevo)
+            df_nuevo = solo_america(df_nuevo)
+            print(f"Internacional: {total:,} filas en total, {len(df_nuevo):,} dentro de América")
         print(f"Descargado: {len(df_nuevo):,} filas, última fecha {ultima_fecha(df_nuevo)}")
 
-        problemas = validar(df_nuevo, df_actual, max_tablero)
+        problemas = validar(df_nuevo, df_actual, max_tablero, columnas)
         if problemas:
             print("NO se reemplazó el zip. Problemas detectados:")
             for pr in problemas:
@@ -147,10 +184,10 @@ def main():
 
         buf = io.StringIO()
         df_nuevo.to_csv(buf, index=False)
-        with zipfile.ZipFile(args.salida, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-            z.writestr(CSV_EN_ZIP, buf.getvalue())
+        with zipfile.ZipFile(salida, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            z.writestr(base["csv"], buf.getvalue())
 
-    print(f"Zip actualizado: {args.salida}")
+    print(f"Zip actualizado: {salida}")
     marcar_salida(changed="true", ultima_fecha=ultima_fecha(df_nuevo).isoformat(), filas=len(df_nuevo))
     return 0
 

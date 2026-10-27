@@ -5,7 +5,9 @@ Regla: durante el mes M, el zip tiene que llegar hasta el último día del mes M
 Si ya llega, el mes está "resuelto" y el agente no hace nada hasta el mes siguiente.
 
 Escribe pendiente=true/false en GITHUB_OUTPUT (y lo imprime).
-Uso: python verificar_zip.py [--hoy AAAA-MM-DD]   (--hoy es solo para pruebas)
+Uso: python verificar_zip.py [--zip ARCHIVO] [--clave NOMBRE] [--hoy AAAA-MM-DD]   (--hoy es solo para pruebas)
+     --zip    archivo a revisar (por defecto, la base de cabotaje)
+     --clave  nombre del resultado en GITHUB_OUTPUT (por defecto, "pendiente")
 """
 import argparse
 import calendar
@@ -43,19 +45,21 @@ def fin_mes_anterior(hoy):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--hoy", default=None)
+    ap.add_argument("--zip", default=ZIP_PATH)
+    ap.add_argument("--clave", default="pendiente")
     args = ap.parse_args()
     hoy = date.fromisoformat(args.hoy) if args.hoy else date.today()
 
     esperada = fin_mes_anterior(hoy)
-    actual = ultima_fecha_zip(ZIP_PATH)
+    actual = ultima_fecha_zip(args.zip)
     pendiente = actual is None or actual < esperada
-    print(f"Hoy: {hoy} | el zip debería llegar al {esperada} | llega al {actual} -> "
+    print(f"{args.zip} | Hoy: {hoy} | el zip debería llegar al {esperada} | llega al {actual} -> "
           f"{'FALTA actualizar' if pendiente else 'ya está actualizado este mes'}")
 
     ruta = os.environ.get("GITHUB_OUTPUT")
     if ruta:
         with open(ruta, "a", encoding="utf-8") as f:
-            f.write(f"pendiente={'true' if pendiente else 'false'}\n")
+            f.write(f"{args.clave}={'true' if pendiente else 'false'}\n")
 
 
 if __name__ == "__main__":

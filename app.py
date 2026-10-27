@@ -5,6 +5,7 @@ import calendar
 import math
 from collections import Counter
 import zipfile
+from types import SimpleNamespace
 import warnings
 from datetime import datetime, date, timedelta
 import pandas as pd
@@ -104,6 +105,7 @@ section[data-testid="stSidebar"] { background: #fff; border-right: 1px solid #e2
     }
     button[data-baseweb="tab"] { padding: .5rem .6rem; font-size: .85rem; }
 }
+div[data-testid="stButtonGroup"] button { font-size: 1.05rem; font-weight: 600; padding: .55rem 1.3rem; }
 #MainMenu, footer { visibility: hidden; }
 [data-testid="stSidebarCollapsedControl"], [data-testid="collapsedControl"] { display: none; }
 </style>
@@ -884,11 +886,39 @@ for ruta in posibles_rutas:
 # -------------------------------------------------------------
 st.markdown(
     '<div class="hero">'
-    '<h1>✈️ Monitor de Rutas Aéreas y Tráfico de Cabotaje</h1>'
-    '<p>Análisis basado únicamente en estadísticas oficiales: ANAC y Secretaría de Turismo y Transporte.</p>'
+    '<h1>✈️ Monitor de Rutas Aéreas de Argentina</h1>'
+    '<p>Vuelos de cabotaje y conexiones con el resto de América, con estadísticas oficiales de SINTA (Turismo) y ANAC.</p>'
     '</div>',
     unsafe_allow_html=True
 )
+
+# -------------------------------------------------------------
+# SELECTOR DE SECCIÓN: cabotaje o internacional (América)
+# -------------------------------------------------------------
+SECCIONES = ["✈️ Cabotaje", "🌎 Internacional – América"]
+if 'seccion' not in st.session_state:
+    st.session_state['seccion'] = SECCIONES[1] if st.query_params.get('seccion') == 'internacional' else SECCIONES[0]
+
+
+def _mantener_seccion():
+    # si se vuelve a tocar la sección ya elegida, el control queda vacío: se conserva la anterior
+    if not st.session_state.get('seccion'):
+        st.session_state['seccion'] = st.session_state.get('_seccion_previa', SECCIONES[0])
+    st.session_state['_seccion_previa'] = st.session_state['seccion']
+
+
+seccion = st.segmented_control("Sección", SECCIONES, key='seccion', on_change=_mantener_seccion,
+                               label_visibility='collapsed') or SECCIONES[0]
+st.query_params['seccion'] = 'internacional' if seccion == SECCIONES[1] else 'cabotaje'
+
+if seccion == SECCIONES[1]:
+    import internacional
+    internacional.mostrar(SimpleNamespace(
+        graficar=graficar, config_numerica=config_numerica, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
+        fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
+        construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
+        COORDENADAS=COORDENADAS))
+    st.stop()
 
 if df_raw is None or df_raw.empty:
     st.error(

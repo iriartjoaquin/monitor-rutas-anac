@@ -22,7 +22,7 @@ concurrency:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - name: Descargar código
         uses: actions/checkout@v4
@@ -37,18 +37,20 @@ jobs:
         run: |
           if [ "${{ inputs.forzar }}" = "true" ]; then
             echo "pendiente=true" >> "$GITHUB_OUTPUT"
+            echo "pendiente_int=true" >> "$GITHUB_OUTPUT"
             echo "Ejecución forzada manualmente."
           else
             python verificar_zip.py
+            python verificar_zip.py --zip internacional_america.zip --clave pendiente_int
           fi
 
       - name: Instalar dependencias
-        if: steps.chk.outputs.pendiente == 'true'
+        if: steps.chk.outputs.pendiente == 'true' || steps.chk.outputs.pendiente_int == 'true'
         run: |
           pip install pandas playwright
           playwright install --with-deps chromium
 
-      - name: Actualizar conectividad_aerea.zip desde el tablero de SINTA
+      - name: Actualizar cabotaje (conectividad_aerea.zip) desde el tablero de SINTA
         if: steps.chk.outputs.pendiente == 'true'
         id: act
         run: |
@@ -58,11 +60,28 @@ jobs:
             python actualizar_zip.py
           fi
 
+      - name: Actualizar internacional – América (internacional_america.zip) desde el tablero de SINTA
+        if: steps.chk.outputs.pendiente_int == 'true'
+        id: act_int
+        run: |
+          if [ "${{ inputs.forzar }}" = "true" ]; then
+            python actualizar_zip.py --tipo internacional --forzar
+          else
+            python actualizar_zip.py --tipo internacional
+          fi
+
       - name: Guardar cambios en GitHub
-        if: steps.act.outputs.changed == 'true'
+        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add conectividad_aerea.zip
-          git commit -m "Actualización automática de datos hasta ${{ steps.act.outputs.ultima_fecha }} (${{ steps.act.outputs.filas }} filas)"
+          git add conectividad_aerea.zip internacional_america.zip
+          MENSAJE="Actualización automática de datos:"
+          if [ "${{ steps.act.outputs.changed }}" = "true" ]; then
+            MENSAJE="$MENSAJE cabotaje hasta ${{ steps.act.outputs.ultima_fecha }} (${{ steps.act.outputs.filas }} filas)"
+          fi
+          if [ "${{ steps.act_int.outputs.changed }}" = "true" ]; then
+            MENSAJE="$MENSAJE internacional hasta ${{ steps.act_int.outputs.ultima_fecha }} (${{ steps.act_int.outputs.filas }} filas)"
+          fi
+          git commit -m "$MENSAJE"
           git push
