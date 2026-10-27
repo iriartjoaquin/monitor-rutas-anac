@@ -1,14 +1,16 @@
 """
 Sección "Internacional – América": vuelos entre Argentina y el resto de América.
 
+Pensada como herramienta de trabajo para una aerolínea: todas las rutas Argentina ⇄ América, todas las
+aerolíneas que las operan, con ficha por ruta, análisis de competidores, capacidad y ocupación, y
+oportunidades de mercado. Las rutas se pueden ver por aeropuerto, por ciudad (mercado) o aeropuerto a aeropuerto.
+
 Fuente: tablero de conectividad aérea de SINTA (Ministerio de Turismo) con datos de ANAC, clasificación
 "Internacional", filtrado a vuelos cuyo otro extremo está en América. Lo descarga y actualiza el agente
 mensual (actualizar_zip.py --tipo internacional) en internacional_america.zip.
 
-La función principal es mostrar(h), donde h trae las utilidades compartidas con la sección de cabotaje
-(gráficos, formatos, coordenadas de aeropuertos argentinos, etc.).
+La función principal es mostrar(h), donde h trae las utilidades compartidas con la sección de cabotaje.
 """
-import calendar
 import os
 from datetime import date
 
@@ -21,14 +23,16 @@ import streamlit as st
 ZIP_INTERNACIONAL = "internacional_america.zip"
 MESES_NOMBRE = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7,
                 "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+AMBA = {'AEP', 'EZE', 'EPA', 'MOR', 'FDO'}
 
+# ---------------------------------------------------------------------------------------------- aerolíneas
 # Aerolíneas con certificado argentino. JetSMART va aparte: SINTA agrupa en un solo nombre sus filiales
 # de Argentina, Chile y Perú, así que no se puede saber qué parte de sus vuelos es argentina.
 ARGENTINAS = {'Aerolíneas Argentinas', 'Flybondi', 'Andes Líneas Aéreas', 'LADE - Líneas Aéreas Del Estado',
               'American Jet', 'Flyest'}
 JETSMART = {'JetSMART Airlines'}
-# Aerolíneas de fuera de América: sus vuelos a Argentina en esta base son el tramo final de un viaje
-# que hace escala en otra ciudad de América (por ejemplo, Dubái → Río de Janeiro → Buenos Aires).
 FUERA_DE_AMERICA = {'Turkish Airlines', 'KLM', 'Emirates Airline', 'Ethiopian Airlines', 'British Airways',
                     'Qatar Airways', 'Swiss International Air Lines', 'Air Europa', 'Lufthansa', 'Iberia Airlines',
                     'ITA Airways', 'Air France', 'Air New Zealand', 'Plus Ultra', 'Icelandair', 'ASL Airlines France'}
@@ -36,8 +40,30 @@ GRUPOS = ['Argentinas', 'JetSMART (grupo regional)', 'Extranjeras de América', 
 COLORES_GRUPO = {'Argentinas': '#1d4ed8', 'JetSMART (grupo regional)': '#e11d48',
                  'Extranjeras de América': '#94a3b8', 'Extranjeras de fuera de América': '#f59e0b'}
 COLORES_REGION = {'América del Sur': '#1d4ed8', 'América Central y Caribe': '#10b981', 'América del Norte': '#f59e0b'}
+# Colores fijos de las principales aerolíneas internacionales (se suman a los de cabotaje)
+COLORES_INTERNACIONALES = {
+    'Gol Transportes Aéreos': '#f97316', 'Avianca': '#7c3aed', 'American Airlines': '#0f766e', 'Sky Airline': '#14b8a6',
+    'Arajet': '#9f1239', 'United Airlines': '#1e3a8a', 'Delta Air Lines': '#b91c1c', 'Aeroméxico': '#334155',
+    'Boliviana de Aviación': '#65a30d', 'Azul Linhas Aereas Brasileiras': '#38bdf8', 'Air Canada': '#dc2626',
+    'Paranair': '#a855f7', 'Turkish Airlines': '#be123c', 'Emirates Airline': '#ca8a04', 'KLM': '#0284c7',
+    'Ethiopian Airlines': '#15803d', 'Qatar Airways': '#701a75', 'British Airways': '#475569',
+}
+# País o países "de casa" de cada aerolínea de América. Si vuela a Argentina desde otro país,
+# ese tramo es la continuación de un vuelo con escala (ej. Air Canada: Toronto → San Pablo → Buenos Aires).
+PAISES_DE_ORIGEN = {
+    'LATAM': {'Chile', 'Brasil', 'Perú', 'Colombia', 'Ecuador', 'Paraguay'},
+    'Gol Transportes Aéreos': {'Brasil'}, 'Azul Linhas Aereas Brasileiras': {'Brasil'}, 'Copa Airlines': {'Panamá'},
+    'American Airlines': {'Estados Unidos'}, 'United Airlines': {'Estados Unidos'}, 'Delta Air Lines': {'Estados Unidos'},
+    'Eastern Air Lines': {'Estados Unidos'},
+    'Avianca': {'Colombia', 'Ecuador', 'Perú', 'El Salvador', 'Costa Rica', 'Guatemala'},
+    'Sky Airline': {'Chile', 'Perú'}, 'Arajet': {'República Dominicana'}, 'Aeroméxico': {'México'},
+    'Boliviana de Aviación': {'Bolivia'}, 'Air Canada': {'Canadá'}, 'Paranair': {'Paraguay'},
+    'Amaszonas': {'Bolivia', 'Uruguay', 'Paraguay'}, 'Viva Air': {'Colombia', 'Perú'}, 'Estelar Latinoamerica': {'Venezuela'},
+    'Cubana de Aviación': {'Cuba'}, 'Conviasa': {'Venezuela'}, 'Latin American Wings': {'Chile'},
+    'Aerovías DAP': {'Chile'}, 'Aero Regional Paraguaya': {'Paraguay'}, 'TAME': {'Ecuador'}, 'BQB Líneas Aéreas': {'Uruguay'},
+}
 
-# Coordenadas (latitud, longitud) de las ciudades de América conectadas con Argentina, para el mapa
+# ---------------------------------------------------------------------------------------------- lugares
 COORD_CIUDADES = {
     'Santiago|Chile': (-33.39, -70.79), 'São Paulo|Brasil': (-23.43, -46.47), 'Río de Janeiro|Brasil': (-22.81, -43.25),
     'Lima|Perú': (-12.02, -77.11), 'Miami|Estados Unidos': (25.80, -80.29), 'Panamá|Panamá': (9.07, -79.38),
@@ -65,8 +91,6 @@ COORD_CIUDADES = {
     'Ocumare del Tuy|Venezuela': (10.12, -66.78), 'Cuiaba|Brasil': (-15.65, -56.12), 'Manta|Ecuador': (-0.95, -80.68),
     'Encarnación|Paraguay': (-27.23, -55.84), 'Montreal|Canadá': (45.47, -73.74), 'Nueva Orleans|Estados Unidos': (29.99, -90.26),
     'Rioja|Perú': (-6.07, -77.16), 'Puerto Maldonado|Perú': (-12.61, -69.23),
-}
-COORD_CIUDADES.update({
     'Oranjestad|Aruba': (12.50, -70.02), 'Santo Domingo|República Dominicana': (18.43, -69.67),
     'Puerto España|Trinidad y Tobago': (10.60, -61.34), 'Antofagasta|Chile': (-23.44, -70.45), 'Holguín|Cuba': (20.79, -76.32),
     'Boa Vista|Brasil': (2.84, -60.69), 'Washington|Estados Unidos': (38.95, -77.45), 'Mérida|México': (20.94, -89.66),
@@ -74,7 +98,7 @@ COORD_CIUDADES.update({
     'Fernando de Noronha|Brasil': (-3.85, -32.42), 'Minera Escondida|Chile': (-24.29, -69.17),
     'São José dos Campos|Brasil': (-23.23, -45.86), 'Campos dos Goytacazes|Brasil': (-21.70, -41.30),
     'San José del Guaviare|Colombia': (2.57, -72.64),
-})
+}
 COORD_ARG_EXTRA = {'FDO': (-34.45, -58.59)}  # San Fernando (Buenos Aires)
 
 # Aeropuertos que la fuente informa sin ciudad: se les asigna la ciudad a la que sirven
@@ -92,19 +116,22 @@ CIUDAD_POR_AEROPUERTO = {
     'Jacarepaguá - Roberto Marinho Airport': 'Río de Janeiro', 'Professor Urbano Ernesto Stumpf Airport': 'São José dos Campos',
     'Bartolomeu Lisandro Airport': 'Campos dos Goytacazes', 'Orlando Sanford International Airport': 'Orlando',
 }
-
-
-def _ciudad(localidad, aeropuerto):
-    """Ciudad del aeropuerto extranjero; si la fuente no la informa, se deduce del aeropuerto."""
-    if isinstance(localidad, str) and localidad.strip():
-        return localidad
-    nombre = str(aeropuerto)
-    if nombre in CIUDAD_POR_AEROPUERTO:
-        return CIUDAD_POR_AEROPUERTO[nombre]
-    for sufijo in (' International Airport', ' Int Airport', ' Regional Airport', ' Airport'):
-        if nombre.endswith(sufijo):
-            return 'Aeropuerto ' + nombre[:-len(sufijo)]
-    return nombre
+# Código IATA de los aeropuertos extranjeros principales (por una parte única de su nombre)
+CODIGOS_IATA = [
+    ('Merino Ben', 'SCL'), ('Guarulhos', 'GRU'), ('Gale', 'GIG'), ('Santos Dumont', 'SDU'), ('Congonhas', 'CGH'),
+    ('Viracopos', 'VCP'), ('Jorge Ch', 'LIM'), ('Miami International', 'MIA'), ('Tocumen', 'PTY'), ('El Dorado', 'BOG'),
+    ('Hercílio Luz', 'FLN'), ('Silvio Pettirossi', 'ASU'), ('John F Kennedy', 'JFK'), ('Newark', 'EWR'), ('Viru Viru', 'VVI'),
+    ('Carrasco', 'MVD'), ('Benito Juarez', 'MEX'), ('George Bush', 'IAH'), ('Hartsfield', 'ATL'), ('Punta Cana', 'PUJ'),
+    ('Dallas Fort Worth', 'DFW'), ('Luiz Eduardo Magalh', 'SSA'), ('Curbelo', 'PDP'), ('Cancún', 'CUN'), ('Salgado Filho', 'POA'),
+    ('Juscelino Kubitschek', 'BSB'), ('Tancredo Neves', 'CNF'), ('Afonso Pena', 'CWB'), ('Guararapes', 'REC'),
+    ('Porto Seguro', 'BPS'), ('María Córdova', 'MDE'), ('Olaya Herrera', 'EOH'), ('Mariscal Sucre', 'UIO'),
+    ('Aluízio Alves', 'NAT'), ('Pinto Martins', 'FOR'), ('Zumbi dos Palmares', 'MCZ'), ('Olmedo', 'GYE'),
+    ('Maiquet', 'CCS'), ('Los Angeles International', 'LAX'), ('Victor Konder', 'NVT'), ('Las Américas', 'SDQ'),
+    ('Pearson', 'YYZ'), ('Cataratas', 'IGU'), ('Queen Beatrix', 'AUA'), ('Castro Pinto', 'JPA'), ('Cabo Frio', 'CFB'),
+    ('Jardines Del Rey', 'CCC'), ('José Martí', 'HAV'), ('Piarco', 'POS'), ('Andrés Sabella', 'ANF'),
+    ('Velasco Astete', 'CUZ'), ('Orlando International', 'MCO'), ('Fort Lauderdale', 'FLL'), ('Washington Dulles', 'IAD'),
+    ('Diego Aracena', 'IQQ'), ('Juan Santamaría', 'SJO'), ('Rafael Núñez', 'CTG'), ('Eduardo Gomes', 'MAO'),
+]
 
 
 def _combinar(a, b, armar):
@@ -122,6 +149,50 @@ def _grupo(aerolinea):
     if aerolinea in FUERA_DE_AMERICA:
         return 'Extranjeras de fuera de América'
     return 'Extranjeras de América'
+
+
+def _es_escala(aerolinea, pais):
+    """El tramo es la continuación de un vuelo con escala si la aerolínea vuela desde un país que no es el suyo."""
+    if aerolinea in ARGENTINAS or aerolinea in JETSMART:  # JetSMART: su filial argentina vuela directo desde Argentina
+        return False
+    if aerolinea in FUERA_DE_AMERICA:
+        return True
+    casa = PAISES_DE_ORIGEN.get(aerolinea)
+    return bool(casa) and pais not in casa
+
+
+def _ciudad(localidad, aeropuerto):
+    """Ciudad del aeropuerto extranjero; si la fuente no la informa, se deduce del aeropuerto."""
+    if isinstance(localidad, str) and localidad.strip():
+        return localidad
+    nombre = str(aeropuerto)
+    if nombre in CIUDAD_POR_AEROPUERTO:
+        return CIUDAD_POR_AEROPUERTO[nombre]
+    for sufijo in (' International Airport', ' Int Airport', ' Regional Airport', ' Airport'):
+        if nombre.endswith(sufijo):
+            return 'Aeropuerto ' + nombre[:-len(sufijo)]
+    return nombre
+
+
+def _codigo_aeropuerto(nombre):
+    """Código IATA si se conoce; si no, un nombre corto del aeropuerto."""
+    nombre = str(nombre)
+    for clave, cod in CODIGOS_IATA:
+        if clave in nombre:
+            return cod
+    corto = nombre.split(' - ')[0]
+    for sufijo in (' International Airport', ' Int Airport', ' Regional Airport', ' Airport'):
+        corto = corto.replace(sufijo, '')
+    return corto.replace('Aeropuerto Internacional ', '').strip()
+
+
+def _ciudad_argentina(etiqueta):
+    """'EZE (Ezeiza)' -> 'Buenos Aires'; 'COR (Córdoba)' -> 'Córdoba'."""
+    sigla = etiqueta[:3]
+    if sigla in AMBA:
+        return 'Buenos Aires'
+    i = etiqueta.find('(')
+    return etiqueta[i + 1:-1] if i >= 0 else etiqueta
 
 
 @st.cache_resource(show_spinner="Cargando la base internacional…")
@@ -146,33 +217,44 @@ def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto)
     out['fecha'] = pd.to_datetime(dict(year=df['Año'], month=mes, day=df['Dia']), errors='coerce')
     out['ano_num'] = df['Año'].astype(np.int16)
     out['mes_num'] = mes.astype(np.int8)
+    out['dia_semana'] = out['fecha'].dt.dayofweek.fillna(0).astype(np.int8)
     out['periodo_orden'] = _combinar(out['ano_num'], out['mes_num'], lambda y, m: f"{y}-{m:02d}")
-    out['periodo_mes_es'] = _combinar(out['ano_num'], out['mes_num'],
-                                      lambda y, m: f"{['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][m - 1]}-{str(y)[2:]}")
+    out['periodo_mes_es'] = _combinar(out['ano_num'], out['mes_num'], lambda y, m: f"{MESES_CORTOS[m - 1]}-{str(y)[2:]}")
     aer = df['Empresa agrupada'].astype(object)
     nombres = {a: _limpiar_texto(a) for a in aer.unique()}
-    out['aerolinea'] = pd.Categorical(aer.map(nombres))
+    aerolinea = aer.map(nombres).to_numpy(dtype=object)
+    out['aerolinea'] = pd.Categorical(aerolinea)
     out['grupo'] = pd.Categorical(out['aerolinea'].astype(object).map(_grupo), categories=GRUPOS)
 
     aero_arg = lado('Origen aeropuerto', 'Destino aeropuerto', extranjero=False)
     etiquetas_arg = {a: _etiqueta_aeropuerto(a) for a in pd.unique(aero_arg)}
-    out['aeropuerto_arg'] = pd.Categorical([etiquetas_arg[a] for a in aero_arg])
+    etiqueta_arg = np.array([etiquetas_arg[a] for a in aero_arg], dtype=object)
+    out['aeropuerto_arg'] = pd.Categorical(etiqueta_arg)
+    ciudad_arg = _combinar(etiqueta_arg, etiqueta_arg, lambda e, _: _ciudad_argentina(e))
+    out['ciudad_arg'] = ciudad_arg
     pais = lado('Origen país', 'Destino país', extranjero=True)
     aero_ext = lado('Origen aeropuerto', 'Destino aeropuerto', extranjero=True)
     loc_ext = lado('Origen localidad', 'Destino localidad', extranjero=True)
     ciudad = np.asarray(_combinar(loc_ext, aero_ext, _ciudad), dtype=object)
-    region = lado('Origen continente', 'Destino continente', extranjero=True)
+    codigo = np.asarray(_combinar(aero_ext, aero_ext, lambda a, _: _codigo_aeropuerto(a)), dtype=object)
     out['pais'] = pd.Categorical(pais)
-    out['region'] = pd.Categorical(region)
+    out['region'] = pd.Categorical(lado('Origen continente', 'Destino continente', extranjero=True))
     out['ciudad_clave'] = _combinar(ciudad, pais, lambda c, p: f"{c}|{p}")
     out['destino'] = _combinar(ciudad, pais, lambda c, p: f"{c} ({p})")
-    out['ruta'] = _combinar(out['aeropuerto_arg'].astype(object), out['destino'].astype(object), lambda a, b: f"{a} ⇄ {b}")
+    out['aeropuerto_ext'] = _combinar(codigo, ciudad, lambda a, c: f"{a} ({c})")
+    # tres formas de ver una ruta
+    out['ruta'] = _combinar(etiqueta_arg, out['destino'].astype(object), lambda a, b: f"{a} ⇄ {b}")
+    out['ruta_mercado'] = _combinar(np.asarray(ciudad_arg, dtype=object), out['destino'].astype(object), lambda a, b: f"{a} ⇄ {b}")
+    out['ruta_aeropuerto'] = _combinar(np.array([e[:3] for e in etiqueta_arg], dtype=object), out['aeropuerto_ext'].astype(object),
+                                       lambda a, b: f"{a} ⇄ {b}")
+    out['escala'] = np.asarray(_combinar(aerolinea, pais, lambda a, p: 'si' if _es_escala(a, p) else 'no'), dtype=object) == 'si'
     out['sentido'] = pd.Categorical(np.where(sale, 'Sale de Argentina', 'Llega a Argentina'))
     for c in ['vuelos', 'pasajeros', 'asientos']:
         out[c] = pd.to_numeric(df[c.capitalize()], errors='coerce').fillna(0).astype(np.int32)
     return out[out['fecha'].notna()].reset_index(drop=True)
 
 
+# ---------------------------------------------------------------------------------------------- utilidades
 def _filtrar(df, desde, hasta, f):
     m = (df['fecha'] >= pd.Timestamp(desde)) & (df['fecha'] < pd.Timestamp(hasta) + pd.Timedelta(days=1))
     for col, valores in (('region', f['regiones']), ('pais', f['paises']), ('aerolinea', f['aerolineas']),
@@ -191,11 +273,71 @@ def _var(act, ant):
     return (act - ant) / ant * 100 if ant else np.nan
 
 
-def _txt_var(v):
-    return "Nueva" if pd.isna(v) else f"{v:+.1f}%".replace(".", ",")
+def _txt_var(act, ant):
+    """Variación en texto; si el año anterior casi no hubo tráfico, la ruta se considera nueva o reanudada."""
+    if ant < max(500, act * 0.05):
+        return "Nueva" if ant == 0 else "Nueva o reanudada"
+    return f"{_var(act, ant):+.1f}%".replace(".", ",")
 
 
+def _frecuencia(vuelos, dias):
+    """Frecuencias semanales por sentido (un vuelo diario de ida y vuelta = 7)."""
+    return vuelos / max(dias, 1) * 7 / 2
+
+
+def _por(df, col):
+    g = df.groupby(col, observed=True).agg(pasajeros=('pasajeros', 'sum'), vuelos=('vuelos', 'sum'),
+                                           asientos=('asientos', 'sum')).reset_index()
+    g[col] = g[col].astype(str)
+    return g.set_index(col)
+
+
+def _tabla(h, t, porcentajes=(), alto_max=20, **kwargs):
+    cfg = h.config_numerica(t, porcentajes=tuple(c for c in porcentajes if c in t.columns))
+    for c in t.columns:
+        if c.startswith('Δ ocupación') or c.startswith('Cambio de cuota'):
+            cfg[c] = st.column_config.NumberColumn(c, format="%+.1f pp")
+    st.dataframe(t, use_container_width=True, hide_index=True, column_config=cfg,
+                 height=int(max(min(len(t), alto_max), 1) * 35 + 38), **kwargs)
+
+
+def _ranking(actual, previo, col, hay_prev, dias):
+    """Ranking por la columna pedida, con frecuencias, ocupación, variación y cuota argentina."""
+    g = _por(actual, col)
+    g = g[g['vuelos'] > 0]
+    total = max(g['pasajeros'].sum(), 1)
+    t = pd.DataFrame({'clave': g.index, 'Pasajeros': g['pasajeros'].values})
+    if hay_prev and not previo.empty:
+        p = _por(previo, col)['pasajeros']
+        ant = np.array([p.get(k, 0) for k in g.index], dtype=float)
+        t['Pasajeros año ant.'] = ant.astype(int)
+        t['Var. %'] = [_txt_var(a, b) for a, b in zip(g['pasajeros'], ant)]
+    t['Frecuencias semanales'] = _frecuencia(g['vuelos'].values, dias).round(1)
+    t['Vuelos'] = g['vuelos'].values
+    t['Asientos'] = g['asientos'].values
+    t['Ocupación'] = np.where(g['asientos'] > 0, g['pasajeros'] / g['asientos'].clip(lower=1) * 100, np.nan).round(1)
+    t['Participación'] = (g['pasajeros'].values / total * 100).round(1)
+    arg = actual[actual['grupo'] == 'Argentinas'].groupby(col, observed=True)['pasajeros'].sum()
+    arg.index = arg.index.astype(str)
+    t['Cuota argentina'] = (t['clave'].map(arg).fillna(0) / t['Pasajeros'].replace(0, np.nan) * 100).round(1)
+    return t.sort_values('Pasajeros', ascending=False).reset_index(drop=True)
+
+
+def _hhi(serie):
+    tot = serie.sum()
+    return int(round(((serie / tot * 100) ** 2).sum())) if tot > 0 else 0
+
+
+def _lista_aerolineas(df, col):
+    """Aerolíneas que operan cada valor de la columna, en texto."""
+    s = df[df['pasajeros'] > 0].groupby(col, observed=True)['aerolinea'].agg(lambda x: ", ".join(sorted(set(map(str, x)))))
+    s.index = s.index.astype(str)
+    return s
+
+
+# ---------------------------------------------------------------------------------------------- página
 def mostrar(h):
+    h.COLORES_AEROLINEAS.update(COLORES_INTERNACIONALES)
     df = cargar_internacional(ZIP_INTERNACIONAL, os.path.getmtime(ZIP_INTERNACIONAL) if os.path.exists(ZIP_INTERNACIONAL) else 0,
                               h.construir_etiqueta_aeropuerto, h.limpiar_mojibake_texto)
     if df is None or df.empty:
@@ -207,20 +349,23 @@ def mostrar(h):
         '<div class="chips" style="margin:-.4rem 0 1.2rem 0;">'
         '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📡 Fuente: SINTA (Turismo) con datos de ANAC</span>'
         f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 Datos del {f_min.strftime("%d/%m/%Y")} al {f_max.strftime("%d/%m/%Y")}</span>'
-        '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🌎 Vuelos entre Argentina y el resto de América</span>'
+        '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🌎 Todas las rutas entre Argentina y el resto de América</span>'
         '</div>', unsafe_allow_html=True)
 
-    # ---------------------------------------------------------------- filtros
+    # ------------------------------------------------------------------ filtros
     def_desde = date(f_max.year, 1, 1) if date(f_max.year, 1, 1) >= f_min else f_min
     st.session_state.setdefault('int_desde', def_desde)
     st.session_state.setdefault('int_hasta', f_max)
     st.session_state['int_desde'] = h.sanitizar_fecha(st.session_state['int_desde'], def_desde, f_min, f_max)
     st.session_state['int_hasta'] = h.sanitizar_fecha(st.session_state['int_hasta'], f_max, f_min, f_max)
+    niveles = {"Aeropuerto argentino ⇄ ciudad": 'ruta', "Ciudad ⇄ ciudad (mercado)": 'ruta_mercado',
+               "Aeropuerto ⇄ aeropuerto": 'ruta_aeropuerto'}
 
     def _restablecer():
         for k in ('int_regiones', 'int_paises', 'int_aerolineas', 'int_grupos', 'int_aeropuertos'):
             st.session_state[k] = []
         st.session_state['int_desde'], st.session_state['int_hasta'] = def_desde, f_max
+        st.session_state['int_nivel'] = list(niveles)[0]
 
     with st.container(border=True):
         st.markdown("#### 🔍 Filtros")
@@ -238,8 +383,12 @@ def mostrar(h):
         desde = c6.date_input("📅 Desde", key='int_desde', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
         hasta = c7.date_input("📅 Hasta", key='int_hasta', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
         c8.button("↺ Restablecer", on_click=_restablecer, use_container_width=True, key='int_reset')
+        nivel_txt = st.radio("Ver las rutas como", list(niveles), horizontal=True, key='int_nivel',
+                             help="Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, Buenos Aires = Aeroparque + Ezeiza "
+                                  "y San Pablo = Guarulhos + Viracopos + Congonhas.")
         if desde > hasta:
             st.warning("La fecha inicial es posterior a la final: ajustá el período.")
+    rc = niveles[nivel_txt]
 
     filtros = {'regiones': regiones, 'paises': paises, 'aerolineas': aerolineas, 'grupos': grupos, 'aeropuertos': aeropuertos}
     actual = _filtrar(df, desde, hasta, filtros)
@@ -248,273 +397,642 @@ def mostrar(h):
     if actual.empty:
         st.warning("No hay vuelos para los filtros elegidos. Probá ampliar el período o quitar algún filtro.")
         return
+    dias = max((hasta - desde).days + 1, 1)
+    meses = max(dias / 30.44, 1)
 
-    # ---------------------------------------------------------------- indicadores
+    # ------------------------------------------------------------------ indicadores
     pax, vue, asi = int(actual['pasajeros'].sum()), int(actual['vuelos'].sum()), int(actual['asientos'].sum())
+    vuelos_ciudad = actual.groupby('destino', observed=True)['vuelos'].sum() / meses
     st.subheader("📌 Resumen del período")
     k = st.columns(6)
     k[0].metric("Pasajeros", h.fmt_entero(pax))
     k[1].metric("Vuelos", h.fmt_entero(vue))
     k[2].metric("Asientos", h.fmt_entero(asi))
     k[3].metric("Ocupación", h.fmt_porcentaje(pax / asi * 100 if asi else np.nan))
-    k[4].metric("Ciudades conectadas", h.fmt_entero(actual['destino'].nunique()))
+    k[4].metric("Ciudades con vuelos regulares", h.fmt_entero((vuelos_ciudad >= 4).sum()),
+                help=f"Ciudades con al menos 4 vuelos por mes en promedio. Con algún vuelo (incluye chárters y desvíos): "
+                     f"{(vuelos_ciudad > 0).sum()}.")
     k[5].metric("Cuota argentina", h.fmt_porcentaje(_cuota_arg(actual)),
                 help="Porcentaje de los pasajeros transportados por aerolíneas argentinas (sin contar JetSMART).")
 
-    tabs = st.tabs(["📊 Panorama", "🏙️ Destinos", "⚖️ Aerolíneas", "🗺️ Rutas", "🔁 Escalas", "📋 Datos"])
-
-    # ================================================================ PANORAMA
+    tabs = st.tabs(["📊 Panorama", "🛫 Ficha de ruta", "🏢 Competidores", "📦 Capacidad y ocupación", "💡 Oportunidades",
+                    "🏙️ Destinos", "🔁 Escalas", "📋 Datos"])
     with tabs[0]:
-        ini_u = date(f_max.year, f_max.month, 1)
-        filtros_sin_fecha = dict(filtros)
-        u = _filtrar(df, ini_u, f_max, filtros_sin_fecha)
-        up = _filtrar(df, h.restar_ano(ini_u), h.restar_ano(f_max), filtros_sin_fecha) if h.restar_ano(ini_u) >= f_min else u.iloc[0:0]
-        st.subheader(f"Último mes publicado: {h.meses_es[f_max.month]} {f_max.year}")
-        if u.empty:
-            st.info("Los filtros elegidos no tienen vuelos en el último mes publicado.")
-        else:
-            def _d(a, b):
-                return None if up.empty or not b else f"{_var(a, b):+.1f}%".replace(".", ",")
-            uc = st.columns(4)
-            uc[0].metric("Vuelos", h.fmt_entero(u['vuelos'].sum()), delta=_d(u['vuelos'].sum(), up['vuelos'].sum()))
-            uc[1].metric("Pasajeros", h.fmt_entero(u['pasajeros'].sum()), delta=_d(u['pasajeros'].sum(), up['pasajeros'].sum()))
-            uc[2].metric("Asientos", h.fmt_entero(u['asientos'].sum()), delta=_d(u['asientos'].sum(), up['asientos'].sum()))
-            ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
-            uc[3].metric("Cuota argentina", h.fmt_porcentaje(ca),
-                         delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
-            st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max.strftime('%d/%m/%Y')}, comparado con el mismo período de {f_max.year - 1}. "
-                       "Respeta los filtros, salvo las fechas.")
-        st.markdown("---")
-
-        st.subheader("Mapa de conexiones")
-        mc1, mc2 = st.columns(2)
-        grosor = mc1.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="int_mapa_metrica")
-        sem_min = mc2.slider("Frecuencia mínima por ruta (vuelos por semana)", 0, 30, 1, key="int_mapa_sem",
-                             help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
-        fig_mapa, n_r, n_c, faltan = _mapa(actual, h, grosor == "Pasajeros", sem_min, (hasta - desde).days + 1)
-        if fig_mapa is None:
-            st.info("No hay rutas para mostrar con esa frecuencia mínima. Probá bajarla.")
-        else:
-            h.graficar(fig_mapa, mapa=True)
-            st.caption(f"{n_r} rutas y {n_c} ciudades de América. Líneas más gruesas = más {grosor.lower()}; los círculos de colores son "
-                       "las ciudades extranjeras (azul: Sudamérica, verde: Centroamérica y Caribe, naranja: Norteamérica) y los grises, "
-                       "los aeropuertos argentinos. Pasá el mouse para ver el detalle.")
-        if faltan:
-            st.caption("Sin coordenadas, no se muestran: " + ", ".join(sorted(faltan)) + ".")
-        st.markdown("---")
-
-        st.markdown("#### Pasajeros por mes según tipo de aerolínea")
-        g = actual.groupby(['periodo_orden', 'periodo_mes_es', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
-        for c in ('periodo_orden', 'periodo_mes_es', 'grupo'):
-            g[c] = g[c].astype(str)
-        g = g.sort_values('periodo_orden')
-        fig = px.bar(g, x='periodo_mes_es', y='pasajeros', color='grupo', color_discrete_map=COLORES_GRUPO,
-                     category_orders={'periodo_mes_es': g.drop_duplicates('periodo_orden')['periodo_mes_es'].tolist(), 'grupo': GRUPOS},
-                     labels={'periodo_mes_es': 'Período', 'pasajeros': 'Pasajeros', 'grupo': ''})
-        fig.update_layout(xaxis_tickangle=-45, height=440)
-        h.graficar(fig, leyenda_abajo=True)
-        st.markdown("---")
-
-        st.markdown("#### Evolución anual")
-        opc = ["Año calendario", f"Acumulado enero–{h.meses_es[f_max.month].lower()}"]
-        modo = st.radio("Comparar", opc, horizontal=True, key="int_anual_modo",
-                        help="El acumulado compara los mismos meses de todos los años, para que el año en curso no quede en desventaja.")
-        base_a = _filtrar(df, f_min, f_max, filtros_sin_fecha)
-        if modo != opc[0]:
-            base_a = base_a[base_a['mes_num'] <= f_max.month]
-        ga = base_a.groupby(['ano_num', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
-        ga['ano_num'] = ga['ano_num'].astype(str)
-        ga['grupo'] = ga['grupo'].astype(str)
-        fig = px.bar(ga, x='ano_num', y='pasajeros', color='grupo', color_discrete_map=COLORES_GRUPO,
-                     category_orders={'grupo': GRUPOS}, labels={'ano_num': 'Año', 'pasajeros': 'Pasajeros', 'grupo': ''})
-        fig.update_layout(height=420, xaxis=dict(type='category'))
-        h.graficar(fig, leyenda_abajo=True)
-        nota = f" {f_max.year} está incompleto (hasta el {f_max.strftime('%d/%m/%Y')})." if modo == opc[0] and f_max.month < 12 else ""
-        st.caption("Respeta los filtros, salvo las fechas: muestra todos los años de la base." + nota)
-
-    # ================================================================ DESTINOS
+        _panorama(h, df, actual, filtros, f_min, f_max, dias)
     with tabs[1]:
-        for nivel, col, titulo in (("pais", "pais", "Países"), ("destino", "destino", "Ciudades")):
-            st.subheader(f"Ranking de {titulo.lower()}")
-            t = _ranking(actual, previo, col, hay_prev, h)
-            t = t.rename(columns={'clave': 'País' if nivel == 'pais' else 'Ciudad'})
-            cfg = h.config_numerica(t, porcentajes=('Participación', 'Cuota argentina', 'Ocupación'))
-            st.dataframe(t, use_container_width=True, hide_index=True, column_config=cfg,
-                         height=int(min(len(t), 20) * 35 + 38))
-            if nivel == "pais":
-                top = actual.groupby(['pais', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
-                orden = actual.groupby('pais', observed=True)['pasajeros'].sum().sort_values(ascending=False).head(12)
-                top = top[top['pais'].isin(orden.index)]
-                top['pais'], top['grupo'] = top['pais'].astype(str), top['grupo'].astype(str)
-                fig = px.bar(top, y='pais', x='pasajeros', color='grupo', orientation='h', color_discrete_map=COLORES_GRUPO,
-                             category_orders={'pais': [str(p) for p in orden.index], 'grupo': GRUPOS},
-                             labels={'pais': '', 'pasajeros': 'Pasajeros', 'grupo': ''})
-                fig.update_layout(height=max(320, 34 * len(orden) + 120))
-                h.graficar(fig, leyenda_abajo=True)
-            st.caption("Var. % compara con el mismo período del año anterior. Cuota argentina = parte de los pasajeros llevada por "
-                       "aerolíneas argentinas (sin JetSMART). Podés ordenar por cualquier columna.")
-            st.markdown("---")
-
-    # ================================================================ AEROLÍNEAS
+        _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f_min, f_max)
     with tabs[2]:
-        st.subheader("Ranking de aerolíneas")
-        ta = _ranking(actual, previo, 'aerolinea', hay_prev, h, con_grupo=True)
-        ta = ta.rename(columns={'clave': 'Aerolínea'}).drop(columns=['Cuota argentina'])
-        cfg = h.config_numerica(ta, porcentajes=('Participación', 'Ocupación'))
-        if 'Cambio de cuota' in ta.columns:
-            cfg['Cambio de cuota'] = st.column_config.NumberColumn('Cambio de cuota', format="%+.1f pp")
-        st.dataframe(ta, use_container_width=True, hide_index=True, column_config=cfg, height=int(min(len(ta), 20) * 35 + 38))
-        st.caption("Participación = parte de los pasajeros del período. Cambio de cuota = puntos porcentuales ganados o perdidos "
-                   "frente al mismo período del año anterior.")
-        if hay_prev and 'Cambio de cuota' in ta.columns:
-            cambios = ta[ta['Cambio de cuota'].abs() >= 0.3].sort_values('Cambio de cuota')
-            if not cambios.empty:
-                st.markdown("#### Quién ganó y quién perdió cuota")
-                fig = go.Figure(go.Bar(
-                    x=cambios['Cambio de cuota'], y=cambios['Aerolínea'], orientation='h',
-                    marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],
-                    text=[f"{v:+.1f} pp".replace(".", ",") for v in cambios['Cambio de cuota']], textposition='outside', cliponaxis=False))
-                fig.update_layout(height=max(240, 34 * len(cambios) + 100), showlegend=False,
-                                  xaxis_title='Cambio de cuota (puntos porcentuales)', yaxis_title=None)
-                h.graficar(fig)
-                st.caption("Solo aerolíneas que movieron al menos 0,3 puntos porcentuales.")
-        st.markdown("---")
-
-        st.markdown("#### Participación de mercado, mes a mes")
-        top8 = actual.groupby('aerolinea', observed=True)['pasajeros'].sum().nlargest(8).index
-        s = actual[['periodo_orden', 'periodo_mes_es', 'aerolinea', 'pasajeros']].copy()
-        s['aerolinea'] = s['aerolinea'].astype(str).where(s['aerolinea'].isin(top8), 'Otras aerolíneas')
-        s = s.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
-        s['periodo_orden'], s['periodo_mes_es'] = s['periodo_orden'].astype(str), s['periodo_mes_es'].astype(str)
-        s = s.sort_values('periodo_orden')
-        fig = px.bar(s, x='periodo_mes_es', y='pasajeros', color='aerolinea',
-                     category_orders={'periodo_mes_es': s.drop_duplicates('periodo_orden')['periodo_mes_es'].tolist()},
-                     labels={'periodo_mes_es': 'Período', 'pasajeros': 'Participación', 'aerolinea': ''})
-        fig.update_layout(barmode='stack', barnorm='percent', yaxis_ticksuffix='%', xaxis_tickangle=-45, height=440)
-        h.graficar(fig, leyenda_abajo=True)
-
-    # ================================================================ RUTAS
+        _competidores(h, actual, previo, rc, hay_prev, dias)
     with tabs[3]:
-        st.subheader("Ranking de rutas")
-        dias = max((hasta - desde).days + 1, 1)
-        tr = _ranking(actual, previo, 'ruta', hay_prev, h)
-        ops = actual[actual['pasajeros'] > 0].groupby('ruta', observed=True)['aerolinea'].agg(
-            lambda x: ", ".join(sorted(set(map(str, x)))))
-        ops.index = ops.index.astype(str)
-        vuelos_ruta = actual.groupby('ruta', observed=True)['vuelos'].sum()
-        vuelos_ruta.index = vuelos_ruta.index.astype(str)
-        tr.insert(2, 'Vuelos por semana', (tr['clave'].map(vuelos_ruta) / dias * 7).round(1))  # ida y vuelta
-        tr['Aerolíneas'] = tr['clave'].map(ops)
-        tr = tr.rename(columns={'clave': 'Ruta'})
-        st.dataframe(tr, use_container_width=True, hide_index=True,
-                     column_config=h.config_numerica(tr, porcentajes=('Participación', 'Cuota argentina', 'Ocupación')),
-                     height=int(min(len(tr), 20) * 35 + 38))
-        st.caption("Cada ruta une un aeropuerto argentino con una ciudad de América, sumando ambos sentidos. Vuelos por semana cuenta idas y vueltas (un vuelo diario en cada sentido = 14 por semana).")
+        _capacidad(h, actual, previo, rc, hay_prev, dias)
+    with tabs[4]:
+        _oportunidades(h, actual, previo, rc, hay_prev, dias)
+    with tabs[5]:
+        _destinos(h, actual, previo, hay_prev, dias)
+    with tabs[6]:
+        _escalas(h, actual, dias)
+    with tabs[7]:
+        _datos(actual, f_min, f_max)
+
+
+# ---------------------------------------------------------------------------------------------- pestañas
+def _panorama(h, df, actual, filtros, f_min, f_max, dias):
+    ini_u = date(f_max.year, f_max.month, 1)
+    u = _filtrar(df, ini_u, f_max, filtros)
+    up = _filtrar(df, h.restar_ano(ini_u), h.restar_ano(f_max), filtros) if h.restar_ano(ini_u) >= f_min else u.iloc[0:0]
+    st.subheader(f"Último mes publicado: {h.meses_es[f_max.month]} {f_max.year}")
+    if u.empty:
+        st.info("Los filtros elegidos no tienen vuelos en el último mes publicado.")
+    else:
+        def _d(a, b):
+            return None if up.empty or not b else f"{_var(a, b):+.1f}%".replace(".", ",")
+        uc = st.columns(4)
+        uc[0].metric("Vuelos", h.fmt_entero(u['vuelos'].sum()), delta=_d(u['vuelos'].sum(), up['vuelos'].sum()))
+        uc[1].metric("Pasajeros", h.fmt_entero(u['pasajeros'].sum()), delta=_d(u['pasajeros'].sum(), up['pasajeros'].sum()))
+        uc[2].metric("Asientos", h.fmt_entero(u['asientos'].sum()), delta=_d(u['asientos'].sum(), up['asientos'].sum()))
+        ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
+        uc[3].metric("Cuota argentina", h.fmt_porcentaje(ca), delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
+        st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max.strftime('%d/%m/%Y')}, comparado con el mismo período de {f_max.year - 1}. "
+                   "Respeta los filtros, salvo las fechas.")
+    st.markdown("---")
+
+    st.subheader("Mapa de conexiones")
+    mc1, mc2 = st.columns(2)
+    grosor = mc1.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="int_mapa_metrica")
+    sem_min = mc2.slider("Frecuencia mínima por ruta (vuelos semanales, ida y vuelta)", 0, 30, 1, key="int_mapa_sem",
+                         help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
+    fig_mapa, n_r, n_c, faltan = _mapa(actual, h, grosor == "Pasajeros", sem_min, dias)
+    if fig_mapa is None:
+        st.info("No hay rutas para mostrar con esa frecuencia mínima. Probá bajarla.")
+    else:
+        h.graficar(fig_mapa, mapa=True)
+        st.caption(f"{n_r} rutas y {n_c} ciudades de América. Líneas más gruesas = más {grosor.lower()}; los círculos de colores son "
+                   "las ciudades extranjeras (azul: Sudamérica, verde: Centroamérica y Caribe, naranja: Norteamérica) y los grises, "
+                   "los aeropuertos argentinos. Pasá el mouse para ver el detalle.")
+    if faltan:
+        st.caption("Sin coordenadas, no se muestran: " + ", ".join(sorted(faltan)) + ".")
+    st.markdown("---")
+
+    st.markdown("#### Pasajeros por mes según tipo de aerolínea")
+    g = actual.groupby(['periodo_orden', 'periodo_mes_es', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
+    for c in ('periodo_orden', 'periodo_mes_es', 'grupo'):
+        g[c] = g[c].astype(str)
+    g = g.sort_values('periodo_orden')
+    fig = px.bar(g, x='periodo_mes_es', y='pasajeros', color='grupo', color_discrete_map=COLORES_GRUPO,
+                 category_orders={'periodo_mes_es': g.drop_duplicates('periodo_orden')['periodo_mes_es'].tolist(), 'grupo': GRUPOS},
+                 labels={'periodo_mes_es': 'Período', 'pasajeros': 'Pasajeros', 'grupo': ''})
+    fig.update_layout(xaxis_tickangle=-45, height=440)
+    h.graficar(fig, leyenda_abajo=True)
+    st.markdown("---")
+
+    st.markdown("#### Evolución anual")
+    opc = ["Año calendario", f"Acumulado enero–{h.meses_es[f_max.month].lower()}"]
+    modo = st.radio("Comparar", opc, horizontal=True, key="int_anual_modo",
+                    help="El acumulado compara los mismos meses de todos los años, para que el año en curso no quede en desventaja.")
+    base_a = _filtrar(df, f_min, f_max, filtros)
+    if modo != opc[0]:
+        base_a = base_a[base_a['mes_num'] <= f_max.month]
+    ga = base_a.groupby(['ano_num', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
+    ga['ano_num'], ga['grupo'] = ga['ano_num'].astype(str), ga['grupo'].astype(str)
+    fig = px.bar(ga, x='ano_num', y='pasajeros', color='grupo', color_discrete_map=COLORES_GRUPO,
+                 category_orders={'grupo': GRUPOS}, labels={'ano_num': 'Año', 'pasajeros': 'Pasajeros', 'grupo': ''})
+    incompleto = modo == opc[0] and f_max.month < 12
+    if incompleto:  # el año en curso, más claro
+        for tr in fig.data:
+            tr.marker.opacity = [0.45 if x == str(f_max.year) else 1 for x in tr.x]
+    fig.update_layout(height=420, xaxis=dict(type='category'))
+    h.graficar(fig, leyenda_abajo=True)
+    nota = f" {f_max.year} está incompleto (hasta el {f_max.strftime('%d/%m/%Y')}) y se muestra más claro." if incompleto else ""
+    st.caption("Respeta los filtros, salvo las fechas: muestra todos los años de la base." + nota)
+    st.markdown("---")
+
+    st.subheader("Puertas de entrada: aeropuertos argentinos")
+    pa = _ranking(actual, actual.iloc[0:0], 'aeropuerto_arg', False, dias).rename(columns={'clave': 'Aeropuerto'})
+    ciudades = actual[actual['pasajeros'] > 0].groupby('aeropuerto_arg', observed=True)['destino'].nunique()
+    ciudades.index = ciudades.index.astype(str)
+    pa.insert(2, 'Ciudades conectadas', pa['Aeropuerto'].map(ciudades).fillna(0).astype(int))
+    fuera = actual[~actual['aeropuerto_arg'].astype(str).str[:3].isin(AMBA)]['pasajeros'].sum() / max(actual['pasajeros'].sum(), 1) * 100
+    st.metric("Pasajeros que usan aeropuertos fuera de Buenos Aires", h.fmt_porcentaje(fuera),
+              help="Parte de los pasajeros internacionales a América que salen o llegan por aeropuertos del interior.")
+    _tabla(h, pa[['Aeropuerto', 'Pasajeros', 'Ciudades conectadas', 'Frecuencias semanales', 'Ocupación', 'Participación',
+                  'Cuota argentina']], porcentajes=('Ocupación', 'Participación', 'Cuota argentina'), alto_max=12)
+    base_f = _filtrar(df, f_min, f_max, filtros)
+    base_f = base_f[base_f['mes_num'] <= f_max.month]
+    interior = ~base_f['aeropuerto_arg'].astype(str).str[:3].isin(AMBA)
+    tot_anio = base_f.groupby('ano_num')['pasajeros'].sum()
+    int_anio = base_f[interior].groupby('ano_num')['pasajeros'].sum().reindex(tot_anio.index, fill_value=0)
+    serie = (int_anio / tot_anio.clip(lower=1) * 100)
+    if len(serie) > 1:
+        fig = go.Figure(go.Scatter(x=serie.index.astype(str), y=serie.values, mode='lines+markers+text',
+                                   text=[f"{v:.1f}%".replace(".", ",") for v in serie.values], textposition='top center',
+                                   line=dict(color=h.PALETA[0], width=3)))
+        fig.update_layout(height=320, yaxis=dict(ticksuffix='%', rangemode='tozero'), xaxis=dict(type='category'),
+                          yaxis_title='% fuera de Buenos Aires')
+        h.graficar(fig)
+        st.caption(f"Porcentaje de pasajeros por aeropuertos del interior, enero–{h.meses_es[f_max.month].lower()} de cada año. "
+                   "Muestra cuánto se federaliza la conectividad internacional.")
+
+
+def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f_min, f_max):
+    st.subheader("Todas las rutas")
+    tr = _ranking(actual, previo, rc, hay_prev, dias)
+    tr['Aerolíneas'] = tr['clave'].map(_lista_aerolineas(actual, rc))
+    tr = tr.rename(columns={'clave': 'Ruta'})
+    _tabla(h, tr, porcentajes=('Ocupación', 'Participación', 'Cuota argentina'), alto_max=12)
+    st.caption(f"Rutas vistas como «{nivel_txt}», sumando ambos sentidos. Frecuencias semanales = vuelos por semana en cada "
+               "sentido (un vuelo diario = 7). «Nueva o reanudada» = casi sin tráfico el año anterior.")
+    st.markdown("---")
+
+    opciones = tr['Ruta'].tolist()
+    if st.session_state.get('int_ficha_ruta') not in opciones:
+        st.session_state.pop('int_ficha_ruta', None)
+    ruta = st.selectbox("🛫 Elegí una ruta para ver su ficha completa", opciones, key='int_ficha_ruta',
+                        help="Están ordenadas por pasajeros. Podés escribir para buscar.")
+    r = actual[actual[rc] == ruta]
+    rp = previo[previo[rc] == ruta] if hay_prev else previo
+    if r.empty:
+        return
+    pax, vue, asi = r['pasajeros'].sum(), r['vuelos'].sum(), r['asientos'].sum()
+    por_aer = r.groupby('aerolinea', observed=True)['pasajeros'].sum()
+
+    def _d(a, b):
+        return None if not hay_prev or rp.empty or not b else f"{_var(a, b):+.1f}%".replace(".", ",")
+    st.markdown(f"### {ruta}")
+    k = st.columns(6)
+    k[0].metric("Pasajeros", h.fmt_entero(pax), delta=_d(pax, rp['pasajeros'].sum()))
+    k[1].metric("Frecuencias semanales", h.fmt_decimal(_frecuencia(vue, dias)), delta=_d(vue, rp['vuelos'].sum()),
+                help="Vuelos por semana en cada sentido (un vuelo diario = 7).")
+    k[2].metric("Asientos", h.fmt_entero(asi), delta=_d(asi, rp['asientos'].sum()))
+    ocup = pax / asi * 100 if asi else np.nan
+    ocup_p = rp['pasajeros'].sum() / rp['asientos'].sum() * 100 if hay_prev and rp['asientos'].sum() else np.nan
+    k[3].metric("Ocupación", h.fmt_porcentaje(ocup),
+                delta=None if pd.isna(ocup_p) or pd.isna(ocup) else f"{ocup - ocup_p:+.1f} pp".replace(".", ","))
+    k[4].metric("Asientos por vuelo", h.fmt_entero(asi / vue) if vue else "s/d", help="Tamaño promedio del avión.")
+    k[5].metric("Aerolíneas · HHI", f"{(por_aer > 0).sum()} · {h.fmt_entero(_hhi(por_aer))}",
+                help="Cantidad de aerolíneas que operan y concentración del mercado (HHI de 0 a 10.000; más de 2.500 = concentrado).")
+    st.caption("Las variaciones comparan con el mismo período del año anterior.")
+
+    st.markdown("#### Quién vuela la ruta")
+    g = _por(r, 'aerolinea')
+    g = g[g['vuelos'] > 0]
+    ocasionales = sorted(g.index[_frecuencia(g['vuelos'], dias) < 0.1])
+    g = g[_frecuencia(g['vuelos'], dias) >= 0.1]
+    gp = _por(rp, 'aerolinea') if hay_prev and not rp.empty else None
+    t = pd.DataFrame({
+        'Aerolínea': g.index,
+        'Frecuencias semanales': _frecuencia(g['vuelos'].values, dias).round(1),
+        'Asientos por vuelo': (g['asientos'] / g['vuelos']).round(0).values,
+        'Pasajeros': g['pasajeros'].values,
+        'Ocupación': np.where(g['asientos'] > 0, g['pasajeros'] / g['asientos'].clip(lower=1) * 100, np.nan).round(1),
+        'Cuota de pasajeros': (g['pasajeros'] / max(pax, 1) * 100).round(1).values,
+        'Cuota de asientos': (g['asientos'] / max(asi, 1) * 100).round(1).values,
+    })
+    t['Pasajeros ÷ asientos (cuota)'] = (t['Cuota de pasajeros'] / t['Cuota de asientos'].clip(lower=0.1)).round(2)
+    if gp is not None:
+        t['Frec. semanales año ant.'] = [round(_frecuencia(gp['vuelos'].get(a, 0), dias), 1) for a in g.index]
+        t['Var. % pasajeros'] = [_txt_var(p, gp['pasajeros'].get(a, 0)) for a, p in zip(g.index, g['pasajeros'])]
+    t = t.sort_values('Pasajeros', ascending=False)
+    _tabla(h, t, porcentajes=('Ocupación', 'Cuota de pasajeros', 'Cuota de asientos'), alto_max=12)
+    st.caption("Pasajeros ÷ asientos (cuota): mayor a 1 = la aerolínea capta más pasajeros de los que le corresponderían por su "
+               "capacidad (vende mejor que su oferta); menor a 1 = vende por debajo de su oferta."
+               + (f" Con vuelos ocasionales (menos de uno cada diez semanas): {', '.join(ocasionales)}." if ocasionales else ""))
+
+    st.markdown("#### Frecuencias semanales por mes")
+    m = r.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['vuelos'].sum().reset_index()
+    for c in ('periodo_orden', 'periodo_mes_es', 'aerolinea'):
+        m[c] = m[c].astype(str)
+    dias_mes = r.groupby('periodo_orden', observed=True)['fecha'].nunique()
+    dias_mes.index = dias_mes.index.astype(str)
+    m['frec'] = [_frecuencia(v, dias_mes.get(p, 30)) for v, p in zip(m['vuelos'], m['periodo_orden'])]
+    m = m.sort_values('periodo_orden')
+    oc = r.groupby(['periodo_orden', 'periodo_mes_es'], observed=True)[['pasajeros', 'asientos']].sum().reset_index()
+    oc['periodo_orden'], oc['periodo_mes_es'] = oc['periodo_orden'].astype(str), oc['periodo_mes_es'].astype(str)
+    oc = oc.sort_values('periodo_orden')
+    fig = go.Figure()
+    for aer in m.groupby('aerolinea')['frec'].sum().sort_values(ascending=False).index:
+        sub = m[m['aerolinea'] == aer]
+        fig.add_bar(x=sub['periodo_mes_es'], y=sub['frec'].round(1), name=aer)
+    fig.add_scatter(x=oc['periodo_mes_es'], y=(oc['pasajeros'] / oc['asientos'].replace(0, np.nan) * 100).round(1),
+                    name='Ocupación (%)', yaxis='y2', mode='lines+markers', line=dict(color='#0f172a', width=2, dash='dot'))
+    fig.update_layout(barmode='stack', height=440,
+                      xaxis=dict(categoryorder='array', categoryarray=oc['periodo_mes_es'].tolist(), tickangle=-45),
+                      yaxis=dict(title='Frecuencias semanales (por sentido)'),
+                      yaxis2=dict(title='Ocupación', overlaying='y', side='right', range=[0, 105], tickvals=[0, 25, 50, 75, 100],
+                                  ticksuffix='%', showgrid=False))
+    h.graficar(fig, leyenda_abajo=True)
+
+    st.markdown("#### Vuelos por día de la semana")
+    dsem = r.groupby(['aerolinea', 'dia_semana'], observed=True)['vuelos'].sum().reset_index()
+    dsem['aerolinea'] = dsem['aerolinea'].astype(str)
+    dsem['por_dia'] = (dsem['vuelos'] / max(dias / 7, 1) / 2).round(2)
+    dsem['Día'] = dsem['dia_semana'].map(dict(enumerate(DIAS_SEMANA)))
+    fig = px.bar(dsem, x='Día', y='por_dia', color='aerolinea', barmode='stack',
+                 category_orders={'Día': DIAS_SEMANA}, labels={'por_dia': 'Vuelos promedio por sentido', 'aerolinea': ''})
+    fig.update_layout(height=360)
+    h.graficar(fig, leyenda_abajo=True)
+    st.caption("Promedio de vuelos de cada día de la semana, en cada sentido, durante el período elegido.")
+
+    todo = _filtrar(df, f_min, f_max, filtros)
+    todo = todo[todo[rc] == ruta]
+    st.markdown("#### Historia de la ruta desde 2017")
+    ha = todo.groupby(['ano_num', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    ha['ano_num'], ha['aerolinea'] = ha['ano_num'].astype(str), ha['aerolinea'].astype(str)
+    fig = px.bar(ha, x='ano_num', y='pasajeros', color='aerolinea', labels={'ano_num': 'Año', 'pasajeros': 'Pasajeros', 'aerolinea': ''})
+    if f_max.month < 12:
+        for tr_ in fig.data:
+            tr_.marker.opacity = [0.45 if x == str(f_max.year) else 1 for x in tr_.x]
+    fig.update_layout(height=380, xaxis=dict(type='category'))
+    h.graficar(fig, leyenda_abajo=True)
+    vida = todo[todo['vuelos'] > 0].groupby('aerolinea', observed=True)['fecha'].agg(['min', 'max']).reset_index()
+    ultimo_mes = pd.Timestamp(f_max).to_period('M')
+    vida['Estado'] = np.where(vida['max'].dt.to_period('M') >= ultimo_mes, 'Opera', 'Dejó de operar')
+    vida['Primer vuelo en la base'] = vida['min'].dt.strftime('%m/%Y')
+    vida['Último vuelo'] = vida['max'].dt.strftime('%m/%Y')
+    vida = vida.rename(columns={'aerolinea': 'Aerolínea'}).sort_values(['Estado', 'min'], ascending=[False, True])
+    st.dataframe(vida[['Aerolínea', 'Estado', 'Primer vuelo en la base', 'Último vuelo']], use_container_width=True, hide_index=True)
+    st.caption(f"Entradas y salidas de cada aerolínea en la ruta. La base empieza en {f_min.strftime('%m/%Y')}: "
+               "«primer vuelo» puede ser anterior. «Dejó de operar» = sin vuelos en el último mes publicado.")
+
+    st.markdown("#### Estacionalidad de la ruta")
+    est = todo[~todo['ano_num'].isin([2020, 2021])]
+    completos = est.groupby('ano_num')['mes_num'].nunique()
+    est = est[est['ano_num'].isin(completos[completos == 12].index)]
+    if est.empty:
+        st.info("No hay años completos (sin contar 2020 y 2021) para calcular la estacionalidad de esta ruta.")
+    else:
+        e = est.groupby(['ano_num', 'mes_num'])['pasajeros'].sum().reset_index()
+        e['indice'] = e['pasajeros'] / e.groupby('ano_num')['pasajeros'].transform('mean') * 100
+        e['Mes'] = e['mes_num'].map(lambda x: MESES_CORTOS[x - 1])
+        e['Año'] = e['ano_num'].astype(str)
+        fig = px.line(e.sort_values('mes_num'), x='Mes', y='indice', color='Año', markers=True,
+                      category_orders={'Mes': MESES_CORTOS}, labels={'indice': 'Índice (100 = mes promedio del año)'})
+        fig.add_hline(y=100, line_dash='dot', line_color='#94a3b8')
+        fig.update_layout(height=380)
+        h.graficar(fig, leyenda_abajo=True)
+        st.caption("Años completos, sin 2020 ni 2021 (pandemia). Más de 100 = temporada alta de la ruta.")
+
+
+def _competidores(h, actual, previo, rc, hay_prev, dias):
+    st.subheader("Ranking de aerolíneas")
+    ta = _ranking(actual, previo, 'aerolinea', hay_prev, dias).rename(columns={'clave': 'Aerolínea'})
+    grupos = actual.groupby('aerolinea', observed=True)['grupo'].first()
+    grupos.index = grupos.index.astype(str)
+    ta.insert(1, 'Tipo', ta['Aerolínea'].map(grupos).astype(str))
+    rutas_n = actual[actual['vuelos'] > 0].groupby('aerolinea', observed=True)[rc].nunique()
+    rutas_n.index = rutas_n.index.astype(str)
+    ta.insert(2, 'Rutas', ta['Aerolínea'].map(rutas_n).fillna(0).astype(int))
+    if hay_prev and not previo.empty:
+        p = _por(previo, 'aerolinea')['pasajeros']
+        ta['Cambio de cuota'] = (ta['Participación'] - ta['Aerolínea'].map(p).fillna(0) / max(p.sum(), 1) * 100).round(1)
+    _tabla(h, ta.drop(columns=['Cuota argentina']), porcentajes=('Ocupación', 'Participación'), alto_max=15)
+    st.caption("Participación = parte de los pasajeros del período. Cambio de cuota = puntos porcentuales ganados o perdidos.")
+    if 'Cambio de cuota' in ta.columns:
+        cambios = ta[ta['Cambio de cuota'].abs() >= 0.3].sort_values('Cambio de cuota')
+        if not cambios.empty:
+            st.markdown("#### Quién ganó y quién perdió cuota")
+            fig = go.Figure(go.Bar(x=cambios['Cambio de cuota'], y=cambios['Aerolínea'], orientation='h',
+                                   marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],
+                                   text=[f"{v:+.1f} pp".replace(".", ",") for v in cambios['Cambio de cuota']],
+                                   textposition='outside', cliponaxis=False))
+            fig.update_layout(height=max(240, 34 * len(cambios) + 100), showlegend=False,
+                              xaxis_title='Cambio de cuota (puntos porcentuales)', yaxis_title=None)
+            h.graficar(fig)
+    st.markdown("---")
+
+    st.subheader("Análisis de una aerolínea")
+    lista = ta['Aerolínea'].tolist()
+    c1, c2 = st.columns(2)
+    for clave, defecto in (('int_comp_aer', lista[0]),
+                           ('int_comp_vs', 'Aerolíneas Argentinas' if 'Aerolíneas Argentinas' in lista else lista[0])):
+        if st.session_state.get(clave) not in lista:
+            st.session_state[clave] = defecto
+    aer = c1.selectbox("Aerolínea a analizar", lista, key='int_comp_aer')
+    vs = c2.selectbox("Comparar con", lista, key='int_comp_vs', help="Normalmente, tu propia aerolínea.")
+    a = actual[actual['aerolinea'] == aer]
+    ap = previo[previo['aerolinea'] == aer] if hay_prev else previo
+    k = st.columns(5)
+    k[0].metric("Pasajeros", h.fmt_entero(a['pasajeros'].sum()),
+                delta=None if ap.empty else f"{_var(a['pasajeros'].sum(), ap['pasajeros'].sum()):+.1f}%".replace(".", ","))
+    k[1].metric("Rutas", h.fmt_entero(a[a['vuelos'] > 0][rc].nunique()))
+    k[2].metric("Frecuencias semanales", h.fmt_decimal(_frecuencia(a['vuelos'].sum(), dias)), help="Suma de todas sus rutas, por sentido.")
+    k[3].metric("Ocupación", h.fmt_porcentaje(a['pasajeros'].sum() / a['asientos'].sum() * 100 if a['asientos'].sum() else np.nan))
+    k[4].metric("Participación total", h.fmt_porcentaje(a['pasajeros'].sum() / max(actual['pasajeros'].sum(), 1) * 100))
+
+    st.markdown(f"#### Rutas de {aer}")
+    g = _por(a, rc)
+    g = g[g['vuelos'] > 0]
+    tot_ruta = _por(actual, rc)
+    gp = _por(ap, rc) if not ap.empty else None
+    otros = _lista_aerolineas(actual[actual['aerolinea'] != aer], rc)
+    vs_rutas = set(actual[(actual['aerolinea'] == vs) & (actual['vuelos'] > 0)][rc].astype(str))
+    total_r = np.array([tot_ruta['pasajeros'].get(x, 0) for x in g.index], dtype=float)
+    t = pd.DataFrame({
+        'Ruta': g.index,
+        'Frecuencias semanales': _frecuencia(g['vuelos'].values, dias).round(1),
+        'Pasajeros': g['pasajeros'].values,
+        'Ocupación': np.where(g['asientos'] > 0, g['pasajeros'] / g['asientos'].clip(lower=1) * 100, np.nan).round(1),
+        'Cuota en la ruta': (g['pasajeros'].values / np.clip(total_r, 1, None) * 100).round(1),
+    })
+    if gp is not None:
+        t['Var. % pasajeros'] = [_txt_var(p_, gp['pasajeros'].get(r_, 0)) for r_, p_ in zip(g.index, g['pasajeros'])]
+    if vs != aer:
+        t[f'¿Vuela {vs}?'] = ['Sí' if r_ in vs_rutas else 'No' for r_ in g.index]
+    t['Competidores'] = [otros.get(r_, '—') for r_ in g.index]
+    _tabla(h, t.sort_values('Pasajeros', ascending=False), porcentajes=('Ocupación', 'Cuota en la ruta'), alto_max=15)
+
+    if gp is not None:
+        nuevas = sorted(set(g[g['pasajeros'] >= 1000].index) - set(gp[gp['pasajeros'] >= 200].index))
+        cortadas = sorted(set(gp[gp['pasajeros'] >= 1000].index) - set(g[g['pasajeros'] >= 200].index))
+        cn, cc = st.columns(2)
+        with cn:
+            st.markdown(f"**Rutas nuevas de {aer}** ({len(nuevas)})")
+            st.write(" · ".join(nuevas) if nuevas else "Ninguna frente al mismo período del año anterior.")
+        with cc:
+            st.markdown(f"**Rutas que dejó de volar** ({len(cortadas)})")
+            st.write(" · ".join(cortadas) if cortadas else "Ninguna frente al mismo período del año anterior.")
+        st.caption("Solo rutas con al menos 1.000 pasajeros en el período en que operan (se dejan afuera vuelos ocasionales).")
+
+    if vs != aer:
+        st.markdown(f"#### Cara a cara: {aer} vs. {vs}")
+        gb = _por(actual[actual['aerolinea'] == vs], rc)
+        comunes = sorted(set(g.index) & set(gb[gb['vuelos'] > 0].index), key=lambda x: -tot_ruta['pasajeros'].get(x, 0))
+        if not comunes:
+            st.info(f"{aer} y {vs} no comparten rutas en el período elegido.")
+        else:
+            def _oc(tabla, x):
+                return round(tabla['pasajeros'][x] / tabla['asientos'][x] * 100, 1) if tabla['asientos'][x] else np.nan
+            cara = pd.DataFrame({
+                'Ruta': comunes,
+                f'Frec. {aer}': [round(_frecuencia(g['vuelos'][x], dias), 1) for x in comunes],
+                f'Frec. {vs}': [round(_frecuencia(gb['vuelos'][x], dias), 1) for x in comunes],
+                f'Cuota {aer}': [round(g['pasajeros'][x] / tot_ruta['pasajeros'][x] * 100, 1) for x in comunes],
+                f'Cuota {vs}': [round(gb['pasajeros'][x] / tot_ruta['pasajeros'][x] * 100, 1) for x in comunes],
+                f'Ocupación {aer}': [_oc(g, x) for x in comunes],
+                f'Ocupación {vs}': [_oc(gb, x) for x in comunes],
+            })
+            _tabla(h, cara, porcentajes=tuple(c for c in cara.columns if c.startswith(('Cuota', 'Ocupación'))), alto_max=12)
+            st.caption(f"{len(comunes)} rutas que operan las dos aerolíneas, ordenadas por tamaño del mercado.")
+
+    st.markdown(f"#### Red de {aer} desde Argentina")
+    fig_red, n_r, n_c, _ = _mapa(a, h, True, 0, dias)
+    if fig_red is not None:
+        h.graficar(fig_red, mapa=True)
+        st.caption(f"{n_r} rutas a {n_c} ciudades de América en el período elegido.")
+    st.markdown("---")
+
+    st.markdown("#### Participación de mercado, mes a mes")
+    top8 = actual.groupby('aerolinea', observed=True)['pasajeros'].sum().nlargest(8).index
+    s = actual[['periodo_orden', 'periodo_mes_es', 'aerolinea', 'pasajeros']].copy()
+    s['aerolinea'] = s['aerolinea'].astype(str).where(s['aerolinea'].isin(top8), 'Otras aerolíneas')
+    s = s.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
+    s['periodo_orden'], s['periodo_mes_es'] = s['periodo_orden'].astype(str), s['periodo_mes_es'].astype(str)
+    s = s.sort_values('periodo_orden')
+    fig = px.bar(s, x='periodo_mes_es', y='pasajeros', color='aerolinea',
+                 category_orders={'periodo_mes_es': s.drop_duplicates('periodo_orden')['periodo_mes_es'].tolist()},
+                 labels={'periodo_mes_es': 'Período', 'pasajeros': 'Participación', 'aerolinea': ''})
+    fig.update_layout(barmode='stack', barnorm='percent', yaxis_ticksuffix='%', xaxis_tickangle=-45, height=440)
+    h.graficar(fig, leyenda_abajo=True)
+
+
+def _capacidad(h, actual, previo, rc, hay_prev, dias):
+    st.subheader("Capacidad y ocupación por ruta")
+    g = _por(actual, rc)
+    g = g[g['vuelos'] > 0]
+    gp = _por(previo, rc) if hay_prev and not previo.empty else None
+    t = pd.DataFrame({'Ruta': g.index, 'Asientos': g['asientos'].values, 'Pasajeros': g['pasajeros'].values,
+                      'Frecuencias semanales': _frecuencia(g['vuelos'].values, dias).round(1),
+                      'Ocupación': np.where(g['asientos'] > 0, g['pasajeros'] / g['asientos'].clip(lower=1) * 100, np.nan).round(1)})
+    if gp is not None:
+        asi_ant = np.array([gp['asientos'].get(x, 0) for x in g.index], dtype=float)
+        pax_ant = np.array([gp['pasajeros'].get(x, 0) for x in g.index], dtype=float)
+        t['Asientos año ant.'] = asi_ant.astype(int)
+        t['Var. % asientos'] = [_txt_var(a, b) for a, b in zip(g['asientos'], asi_ant)]
+        t['Ocupación año ant.'] = np.where(asi_ant > 0, pax_ant / np.clip(asi_ant, 1, None) * 100, np.nan).round(1)
+        t['Δ ocupación'] = (t['Ocupación'] - t['Ocupación año ant.']).round(1)
+        t['_var_asi'] = np.where(asi_ant >= 1000, (g['asientos'].values - asi_ant) / np.clip(asi_ant, 1, None) * 100, np.nan)
+    t = t.sort_values('Pasajeros', ascending=False)
+    relevantes = t[(t['Pasajeros'] >= 5000) & (t['Frecuencias semanales'] >= 1)]
+
+    if gp is not None and relevantes['_var_asi'].notna().any():
+        st.markdown("#### Mapa de capacidad: ocupación vs. crecimiento de la oferta")
+        v = relevantes.dropna(subset=['_var_asi'])
+        v = v[v['_var_asi'].between(-100, 300)]
+        fig = px.scatter(v, x='Ocupación', y='_var_asi', size='Pasajeros', hover_name='Ruta', size_max=40,
+                         labels={'_var_asi': 'Variación de asientos vs. año anterior (%)', 'Ocupación': 'Ocupación (%)'})
+        fig.add_vline(x=85, line_dash='dot', line_color='#94a3b8')
+        fig.add_hline(y=0, line_dash='dot', line_color='#94a3b8')
+        fig.add_annotation(x=v['Ocupación'].max(), y=v['_var_asi'].min(), text="Llenas y sin más oferta", showarrow=False,
+                           xanchor='right', yanchor='bottom', font=dict(color='#15803d'))
+        fig.add_annotation(x=v['Ocupación'].min(), y=v['_var_asi'].max(), text="Más oferta y poca ocupación", showarrow=False,
+                           xanchor='left', yanchor='top', font=dict(color='#b91c1c'))
+        fig.update_traces(marker=dict(color=h.PALETA[0], opacity=0.6, line=dict(width=1, color='white')))
+        fig.update_layout(height=480, xaxis=dict(ticksuffix='%'), yaxis=dict(ticksuffix='%'))
+        h.graficar(fig)
+        st.caption("Cada círculo es una ruta con al menos 5.000 pasajeros y una frecuencia semanal (tamaño = pasajeros). Abajo a la derecha: rutas muy llenas "
+                   "donde nadie agregó asientos (posible demanda insatisfecha). Arriba a la izquierda: más oferta y poca ocupación.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("#### Rutas más llenas")
+        _tabla(h, relevantes[relevantes['Ocupación'] >= 88][['Ruta', 'Ocupación', 'Frecuencias semanales', 'Pasajeros']].head(15),
+               porcentajes=('Ocupación',), alto_max=15)
+    with c2:
+        st.markdown("#### Rutas con ocupación baja")
+        _tabla(h, relevantes[relevantes['Ocupación'] <= 72][['Ruta', 'Ocupación', 'Frecuencias semanales', 'Pasajeros']]
+               .sort_values('Ocupación').head(15), porcentajes=('Ocupación',), alto_max=15)
+    st.caption("Rutas con al menos 5.000 pasajeros y una frecuencia semanal en el período. Llenas: 88% o más; baja: 72% o menos.")
+
+    st.markdown("#### Todas las rutas")
+    _tabla(h, t.drop(columns=[c for c in t.columns if c.startswith('_')]), porcentajes=('Ocupación', 'Ocupación año ant.'), alto_max=12)
+    st.markdown("---")
+
+    st.subheader("Quién agregó o sacó capacidad")
+    if not (hay_prev and not previo.empty):
+        st.info("La base no tiene el mismo período del año anterior para comparar la capacidad.")
+        return
+    a, ap = _por(actual, 'aerolinea'), _por(previo, 'aerolinea')
+    aers = sorted(set(a.index) | set(ap.index), key=lambda x: -(a['asientos'].get(x, 0)))
+    c = pd.DataFrame({'Aerolínea': aers,
+                      'Asientos año ant.': [int(ap['asientos'].get(x, 0)) for x in aers],
+                      'Asientos': [int(a['asientos'].get(x, 0)) for x in aers]})
+    c['Diferencia de asientos'] = c['Asientos'] - c['Asientos año ant.']
+    c['Var. %'] = [_txt_var(x, y) for x, y in zip(c['Asientos'], c['Asientos año ant.'])]
+    c['Cuota de asientos'] = (c['Asientos'] / max(c['Asientos'].sum(), 1) * 100).round(1)
+    c['Cambio de cuota de asientos'] = (c['Cuota de asientos'] - c['Asientos año ant.'] / max(c['Asientos año ant.'].sum(), 1) * 100).round(1)
+    c = c[(c['Asientos'] + c['Asientos año ant.']) > 0]
+    top = c.reindex(c['Diferencia de asientos'].abs().sort_values(ascending=False).index).head(12).sort_values('Diferencia de asientos')
+    fig = go.Figure(go.Bar(x=top['Diferencia de asientos'], y=top['Aerolínea'], orientation='h',
+                           marker_color=['#10b981' if v >= 0 else '#ef4444' for v in top['Diferencia de asientos']],
+                           text=[("+" if v >= 0 else "") + h.fmt_entero(v) for v in top['Diferencia de asientos']],
+                           textposition='outside', cliponaxis=False))
+    fig.update_layout(height=max(260, 34 * len(top) + 100), showlegend=False, xaxis_title='Asientos agregados o quitados',
+                      yaxis_title=None)
+    h.graficar(fig)
+    _tabla(h, c.sort_values('Asientos', ascending=False), porcentajes=('Cuota de asientos',), alto_max=12)
+    st.caption("Asientos ofrecidos en el período contra el mismo período del año anterior.")
+
+
+def _oportunidades(h, actual, previo, rc, hay_prev, dias):
+    tr = _ranking(actual, previo, rc, hay_prev, dias).rename(columns={'clave': 'Ruta'})
+    tr['Aerolíneas'] = tr['Ruta'].map(_lista_aerolineas(actual, rc))
+
+    st.subheader("Rutas sin aerolíneas argentinas")
+    sin = tr[(tr['Cuota argentina'].fillna(0) == 0) & (tr['Pasajeros'] >= 1000)]
+    if sin.empty:
+        st.info("En el período elegido, todas las rutas con movimiento relevante tienen alguna aerolínea argentina.")
+    else:
+        cols = [c for c in ['Ruta', 'Pasajeros', 'Var. %', 'Frecuencias semanales', 'Ocupación', 'Aerolíneas'] if c in sin.columns]
+        _tabla(h, sin[cols], porcentajes=('Ocupación',), alto_max=15)
+        st.caption("Rutas con al menos 1.000 pasajeros donde no vuela ninguna aerolínea argentina (JetSMART se cuenta aparte, "
+                   "porque la fuente no separa su filial argentina).")
+    st.markdown("---")
+
+    st.subheader("Destinos que solo tienen vuelo directo desde Buenos Aires")
+    dest = actual[actual['vuelos'] > 0].groupby('destino', observed=True).agg(
+        pasajeros=('pasajeros', 'sum'), ciudades_arg=('ciudad_arg', lambda x: sorted(set(map(str, x)))))
+    dest.index = dest.index.astype(str)
+    solo_ba = dest[dest['ciudades_arg'].map(lambda c: c == ['Buenos Aires']) & (dest['pasajeros'] >= 5000)]
+    con_interior = dest[dest['ciudades_arg'].map(lambda c: any(x != 'Buenos Aires' for x in c))]
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Solo desde Buenos Aires**")
+        t1 = solo_ba.sort_values('pasajeros', ascending=False).reset_index().rename(columns={'destino': 'Destino', 'pasajeros': 'Pasajeros'})
+        _tabla(h, t1[['Destino', 'Pasajeros']], alto_max=15)
+    with c2:
+        st.markdown("**Con vuelo directo desde el interior**")
+        t2 = con_interior.sort_values('pasajeros', ascending=False).reset_index()
+        t2['Desde el interior'] = t2['ciudades_arg'].map(lambda c: ", ".join(x for x in c if x != 'Buenos Aires'))
+        t2 = t2.rename(columns={'destino': 'Destino', 'pasajeros': 'Pasajeros'})
+        _tabla(h, t2[['Destino', 'Pasajeros', 'Desde el interior']], alto_max=15)
+    st.caption("Destinos de América con al menos 5.000 pasajeros en el período a los que hoy solo se llega en vuelo directo desde "
+               "Buenos Aires: los pasajeros del interior tienen que conectar.")
+
+    if not (hay_prev and 'Var. %' in tr.columns):
+        return
+    st.markdown("---")
+    st.subheader("Rutas que más crecen y más caen")
+    base = tr[tr['Pasajeros año ant.'] >= 10000].copy()
+    base['_v'] = (base['Pasajeros'] - base['Pasajeros año ant.']) / base['Pasajeros año ant.'] * 100
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Crecen**")
+        _tabla(h, base.nlargest(12, '_v')[['Ruta', 'Pasajeros', 'Var. %', 'Aerolíneas']], alto_max=12)
+    with c2:
+        st.markdown("**Caen**")
+        _tabla(h, base.nsmallest(12, '_v')[['Ruta', 'Pasajeros', 'Var. %', 'Aerolíneas']], alto_max=12)
+    st.caption("Rutas con al menos 10.000 pasajeros el año anterior, para evitar porcentajes engañosos.")
+    st.markdown("---")
+
+    st.subheader("Rutas nuevas y rutas cortadas")
+    p = _por(previo, rc)
+    nuevas = tr[(tr['Pasajeros año ant.'] < (tr['Pasajeros'] * 0.05).clip(lower=500)) & (tr['Pasajeros'] >= 1000)]
+    actuales = set(tr['Ruta'])
+    cortadas = p[(p['pasajeros'] >= 1000) & ~p.index.isin(actuales)].sort_values('pasajeros', ascending=False).reset_index()
+    cortadas = cortadas.rename(columns={rc: 'Ruta', 'pasajeros': 'Pasajeros año ant.'})
+    cortadas['Volaban'] = cortadas['Ruta'].map(_lista_aerolineas(previo, rc))
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown(f"**Nuevas o reanudadas** ({len(nuevas)})")
+        _tabla(h, nuevas[['Ruta', 'Pasajeros', 'Aerolíneas']], alto_max=12)
+    with c2:
+        st.markdown(f"**Cortadas** ({len(cortadas)})")
+        _tabla(h, cortadas[['Ruta', 'Pasajeros año ant.', 'Volaban']], alto_max=12)
+    st.caption("Frente al mismo período del año anterior, con al menos 1.000 pasajeros.")
+
+
+def _destinos(h, actual, previo, hay_prev, dias):
+    for col, titulo, nombre in (("pais", "países", "País"), ("destino", "ciudades", "Ciudad")):
+        st.subheader(f"Ranking de {titulo}")
+        t = _ranking(actual, previo, col, hay_prev, dias).rename(columns={'clave': nombre})
+        _tabla(h, t, porcentajes=('Participación', 'Cuota argentina', 'Ocupación'))
+        if col == "pais":
+            top = actual.groupby(['pais', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
+            orden = actual.groupby('pais', observed=True)['pasajeros'].sum().sort_values(ascending=False).head(12)
+            top = top[top['pais'].isin(orden.index)]
+            top['pais'], top['grupo'] = top['pais'].astype(str), top['grupo'].astype(str)
+            fig = px.bar(top, y='pais', x='pasajeros', color='grupo', orientation='h', color_discrete_map=COLORES_GRUPO,
+                         category_orders={'pais': [str(p) for p in orden.index], 'grupo': GRUPOS},
+                         labels={'pais': '', 'pasajeros': 'Pasajeros', 'grupo': ''})
+            fig.update_layout(height=max(320, 34 * len(orden) + 120))
+            h.graficar(fig, leyenda_abajo=True)
+        st.caption("Var. % compara con el mismo período del año anterior. Cuota argentina = parte de los pasajeros llevada por "
+                   "aerolíneas argentinas (sin JetSMART). Podés ordenar por cualquier columna.")
         st.markdown("---")
 
-        st.subheader("Rutas sin aerolíneas argentinas")
-        sin = tr[(tr['Cuota argentina'].fillna(0) == 0)].copy()
-        sin = sin[sin['Pasajeros'] >= max(1000, sin['Pasajeros'].quantile(0.25) if len(sin) else 0)]
-        if sin.empty:
-            st.info("En el período elegido, todas las rutas con movimiento relevante tienen alguna aerolínea argentina.")
+
+def _escalas(h, actual, dias):
+    st.subheader("Vuelos con escala o de quinta libertad")
+    st.markdown("Cuando una aerolínea vuela entre Argentina y **un país que no es el suyo**, ese tramo suele ser la continuación "
+                "de un vuelo con escala. Por ejemplo, Emirates (Dubái → **Río de Janeiro** → Buenos Aires) o Air Canada "
+                "(Toronto → **San Pablo** → Buenos Aires). También incluye vuelos de **quinta libertad**: una aerolínea que opera "
+                "entre dos países que no son el suyo (por ejemplo, LATAM entre Buenos Aires y Miami). En esta base aparece el tramo "
+                "entre esa ciudad y Argentina.")
+    esc = actual[actual['escala']]
+    if esc.empty:
+        st.info("No hay vuelos con escala ni de quinta libertad con los filtros elegidos.")
+    else:
+        ge = esc.groupby(['aerolinea', 'destino'], observed=True).agg(
+            Pasajeros=('pasajeros', 'sum'), Vuelos=('vuelos', 'sum'), Asientos=('asientos', 'sum')).reset_index()
+        # solo escalas regulares: al menos 1.000 pasajeros y un vuelo cada dos semanas por sentido (se descartan desvíos)
+        ge = ge[(ge['Pasajeros'] >= 1000) & (_frecuencia(ge['Vuelos'], dias) >= 0.5)]
+        if ge.empty:
+            st.info("En el período elegido no hay escalas regulares (solo vuelos ocasionales o desvíos).")
         else:
-            cols = ['Ruta', 'Pasajeros', 'Vuelos por semana', 'Var. %', 'Aerolíneas'] if 'Var. %' in sin.columns else \
-                ['Ruta', 'Pasajeros', 'Vuelos por semana', 'Aerolíneas']
-            st.dataframe(sin[cols], use_container_width=True, hide_index=True,
-                         column_config=h.config_numerica(sin[cols]), height=int(min(len(sin), 15) * 35 + 38))
-            st.caption("Rutas con al menos 1.000 pasajeros en el período donde no vuela ninguna aerolínea argentina "
-                       "(JetSMART se cuenta aparte). Muestran mercados atendidos solo por compañías extranjeras.")
+            ge['aerolinea'], ge['destino'] = ge['aerolinea'].astype(str), ge['destino'].astype(str)
+            ge['Frecuencias semanales'] = _frecuencia(ge['Vuelos'], dias).round(1)
+            ge['Ocupación'] = np.where(ge['Asientos'] > 0, ge['Pasajeros'] / ge['Asientos'].clip(lower=1) * 100, np.nan).round(1)
+            ge = ge.sort_values('Pasajeros', ascending=False).rename(columns={'aerolinea': 'Aerolínea', 'destino': 'Ciudad de escala u origen'})
+            fig = px.bar(ge.iloc[::-1], x='Pasajeros', y='Aerolínea', color='Ciudad de escala u origen', orientation='h', labels={'Aerolínea': ''})
+            fig.update_layout(height=max(280, 36 * ge['Aerolínea'].nunique() + 140))
+            h.graficar(fig, leyenda_abajo=True)
+            _tabla(h, ge[['Aerolínea', 'Ciudad de escala u origen', 'Pasajeros', 'Frecuencias semanales', 'Ocupación']], porcentajes=('Ocupación',))
+            st.caption("Solo combinaciones regulares (al menos 1.000 pasajeros y un vuelo cada dos semanas por sentido), para dejar "
+                       "afuera desvíos y vuelos ocasionales. "
+                       "Pasajeros = los que vuelan entre la ciudad de escala y Argentina.")
+    with st.expander("¿Y las escalas de las aerolíneas argentinas?"):
+        st.markdown("La fuente oficial (SINTA/ANAC) registra solo los tramos que tocan un aeropuerto argentino y no informa el "
+                    "número de vuelo. Por eso, si un vuelo de una aerolínea argentina sigue desde una ciudad de América hacia "
+                    "otra (por ejemplo, Punta Cana → Miami), ese tramo no aparece acá. Para reconstruirlo haría falta otra "
+                    "fuente, como el seguimiento de los aviones por radar (ADS-B).")
 
-    # ================================================================ ESCALAS
-    with tabs[4]:
-        st.subheader("Vuelos que llegan con escala en América")
-        st.markdown("Algunas aerolíneas de **Europa, Medio Oriente y África** llegan a Argentina haciendo **escala en otra ciudad "
-                    "de América** (por ejemplo, Dubái → Río de Janeiro → Buenos Aires). En esta base aparece el último tramo, "
-                    "entre la ciudad de escala y Argentina.")
-        esc = actual[actual['grupo'] == 'Extranjeras de fuera de América']
-        if esc.empty:
-            st.info("No hay vuelos de aerolíneas de fuera de América con los filtros elegidos.")
-        else:
-            ge = esc.groupby(['aerolinea', 'destino'], observed=True).agg(
-                Pasajeros=('pasajeros', 'sum'), Vuelos=('vuelos', 'sum'), Asientos=('asientos', 'sum')).reset_index()
-            ge = ge[ge['Pasajeros'] >= 500]  # se descartan desvíos y vuelos ocasionales
-            if ge.empty:
-                st.info("En el período elegido no hay escalas regulares (solo vuelos ocasionales o desvíos).")
-            else:
-                ge['aerolinea'], ge['destino'] = ge['aerolinea'].astype(str), ge['destino'].astype(str)
-                ge['Vuelos por semana'] = (ge['Vuelos'] / max((hasta - desde).days + 1, 1) * 7).round(1)
-                ge['Ocupación'] = np.where(ge['Asientos'] > 0, ge['Pasajeros'] / ge['Asientos'] * 100, np.nan).round(1)
-                ge = ge.sort_values('Pasajeros', ascending=False).rename(columns={'aerolinea': 'Aerolínea', 'destino': 'Ciudad de escala'})
-                fig = px.bar(ge.iloc[::-1], x='Pasajeros', y='Aerolínea', color='Ciudad de escala', orientation='h',
-                             labels={'Aerolínea': ''})
-                fig.update_layout(height=max(280, 36 * ge['Aerolínea'].nunique() + 140))
-                h.graficar(fig, leyenda_abajo=True)
-                vista = ge[['Aerolínea', 'Ciudad de escala', 'Pasajeros', 'Vuelos', 'Vuelos por semana', 'Ocupación']]
-                st.dataframe(vista, use_container_width=True, hide_index=True,
-                             column_config=h.config_numerica(vista, porcentajes=('Ocupación',)))
-                st.caption("Solo se muestran combinaciones con al menos 500 pasajeros en el período, para dejar afuera desvíos "
-                           "y vuelos ocasionales. Pasajeros = los que vuelan entre la ciudad de escala y Argentina. "
-                           "Vuelos por semana cuenta idas y vueltas (14 = un vuelo diario).")
-        with st.expander("¿Y las escalas de las aerolíneas argentinas?"):
-            st.markdown("La fuente oficial (SINTA/ANAC) registra solo los tramos que tocan un aeropuerto argentino y no informa el "
-                        "número de vuelo. Por eso, si un vuelo de una aerolínea argentina sigue desde una ciudad de América hacia "
-                        "otra (por ejemplo, Punta Cana → Miami), ese tramo no aparece acá. Para reconstruirlo haría falta otra "
-                        "fuente, como el seguimiento de los aviones por radar (ADS-B).")
 
-    # ================================================================ DATOS
-    with tabs[5]:
-        st.subheader("Descarga de datos filtrados")
-        st.markdown("Descargá los datos del filtro aplicado para analizarlos en Excel o Python.")
+def _datos(actual, f_min, f_max):
+    st.subheader("Descarga de datos filtrados")
+    st.markdown("Descargá los datos del filtro aplicado para analizarlos en Excel o Python.")
 
-        def _csv(d=actual):
-            return d.drop(columns=['ciudad_clave']).to_csv(index=False, sep=';').encode('utf-8-sig')
+    def _csv(d=actual):
+        return d.drop(columns=['ciudad_clave']).to_csv(index=False, sep=';').encode('utf-8-sig')
 
-        st.download_button("📥 Descargar datos filtrados (CSV)", data=_csv,
-                           file_name=f"internacional_america_{date.today().strftime('%Y%m%d')}.csv", mime="text/csv")
-        with st.expander("ℹ️ Metodología de esta sección"):
-            st.markdown(f"""
+    st.download_button("📥 Descargar datos filtrados (CSV)", data=_csv,
+                       file_name=f"internacional_america_{date.today().strftime('%Y%m%d')}.csv", mime="text/csv")
+    with st.expander("ℹ️ Metodología de esta sección"):
+        st.markdown(f"""
 **Fuente.** Tablero de conectividad aérea de SINTA (Ministerio de Turismo) con registros de ANAC, clasificación
-"Internacional". Se incluyen solo los vuelos cuyo otro extremo está en América. Datos del **{f_min.strftime('%d/%m/%Y')}**
-al **{f_max.strftime('%d/%m/%Y')}**; se actualizan automáticamente cada mes.
+"Internacional". Se incluyen todos los vuelos entre un aeropuerto argentino y otra ciudad de América. Datos del
+**{f_min.strftime('%d/%m/%Y')}** al **{f_max.strftime('%d/%m/%Y')}**; se actualizan automáticamente cada mes.
+
+**Rutas.** Se pueden ver como aeropuerto argentino ⇄ ciudad, ciudad ⇄ ciudad (mercado: por ejemplo, Buenos Aires suma
+Aeroparque, Ezeiza, El Palomar, Morón y San Fernando) o aeropuerto ⇄ aeropuerto. Siempre suman ambos sentidos.
+
+**Indicadores**
+- **Frecuencias semanales:** vuelos por semana en cada sentido (un vuelo diario = 7).
+- **Ocupación:** pasajeros ÷ asientos. **Asientos por vuelo:** tamaño promedio del avión.
+- **Cuota de pasajeros vs. cuota de asientos:** si una aerolínea tiene más cuota de pasajeros que de asientos, vende mejor que su oferta.
+- **HHI:** concentración del mercado de la ruta (0 a 10.000; más de 2.500 = concentrado).
+- **Variaciones:** contra el mismo período del año anterior. «Nueva o reanudada» = casi sin tráfico el año anterior.
 
 **Tipos de aerolínea**
 - **Argentinas:** Aerolíneas Argentinas, Flybondi, Andes, LADE, American Jet y Flyest.
-- **JetSMART (grupo regional):** la fuente agrupa sus filiales de Argentina, Chile y Perú en un solo nombre, así que no
-  se puede separar la parte argentina.
-- **Extranjeras de América** y **extranjeras de fuera de América** (estas últimas llegan con escala en otra ciudad de América).
+- **JetSMART (grupo regional):** la fuente agrupa sus filiales de Argentina, Chile y Perú en un solo nombre.
+- **Extranjeras de América** y **extranjeras de fuera de América**.
 
-**Indicadores.** Cuota argentina = pasajeros de aerolíneas argentinas ÷ pasajeros totales. Las rutas suman ambos sentidos.
-Var. % compara contra el mismo período del año anterior. Vuelos por semana = vuelos del período ÷ días × 7.
+**Escalas y quinta libertad.** Un tramo se considera continuación de un vuelo con escala (o de quinta libertad) cuando la
+aerolínea vuela entre Argentina y un país que no es el suyo (por ejemplo, Air Canada desde San Pablo). JetSMART queda
+afuera porque su filial argentina vuela directo desde Argentina.
+
+**Lo que la fuente no tiene:** tarifas, número de vuelo, tipo de avión, origen y destino real del pasajero (conexiones) ni la
+programación futura de vuelos.
 """)
-
-
-def _ranking(actual, previo, col, hay_prev, h, con_grupo=False):
-    """Tabla de ranking por país, ciudad, ruta o aerolínea, con variación interanual y cuota argentina."""
-    g = actual.groupby(col, observed=True).agg(Pasajeros=('pasajeros', 'sum'), Vuelos=('vuelos', 'sum'),
-                                                Asientos=('asientos', 'sum')).reset_index()
-    g = g[g['Vuelos'] > 0].rename(columns={col: 'clave'})
-    g['clave'] = g['clave'].astype(str)
-    total = max(g['Pasajeros'].sum(), 1)
-    g['Participación'] = (g['Pasajeros'] / total * 100).round(1)
-    g['Ocupación'] = np.where(g['Asientos'] > 0, g['Pasajeros'] / g['Asientos'] * 100, np.nan).round(1)
-    arg = actual[actual['grupo'] == 'Argentinas'].groupby(col, observed=True)['pasajeros'].sum()
-    arg.index = arg.index.astype(str)
-    g['Cuota argentina'] = (g['clave'].map(arg).fillna(0) / g['Pasajeros'].replace(0, np.nan) * 100).round(1)
-    if con_grupo:
-        gr = actual.groupby(col, observed=True)['grupo'].first()
-        gr.index = gr.index.astype(str)
-        g.insert(1, 'Tipo', g['clave'].map(gr).astype(str))
-    if hay_prev and not previo.empty:
-        p = previo.groupby(col, observed=True)['pasajeros'].sum()
-        p.index = p.index.astype(str)
-        ant = g['clave'].map(p).fillna(0)
-        g.insert(2 if not con_grupo else 3, 'Pasajeros año ant.', ant.astype(int))
-        g.insert(3 if not con_grupo else 4, 'Var. %', [_txt_var(_var(a, b)) for a, b in zip(g['Pasajeros'], ant)])
-        if con_grupo:
-            tot_ant = max(p.sum(), 1)
-            g['Cambio de cuota'] = (g['Participación'] - ant / tot_ant * 100).round(1)
-    g = g.drop(columns=['Asientos']).sort_values('Pasajeros', ascending=False).reset_index(drop=True)
-    return g
 
 
 def _mapa(df, h, por_pasajeros, vuelos_semana_min, dias):
@@ -547,24 +1065,24 @@ def _mapa(df, h, por_pasajeros, vuelos_semana_min, dias):
             lons += [coord_arg[s][1], COORD_CIUDADES[c][1], None]
         fig.add_trace(go.Scattergeo(lat=lats, lon=lons, mode='lines', hoverinfo='skip', showlegend=False,
                                     line=dict(width=0.8 + nivel * 1.6, color='rgba(29,78,216,0.40)')))
-    # ciudades extranjeras
     ciu = g.groupby(['ciudad_clave', 'destino', 'region'])[['pasajeros', 'vuelos']].sum().reset_index()
     cmax = max(float(ciu[col].max()), 1.0)
+    top = set(ciu.nlargest(10, col)['ciudad_clave'])
     fig.add_trace(go.Scattergeo(
         lat=[COORD_CIUDADES[c][0] for c in ciu['ciudad_clave']], lon=[COORD_CIUDADES[c][1] for c in ciu['ciudad_clave']],
-        mode='markers', showlegend=False,
+        mode='markers+text', showlegend=False, textposition='middle right', textfont=dict(size=10, color='#0f172a'),
+        text=[c.split('|')[0] if c in top else '' for c in ciu['ciudad_clave']],
         marker=dict(size=[6 + 22 * np.sqrt(v / cmax) for v in ciu[col]], color=[COLORES_REGION.get(r, '#64748b') for r in ciu['region']],
                     line=dict(width=1.2, color='white')),
-        text=[f"<b>{d}</b><br>{int(p):,} pasajeros<br>{int(v):,} vuelos".replace(",", ".")
-              for d, p, v in zip(ciu['destino'], ciu['pasajeros'], ciu['vuelos'])],
-        hovertemplate='%{text}<extra></extra>'))
-    # aeropuertos argentinos
+        hovertext=[f"<b>{d}</b><br>{int(p):,} pasajeros<br>{int(v):,} vuelos".replace(",", ".")
+                   for d, p, v in zip(ciu['destino'], ciu['pasajeros'], ciu['vuelos'])],
+        hovertemplate='%{hovertext}<extra></extra>'))
     arg = g.groupby('sigla')[['pasajeros', 'vuelos']].sum().reset_index()
     amax = max(float(arg[col].max()), 1.0)
     fig.add_trace(go.Scattergeo(
         lat=[coord_arg[s][0] for s in arg['sigla']], lon=[coord_arg[s][1] for s in arg['sigla']],
-        mode='markers+text', showlegend=False, text=list(arg['sigla']), textposition='middle left',
-        textfont=dict(size=10, color='#0f172a'),
+        mode='markers+text', showlegend=False, text=[s if s not in ('AEP', 'EPA', 'MOR', 'FDO') else '' for s in arg['sigla']],
+        textposition='middle left', textfont=dict(size=10, color='#0f172a'),
         marker=dict(size=[6 + 18 * np.sqrt(v / amax) for v in arg[col]], color='#475569', line=dict(width=1.2, color='white')),
         hovertext=[f"<b>{s}</b><br>{int(p):,} pasajeros internacionales".replace(",", ".") for s, p in zip(arg['sigla'], arg['pasajeros'])],
         hovertemplate='%{hovertext}<extra></extra>'))

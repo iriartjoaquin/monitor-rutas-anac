@@ -846,42 +846,6 @@ def cargar_base_repositorio(ruta, modificado):
 
 
 # -------------------------------------------------------------
-# FUENTE DE DATOS: archivo oficial del repositorio (lo actualiza el agente mensual)
-# -------------------------------------------------------------
-df_raw = None
-fuente_activa = None
-
-posibles_rutas = [
-    "conectividad_aerea.zip",
-    "conectividad_aerea.csv.gz",
-    "conectividad_aerea.csv",
-    "conectividad-aerea.zip",
-    "conectividad-aerea.csv",
-    "data/conectividad_aerea.zip",
-    "data/conectividad_aerea.csv",
-    "datos/conectividad_aerea.zip",
-    "datos/conectividad_aerea.csv",
-    "base_anac.zip",
-    "base_anac.csv",
-    "cabotaje.zip",
-    "cabotaje.csv"
-]
-try:
-    for f in os.listdir('.'):
-        if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
-            posibles_rutas.append(f)
-except Exception:
-    pass
-
-for ruta in posibles_rutas:
-    if os.path.exists(ruta):
-        df_procesado, err_proc = cargar_base_repositorio(ruta, os.path.getmtime(ruta))
-        if not err_proc and df_procesado is not None:
-            df_raw = df_procesado
-            fuente_activa = f"Repositorio GitHub ({ruta})"
-            break
-
-# -------------------------------------------------------------
 # CABECERA Y REGLA ESTRICTA CONTRA DATOS INVENTADOS
 # -------------------------------------------------------------
 st.markdown(
@@ -917,8 +881,44 @@ if seccion == SECCIONES[1]:
         graficar=graficar, config_numerica=config_numerica, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
         fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
         construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
-        COORDENADAS=COORDENADAS))
+        COORDENADAS=COORDENADAS, COLORES_AEROLINEAS=COLORES_AEROLINEAS, PALETA=PALETA))
     st.stop()
+
+# -------------------------------------------------------------
+# FUENTE DE DATOS: archivo oficial del repositorio (lo actualiza el agente mensual)
+# -------------------------------------------------------------
+df_raw = None
+fuente_activa = None
+
+posibles_rutas = [
+    "conectividad_aerea.zip",
+    "conectividad_aerea.csv.gz",
+    "conectividad_aerea.csv",
+    "conectividad-aerea.zip",
+    "conectividad-aerea.csv",
+    "data/conectividad_aerea.zip",
+    "data/conectividad_aerea.csv",
+    "datos/conectividad_aerea.zip",
+    "datos/conectividad_aerea.csv",
+    "base_anac.zip",
+    "base_anac.csv",
+    "cabotaje.zip",
+    "cabotaje.csv"
+]
+try:
+    for f in os.listdir('.'):
+        if f.lower().endswith(('.zip', '.gz', '.csv')) and f not in posibles_rutas:
+            posibles_rutas.append(f)
+except Exception:
+    pass
+
+for ruta in posibles_rutas:
+    if os.path.exists(ruta):
+        df_procesado, err_proc = cargar_base_repositorio(ruta, os.path.getmtime(ruta))
+        if not err_proc and df_procesado is not None:
+            df_raw = df_procesado
+            fuente_activa = f"Repositorio GitHub ({ruta})"
+            break
 
 if df_raw is None or df_raw.empty:
     st.error(
