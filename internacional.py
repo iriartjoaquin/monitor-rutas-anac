@@ -438,11 +438,10 @@ def _panel_filtros(df, f_min, f_max, def_desde):
     def _restablecer():
         for k in ('int_regiones', 'int_paises', 'int_aerolineas', 'int_grupos', 'int_aeropuertos'):
             st.session_state[k] = []
-        st.session_state['int_todo'] = True
+        st.session_state['int_todo'] = False
         st.session_state['int_desde'], st.session_state['int_hasta'] = def_desde, f_max
         st.session_state['int_nivel'] = list(NIVELES)[0]
-        st.session_state['int_aplicado'] = {'todo': True, 'regiones': [], 'paises': [], 'aerolineas': [], 'grupos': [],
-                                            'aeropuertos': [], 'desde': def_desde, 'hasta': f_max}
+        st.session_state['int_aplicado'] = None  # vuelve a la página vacía
 
     with st.container(border=True):
         t1, t2 = st.columns([3, 2], vertical_alignment="center")
@@ -479,9 +478,12 @@ def _panel_filtros(df, f_min, f_max, def_desde):
                 st.session_state['int_aplicado'] = elegidos
                 st.rerun(scope="app")
         aplicado = st.session_state['int_aplicado']
-        c8.caption(f"**Mostrando:** {_describir(aplicado)}")
-        if elegidos != aplicado:
-            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
+        if aplicado is None:
+            c8.caption("Todavía no buscaste nada: elegí qué mirar y tocá **🔍 Buscar vuelos**.")
+        else:
+            c8.caption(f"**Mostrando:** {_describir(aplicado)}")
+            if elegidos != aplicado:
+                st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
 
 
 # ---------------------------------------------------------------------------------------------- página
@@ -510,10 +512,13 @@ def mostrar(h):
     st.session_state['int_desde'] = h.sanitizar_fecha(st.session_state['int_desde'], def_desde, f_min, f_max)
     st.session_state['int_hasta'] = h.sanitizar_fecha(st.session_state['int_hasta'], f_max, f_min, f_max)
 
-    st.session_state.setdefault('int_todo', True)
-    st.session_state.setdefault('int_aplicado', {'todo': True, 'regiones': [], 'paises': [], 'aerolineas': [], 'grupos': [],
-                                                 'aeropuertos': [], 'desde': def_desde, 'hasta': f_max})
+    st.session_state.setdefault('int_todo', False)
+    st.session_state.setdefault('int_aplicado', None)  # la página abre vacía hasta tocar "Buscar vuelos"
     _panel_filtros(df, f_min, f_max, def_desde)
+    if st.session_state['int_aplicado'] is None:
+        st.info("💡 **El monitor está listo.** Elegí un país, una región, un aeropuerto argentino o una aerolínea en los "
+                "filtros de arriba (o dejalos vacíos para ver toda América) y tocá **🔍 Buscar vuelos**.")
+        return
     nivel_txt = st.radio("Ver las rutas como", list(NIVELES), horizontal=True, key='int_nivel',
                          help="Se aplica al instante. Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, "
                               "Buenos Aires = Aeroparque + Ezeiza y San Pablo = Guarulhos + Viracopos + Congonhas.")

@@ -40,8 +40,8 @@ menos de 1% de diferencia.
 """
 
 CABOTAJE = """
-**Paso 1: elegí qué querés mirar.** La página abre con **Analizar total país** activado (todo el cabotaje, en lo que va del año).
-Para mirar algo puntual, desactivalo y elegí una o más:
+**Paso 1: elegí qué querés mirar.** La página abre vacía. Para ver todo el cabotaje, activá **Analizar total país**;
+para algo puntual, elegí una o más de estas opciones:
 - **Ruta (ida y vuelta):** por ejemplo *AEP (Aeroparque) ⇄ BRC (Bariloche)*, que suma los dos sentidos.
 - **Aerolínea:** se puede combinar con todo lo demás, también con el total país.
 - **Origen y destino:** para ver un sentido o todos los vuelos que salen o llegan a un aeropuerto. El botón **⇄** los da vuelta.
@@ -72,8 +72,8 @@ período: pasajeros, vuelos, asientos, ocupación, pasajeros por vuelo y HHI.
 """
 
 INTERNACIONAL = """
-**Paso 1: elegí qué querés mirar y tocá 🔍 Buscar vuelos.** La página abre con **Analizar todas las rutas** activado (toda
-América, en lo que va del año). Para mirar algo puntual, desactivalo y acotá por:
+**Paso 1: elegí qué querés mirar y tocá 🔍 Buscar vuelos.** La página abre vacía. Si tocás Buscar sin elegir nada, o con
+**Analizar todas las rutas** activado, ves toda América. Para algo puntual, acotá por:
 - **Región** y **País** del otro extremo (por ejemplo, Brasil).
 - **Tipo de aerolínea:** argentinas, extranjeras de América o extranjeras de fuera de América (como Emirates o Turkish, que llegan
   a Argentina haciendo escala en otra ciudad de América).

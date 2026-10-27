@@ -933,14 +933,14 @@ def restablecer_filtros():
     st.session_state['sel_destinos_key'] = []
     st.session_state['sel_rutas_key'] = []
     st.session_state['sel_aerolineas_key'] = []
-    st.session_state['chk_pais_key'] = True
+    st.session_state['chk_pais_key'] = False
     st.session_state['f_desde_key'] = def_desde
     st.session_state['f_hasta_key'] = def_hasta
     st.session_state['criterios_activos'] = {
         'rutas': [], 'origenes': [], 'destinos': [], 'aerolineas': [],
-        'desde': def_desde, 'hasta': def_hasta, 'todo_el_pais': True
+        'desde': def_desde, 'hasta': def_hasta, 'todo_el_pais': False
     }
-    st.session_state['busqueda_activa'] = True
+    st.session_state['busqueda_activa'] = False
 
 
 def intercambiar_origen_destino():
@@ -950,7 +950,7 @@ def intercambiar_origen_destino():
     )
 
 if 'busqueda_activa' not in st.session_state:
-    st.session_state['busqueda_activa'] = True  # la página abre mostrando el total país
+    st.session_state['busqueda_activa'] = False  # la página abre vacía hasta tocar "Buscar vuelos"
 if 'sel_origenes_key' not in st.session_state:
     st.session_state['sel_origenes_key'] = []
 if 'sel_destinos_key' not in st.session_state:
@@ -967,7 +967,7 @@ if 'criterios_activos' not in st.session_state or not isinstance(st.session_stat
         'aerolineas': [],
         'desde': def_desde,
         'hasta': def_hasta,
-        'todo_el_pais': True
+        'todo_el_pais': False
     }
 else:
     st.session_state['criterios_activos']['desde'] = sanitizar_fecha(
@@ -1060,7 +1060,7 @@ def panel_filtros():
             btn_buscar = st.button("🔍 Buscar vuelos", type="primary", width='stretch')
         with col_b2:
             if st.button("↺ Restablecer", width='stretch', on_click=restablecer_filtros,
-                         help="Vuelve a la vista inicial: total país en el período por defecto."):
+                         help="Vuelve a la vista inicial: filtros vacíos y la página sin resultados."):
                 st.rerun(scope="app")
 
         elegidos = {
@@ -1080,9 +1080,12 @@ def panel_filtros():
                            "'Analizar total país') y tocá 'Buscar vuelos'.")
 
         activos = st.session_state['criterios_activos']
-        st.caption(f"**Mostrando:** {describir_busqueda(activos)}")
-        if elegidos != {k: activos.get(k) for k in elegidos}:
-            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
+        if not st.session_state.get('busqueda_activa'):
+            st.caption("Todavía no buscaste nada: elegí qué mirar y tocá **🔍 Buscar vuelos**.")
+        else:
+            st.caption(f"**Mostrando:** {describir_busqueda(activos)}")
+            if elegidos != {k: activos.get(k) for k in elegidos}:
+                st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
 
 
 panel_filtros()
@@ -1102,7 +1105,7 @@ if not st.session_state.get('busqueda_activa', False):
     k5.metric("Pax / Vuelo", "0,0")
     k6.metric("HHI", "-")
 
-    st.info("💡 **El monitor está listo.** Elegí una **ruta**, un **origen y destino** o una **aerolínea** en los filtros de arriba (o activá **Analizar total país**) y tocá **🔍 Buscar vuelos**.")
+    st.info("💡 **El monitor está listo.** Elegí una **ruta**, un **origen y destino** o una **aerolínea** en los filtros de arriba (o activá **Analizar total país** para ver todo el cabotaje) y tocá **🔍 Buscar vuelos**.")
 
     tab_g, tab_c, tab_dest, tab_r, tab_e, tab_d = st.tabs([
         "📊 Panorama",
