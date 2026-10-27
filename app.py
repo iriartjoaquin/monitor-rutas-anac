@@ -612,7 +612,7 @@ def procesar_dataframe_oficial(df_in):
     if df_in is None or df_in.empty:
         return None, "El archivo proporcionado está vacío."
 
-    df = df_in.copy()
+    df = df_in  # el DataFrame viene recién leído del archivo: no hace falta copiarlo
     
     col_map = {}
     for c in df.columns:
@@ -740,13 +740,18 @@ def procesar_dataframe_oficial(df_in):
     df['origen_label'] = aplicar_unicos(df['origen_raw'], cached_etiqueta)
     df['destino_label'] = aplicar_unicos(df['destino_raw'], cached_etiqueta)
 
-    # Optimización vectorizada de pares y tramos
-    o_arr = df['origen_label'].to_numpy()
-    d_arr = df['destino_label'].to_numpy()
-    p1 = np.where(o_arr < d_arr, o_arr, d_arr)
-    p2 = np.where(o_arr < d_arr, d_arr, o_arr)
-    df['ruta_label'] = pd.Series(p1 + " ⇄ " + p2, index=df.index).astype('category')
-    df['tramo_label'] = pd.Series(o_arr + " ➔ " + d_arr, index=df.index).astype('category')
+    # Rutas (ambos sentidos) y tramos: las etiquetas se arman una vez por combinación distinta
+    # de aeropuertos (unas pocas centenas) en vez de una vez por fila
+    pares = pd.DataFrame({'o': df['origen_label'].to_numpy(), 'd': df['destino_label'].to_numpy()})
+    cod_par, pares_unicos = pd.factorize(pd.MultiIndex.from_frame(pares))
+    o_u = np.array([o for o, _ in pares_unicos], dtype=object)
+    d_u = np.array([d for _, d in pares_unicos], dtype=object)
+    p1 = np.where(o_u < d_u, o_u, d_u)
+    p2 = np.where(o_u < d_u, d_u, o_u)
+    ruta_u = pd.Series(p1 + " ⇄ " + p2)
+    tramo_u = pd.Series(o_u + " ➔ " + d_u)
+    df['ruta_label'] = pd.Series(ruta_u.to_numpy()[cod_par], index=df.index).astype('category')
+    df['tramo_label'] = pd.Series(tramo_u.to_numpy()[cod_par], index=df.index).astype('category')
 
     # Convertir columnas repetitivas a category para reducir la RAM en un 90%
     for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
@@ -814,11 +819,14 @@ def cargar_archivo_en_memoria(archivo_bytes_o_path):
                     df = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, nrows=50)
 
                 if len(df.columns) >= 3:
+                    # Las columnas de texto se leen como categorías: los nombres se repiten miles de veces
+                    # y así la lectura usa mucha menos memoria (importante en Streamlit Cloud)
+                    tipos = {c: 'category' for c in df.columns if df[c].dtype == object}
                     if isinstance(archivo_bytes_o_path, str):
-                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
+                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False, dtype=tipos)
                     else:
                         archivo_bytes_o_path.seek(0)
-                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False)
+                        df_completo = pd.read_csv(archivo_bytes_o_path, sep=sep, encoding=enc, low_memory=False, dtype=tipos)
                     return df_completo, None
             except Exception:
                 continue
