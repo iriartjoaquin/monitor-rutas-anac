@@ -187,7 +187,7 @@ def _codigo_aeropuerto(nombre):
     return corto.replace('Aeropuerto Internacional ', '').strip()
 
 
-def _distancia_km(a, b):
+def distancia_km(a, b):
     """Distancia ortodrómica (en línea recta sobre la Tierra) entre dos puntos (lat, lon); NaN si falta alguno."""
     if not a or not b:
         return np.nan
@@ -309,7 +309,7 @@ def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto,
     # distancia de la ruta (aeropuerto argentino -> ciudad extranjera), para asientos-km y pasajeros-km
     coord_arg = _coord_arg or {}
     out['km'] = np.asarray(_combinar(np.array([e[:3] for e in etiqueta_arg], dtype=object), out['ciudad_clave'].astype(object),
-                                     lambda a, c: _distancia_km(coord_arg.get(a), COORD_CIUDADES.get(c))), dtype=float).astype(np.float32)
+                                     lambda a, c: distancia_km(coord_arg.get(a), COORD_CIUDADES.get(c))), dtype=float).astype(np.float32)
     return out[out['fecha'].notna()].reset_index(drop=True)
 
 
@@ -382,7 +382,7 @@ def _ranking(actual, previo, col, hay_prev, dias):
     return t.sort_values('Pasajeros', ascending=False).reset_index(drop=True)
 
 
-def _km(df, col):
+def medir_km(df, col):
     """Asientos-km y pasajeros-km (en millones) por la columna pedida, y distancia media por pasajero."""
     d = df[df['km'].notna()]
     g = pd.DataFrame({'ask': d['asientos'] * d['km'], 'rpk': d['pasajeros'] * d['km'], 'pasajeros': d['pasajeros'],
@@ -585,14 +585,22 @@ def _cuota_mensual(h, df, actual, filtros, f_min, f_max):
 
 
 def _resumen_mes(h, df, filtros, f_min, f_max, rc):
-    """Lo que cambió en el último mes publicado: el bloque que se mira cuando sale un mes nuevo."""
+    resumen_ultimo_mes(h, lambda desde, hasta: _filtrar(df, desde, hasta, filtros), f_min, f_max, rc)
+
+
+def resumen_ultimo_mes(h, filtrar, f_min, f_max, rc, cuota_argentina=True):
+    """Lo que cambió en el último mes publicado: el bloque que se mira cuando sale un mes nuevo.
+
+    filtrar(desde, hasta) devuelve la base con los filtros de la página aplicados. Lo usan las dos secciones:
+    en cabotaje (cuota_argentina=False) la quinta tarjeta muestra la concentración del mercado (HHI).
+    """
     ini_u = date(f_max.year, f_max.month, 1)
     mes_txt = f"{h.meses_es[f_max.month]} {f_max.year}"
-    u = _filtrar(df, ini_u, f_max, filtros)
+    u = filtrar(ini_u, f_max)
     hay_ly = h.restar_ano(ini_u) >= f_min
-    up = _filtrar(df, h.restar_ano(ini_u), h.restar_ano(f_max), filtros) if hay_ly else u.iloc[0:0]
+    up = filtrar(h.restar_ano(ini_u), h.restar_ano(f_max)) if hay_ly else u.iloc[0:0]
     ini_m = (pd.Timestamp(ini_u) - pd.DateOffset(months=1)).date()
-    um = _filtrar(df, ini_m, ini_u - timedelta(days=1), filtros) if ini_m >= f_min else u.iloc[0:0]
+    um = filtrar(ini_m, ini_u - timedelta(days=1)) if ini_m >= f_min else u.iloc[0:0]
     mes_ant_txt = f"{h.meses_es[ini_m.month]} {ini_m.year}"
     ly_txt = f"{h.meses_es[f_max.month]} {f_max.year - 1}"
 
@@ -612,8 +620,14 @@ def _resumen_mes(h, df, filtros, f_min, f_max, rc):
     oc = pax / asi * 100 if asi else np.nan
     ocp = up['pasajeros'].sum() / up['asientos'].sum() * 100 if not up.empty and up['asientos'].sum() else np.nan
     uc[3].metric("Ocupación", h.fmt_porcentaje(oc), delta=None if pd.isna(ocp) else f"{oc - ocp:+.1f} pp".replace(".", ","))
-    ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
-    uc[4].metric("Cuota argentina", h.fmt_porcentaje(ca), delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
+    if cuota_argentina:
+        ca, cp = _cuota_arg(u), _cuota_arg(up) if not up.empty else np.nan
+        uc[4].metric("Cuota argentina", h.fmt_porcentaje(ca), delta=None if pd.isna(cp) else f"{ca - cp:+.1f} pp".replace(".", ","))
+    else:
+        hh = _hhi(u.groupby('aerolinea', observed=True)['pasajeros'].sum())
+        hp = _hhi(up.groupby('aerolinea', observed=True)['pasajeros'].sum()) if not up.empty else None
+        uc[4].metric("HHI", h.fmt_entero(hh), delta=None if hp is None else _num(hh - hp, True), delta_color="inverse",
+                     help="Concentración del mercado (0 a 10.000; más de 2.500 = concentrado). Si sube, hay menos competencia.")
     st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max.strftime('%d/%m/%Y')}, comparado con {ly_txt} "
                "(el mismo mes del año anterior, para no confundir cambios con temporada). Respeta los filtros, salvo las fechas.")
 
@@ -987,7 +1001,7 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
     if hay_prev and not previo.empty:
         p = _por(previo, 'aerolinea')['pasajeros']
         ta['Cambio de cuota'] = (ta['Participación'] - ta['Aerolínea'].map(p).fillna(0) / max(p.sum(), 1) * 100).round(1)
-    km = _km(actual, 'aerolinea')
+    km = medir_km(actual, 'aerolinea')
     ta['Asientos-km (millones)'] = ta['Aerolínea'].map(km['ask']).round(1)
     ta['Pasajeros-km (millones)'] = ta['Aerolínea'].map(km['rpk']).round(1)
     ta['Cuota de pasajeros-km'] = (ta['Pasajeros-km (millones)'] / max(km['rpk'].sum(), 1e-9) * 100).round(1)

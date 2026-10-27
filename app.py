@@ -6,6 +6,8 @@ import math
 from collections import Counter
 import zipfile
 from types import SimpleNamespace
+
+import internacional
 import warnings
 from datetime import datetime, date, timedelta
 import pandas as pd
@@ -459,6 +461,8 @@ La base se revisa automáticamente entre el 10 y el 20 de cada mes; la fuente pu
 - **Pax / vuelo y asientos / vuelo:** promedio de pasajeros y de asientos por vuelo; el segundo refleja el tamaño medio de la aeronave.
 - **Vuelos por día:** vuelos del período ÷ días con datos.
 - **Variación interanual:** compara contra el mismo período calendario del año anterior.
+- **Asientos-km y pasajeros-km:** asientos o pasajeros multiplicados por la distancia en línea recta entre los dos aeropuertos (aproximada: no es la distancia exacta que vuela cada avión).
+- **Resumen del último mes:** compara con el mismo mes del año anterior; las aerolíneas que empezaron o dejaron de volar una ruta se comparan con el mes anterior.
 
 **Rutas y sentidos**
 - **Ruta:** corredor entre dos aeropuertos, sumando ambos sentidos. **Tramo:** un sentido (origen ➔ destino).
@@ -787,6 +791,9 @@ def procesar_dataframe_oficial(df_in):
     tramo_u = pd.Series(o_u + " ➔ " + d_u)
     df['ruta_label'] = pd.Series(ruta_u.to_numpy()[cod_par], index=df.index).astype('category')
     df['tramo_label'] = pd.Series(tramo_u.to_numpy()[cod_par], index=df.index).astype('category')
+    km_u = np.array([internacional.distancia_km(COORDENADAS.get(str(o)[:3]), COORDENADAS.get(str(d)[:3]))
+                     for o, d in zip(o_u, d_u)], dtype=np.float32)
+    df['km'] = km_u[cod_par]  # distancia en línea recta, para asientos-km y pasajeros-km
 
     # Convertir columnas repetitivas a category para reducir la RAM en un 90%
     for c in ['aerolinea', 'origen_label', 'destino_label', 'periodo_orden', 'periodo_mes_es']:
@@ -795,7 +802,7 @@ def procesar_dataframe_oficial(df_in):
     cols_finales = [
         'fecha', 'ano_num', 'mes_num', 'periodo_orden', 'periodo_mes_es',
         'aerolinea', 'origen_label', 'destino_label', 'ruta_label', 'tramo_label',
-        'pasajeros', 'vuelos', 'asientos'
+        'pasajeros', 'vuelos', 'asientos', 'km'
     ]
     return df[cols_finales], None
 
@@ -908,13 +915,15 @@ seccion = st.segmented_control("Sección", SECCIONES, key='seccion', on_change=_
                                label_visibility='collapsed') or SECCIONES[0]
 st.query_params['seccion'] = 'internacional' if seccion == SECCIONES[1] else 'cabotaje'
 
+# Utilidades que comparten las dos secciones
+UTILES = SimpleNamespace(
+    graficar=graficar, config_numerica=config_numerica, tabla=tabla, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
+    fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
+    construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
+    COORDENADAS=COORDENADAS, COLORES_AEROLINEAS=COLORES_AEROLINEAS, PALETA=PALETA)
+
 if seccion == SECCIONES[1]:
-    import internacional
-    internacional.mostrar(SimpleNamespace(
-        graficar=graficar, config_numerica=config_numerica, tabla=tabla, fmt_entero=fmt_entero, fmt_porcentaje=fmt_porcentaje,
-        fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
-        construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
-        COORDENADAS=COORDENADAS, COLORES_AEROLINEAS=COLORES_AEROLINEAS, PALETA=PALETA))
+    internacional.mostrar(UTILES)
     st.stop()
 
 # -------------------------------------------------------------
@@ -1267,6 +1276,8 @@ df_rank['Ocupación'] = np.where(df_rank['Asientos'] > 0, df_rank['Pasajeros'] /
 dias_periodo = dias_operados(df_filtrado)
 df_rank['Asientos/vuelo'] = np.where(df_rank['Vuelos'] > 0, df_rank['Asientos'] / df_rank['Vuelos'], np.nan)
 df_rank['Vuelos/día'] = df_rank['Vuelos'] / dias_periodo
+_km_ruta = df_filtrado.groupby('ruta_label', observed=True)['km'].first()
+df_rank['Distancia (km)'] = df_rank['Ruta'].map({str(k): v for k, v in _km_ruta.items()}).round(0)
 
 rutas_suspendidas = []
 hay_base_prev = restar_ano(f_d_efectiva) >= f_min_total
@@ -1293,39 +1304,9 @@ df_top8['aerolinea'] = df_top8['aerolinea'].astype(str).where(_en_top, 'Otras ae
 # SECCIÓN 1: GRÁFICOS CON INFORMACIÓN BÁSICA (VERTICALES)
 # =============================================================
 with tab_panorama:
-    # Último mes publicado (respeta los filtros de ruta/aerolínea, no el rango de fechas)
-    ini_u = date(f_max_total.year, f_max_total.month, 1)
-    hay_u_prev = restar_ano(ini_u) >= f_min_total
-    seg_u = filtrar_segmento(df_raw, filtros, ini_u, f_max_total)
-    seg_u_prev = filtrar_segmento(df_raw, filtros, restar_ano(ini_u), restar_ano(f_max_total)) if hay_u_prev else seg_u.iloc[0:0]
-
-    st.subheader(f"Último mes publicado: {meses_es[f_max_total.month]} {f_max_total.year}")
-    if seg_u.empty:
-        st.info("El segmento seleccionado no tiene vuelos en el último mes publicado.")
-    else:
-        def _tot(df):
-            v, pxs, a = int(df['vuelos'].sum()), int(df['pasajeros'].sum()), int(df['asientos'].sum())
-            return v, pxs, a, (pxs / a * 100 if a > 0 else np.nan)
-
-        def _dp(act, ant):
-            if not hay_u_prev or not ant:
-                return None
-            return f"{(act - ant) / ant * 100:+.1f}%".replace(".", ",")
-
-        v1, p1, a1, o1 = _tot(seg_u)
-        v0, p0, a0, o0 = _tot(seg_u_prev)
-        d_ocup = f"{o1 - o0:+.1f} pp".replace(".", ",") if hay_u_prev and not pd.isna(o1) and not pd.isna(o0) else None
-        u1, u2, u3, u4 = st.columns(4)
-        u1.metric("Vuelos", fmt_entero(v1), delta=_dp(v1, v0))
-        u2.metric("Pasajeros", fmt_entero(p1), delta=_dp(p1, p0))
-        u3.metric("Asientos", fmt_entero(a1), delta=_dp(a1, a0))
-        u4.metric("Ocupación", fmt_porcentaje(o1), delta=d_ocup)
-        if hay_u_prev:
-            st.caption(f"Del {ini_u.strftime('%d/%m/%Y')} al {f_max_total.strftime('%d/%m/%Y')}, "
-                       f"comparado con el mismo período de {f_max_total.year - 1}. Respeta los filtros de ruta, aeropuertos y aerolínea; no el rango de fechas.")
-        else:
-            st.caption("La base no tiene datos del año anterior para comparar este mes.")
-    st.markdown("---")
+    # Lo que cambió en el último mes publicado (respeta los filtros de ruta/aerolínea, no el rango de fechas)
+    internacional.resumen_ultimo_mes(UTILES, lambda desde, hasta: filtrar_segmento(df_raw, filtros, desde, hasta),
+                                     f_min_total, f_max_total, 'ruta_label', cuota_argentina=False)
 
     st.subheader("Mapa de conexiones")
     cm1, cm2 = st.columns([1, 1])
@@ -1384,25 +1365,32 @@ with tab_panorama:
     ea1, ea2 = st.columns(2)
     opc_anual = ["Año calendario", f"Acumulado enero–{meses_es[f_max_total.month].lower()}"]
     with ea1:
-        med_anual = st.radio("Medir", ["Pasajeros", "Vuelos", "Ocupación"], horizontal=True, key="anual_med")
+        med_anual = st.radio("Medir", ["Pasajeros", "Vuelos", "Ocupación", "Pasajeros-km", "Asientos-km"], horizontal=True,
+                             key="anual_med", help="Pasajeros-km y asientos-km multiplican por la distancia de cada ruta: miden el "
+                                                   "tamaño real del tráfico y de la oferta (un pasajero a Ushuaia pesa más que uno a Rosario).")
     with ea2:
         modo_anual = st.radio("Comparar", opc_anual, horizontal=True, key="anual_modo",
                               help="El acumulado compara los mismos meses de todos los años, para que el año en curso no quede en desventaja.")
     seg_anual = filtrar_segmento(df_raw, filtros, f_min_total, f_max_total)
     if modo_anual != opc_anual[0]:
         seg_anual = seg_anual[seg_anual['mes_num'] <= f_max_total.month]
-    g_anual = seg_anual.groupby('ano_num', observed=True)[['pasajeros', 'vuelos', 'asientos']].sum().reset_index()
+    seg_anual = seg_anual.assign(pkm=seg_anual['pasajeros'] * seg_anual['km'].fillna(0) / 1e6,
+                                 akm=seg_anual['asientos'] * seg_anual['km'].fillna(0) / 1e6)
+    g_anual = seg_anual.groupby('ano_num', observed=True)[['pasajeros', 'vuelos', 'asientos', 'pkm', 'akm']].sum().reset_index()
     g_anual['ano_num'] = g_anual['ano_num'].astype(int)
     g_anual['Ocupación'] = np.where(g_anual['asientos'] > 0, g_anual['pasajeros'] / g_anual['asientos'] * 100, np.nan)
     if len(g_anual) < 2:
         st.info("Se necesitan datos de al menos dos años para ver la evolución anual.")
     else:
-        col_anual = {'Pasajeros': 'pasajeros', 'Vuelos': 'vuelos', 'Ocupación': 'Ocupación'}[med_anual]
+        col_anual = {'Pasajeros': 'pasajeros', 'Vuelos': 'vuelos', 'Ocupación': 'Ocupación',
+                     'Pasajeros-km': 'pkm', 'Asientos-km': 'akm'}[med_anual]
         vals = g_anual[col_anual]
         var_prev = vals.pct_change() * 100
         incompleto = (g_anual['ano_num'] == f_max_total.year) & (modo_anual == opc_anual[0]) & (f_max_total < date(f_max_total.year, 12, 31))
         if med_anual == "Ocupación":
             etiquetas = [fmt_porcentaje(v) for v in vals]
+        elif med_anual.endswith("-km"):
+            etiquetas = [fmt_entero(v) for v in vals]  # en millones
         else:
             etiquetas = [fmt_entero(v) for v in vals]
         fig_anual = go.Figure(go.Bar(
@@ -1411,7 +1399,8 @@ with tab_panorama:
             customdata=[("s/d" if pd.isna(v) else f"{v:+.1f}%".replace(".", ",")) for v in var_prev],
             hovertemplate='%{x}: %{text}<br>Variación vs. año anterior: %{customdata}<extra></extra>'))
         fig_anual.update_layout(
-            height=420, margin=dict(l=20, r=20, t=40, b=40), yaxis_title=med_anual,
+            height=420, margin=dict(l=20, r=20, t=40, b=40),
+            yaxis_title=f"{med_anual} (millones)" if med_anual.endswith("-km") else med_anual,
             yaxis=dict(range=[0, 105]) if med_anual == "Ocupación" else dict(),
             xaxis=dict(type='category'),
             title=f"{med_anual} por año")
@@ -1618,10 +1607,19 @@ with tab_competencia:
     df_aero_disp = df_aero.rename(columns={'aerolinea': 'Aerolínea'}).copy()
     cols_dec = ['Market Share', 'Factor Ocupación', 'Pax / Vuelo', 'Asientos / Vuelo', 'Vuelos / día']
     df_aero_disp[cols_dec] = df_aero_disp[cols_dec].round(1)
+    km_aero = internacional.medir_km(df_filtrado, 'aerolinea')
+    nombres_aero = df_aero_disp['Aerolínea'].astype(str)
+    df_aero_disp['Asientos-km (millones)'] = nombres_aero.map(km_aero['ask']).round(1)
+    df_aero_disp['Pasajeros-km (millones)'] = nombres_aero.map(km_aero['rpk']).round(1)
+    df_aero_disp['Cuota de pasajeros-km'] = (df_aero_disp['Pasajeros-km (millones)'] / max(km_aero['rpk'].sum(), 1e-9) * 100).round(1)
+    df_aero_disp['Distancia media (km)'] = nombres_aero.map(km_aero['dist']).round(0)
     tabla(
         df_aero_disp, use_container_width=True, hide_index=True,
-        column_config=config_numerica(df_aero_disp, porcentajes=('Market Share', 'Factor Ocupación'))
+        column_config=config_numerica(df_aero_disp, porcentajes=('Market Share', 'Factor Ocupación', 'Cuota de pasajeros-km'))
     )
+    st.caption("Asientos-km y pasajeros-km = asientos o pasajeros multiplicados por la distancia de cada ruta (en línea recta): "
+               "miden el tamaño real de cada aerolínea, porque no pesa lo mismo un pasajero a Ushuaia que uno a Rosario. "
+               "Distancia media = kilómetros que vuela en promedio cada pasajero.")
 
 with tab_destinos:
     st.subheader("Ranking de destinos")
