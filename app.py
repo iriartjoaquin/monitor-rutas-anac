@@ -8,6 +8,7 @@ import zipfile
 from types import SimpleNamespace
 
 import internacional
+from manual import mostrar_manual
 import warnings
 from datetime import datetime, date, timedelta
 import pandas as pd
@@ -914,6 +915,7 @@ def _mantener_seccion():
 seccion = st.segmented_control("Sección", SECCIONES, key='seccion', on_change=_mantener_seccion,
                                label_visibility='collapsed') or SECCIONES[0]
 st.query_params['seccion'] = 'internacional' if seccion == SECCIONES[1] else 'cabotaje'
+mostrar_manual(internacional=seccion == SECCIONES[1])
 
 # Utilidades que comparten las dos secciones
 UTILES = SimpleNamespace(
@@ -1271,7 +1273,7 @@ df_rank = df_filtrado.groupby('ruta_label', observed=True).agg(
 ).reset_index().rename(columns={'ruta_label': 'Ruta'})
 df_rank['Ruta'] = df_rank['Ruta'].astype(str)
 df_rank = df_rank[df_rank['Vuelos'] > 0].sort_values('Pasajeros', ascending=False).reset_index(drop=True)
-df_rank['Share'] = df_rank['Pasajeros'] / max(df_rank['Pasajeros'].sum(), 1) * 100
+df_rank['Participación'] = df_rank['Pasajeros'] / max(df_rank['Pasajeros'].sum(), 1) * 100
 df_rank['Ocupación'] = np.where(df_rank['Asientos'] > 0, df_rank['Pasajeros'] / df_rank['Asientos'] * 100, np.nan)
 dias_periodo = dias_operados(df_filtrado)
 df_rank['Asientos/vuelo'] = np.where(df_rank['Vuelos'] > 0, df_rank['Asientos'] / df_rank['Vuelos'], np.nan)
@@ -1598,14 +1600,14 @@ with tab_competencia:
 
     df_aero = df_aero[df_aero['Vuelos'] > 0].sort_values(by='Pasajeros', ascending=False)
     total_pax_seg = df_aero['Pasajeros'].sum()
-    df_aero['Market Share'] = np.where(total_pax_seg > 0, (df_aero['Pasajeros'] / total_pax_seg) * 100, 0)
-    df_aero['Factor Ocupación'] = np.where(df_aero['Asientos'] > 0, (df_aero['Pasajeros'] / df_aero['Asientos']) * 100, np.nan)
+    df_aero['Participación'] = np.where(total_pax_seg > 0, (df_aero['Pasajeros'] / total_pax_seg) * 100, 0)
+    df_aero['Ocupación'] = np.where(df_aero['Asientos'] > 0, (df_aero['Pasajeros'] / df_aero['Asientos']) * 100, np.nan)
     df_aero['Pax / Vuelo'] = np.where(df_aero['Vuelos'] > 0, df_aero['Pasajeros'] / df_aero['Vuelos'], 0)
     df_aero['Asientos / Vuelo'] = np.where(df_aero['Vuelos'] > 0, df_aero['Asientos'] / df_aero['Vuelos'], np.nan)
     df_aero['Vuelos / día'] = df_aero['Vuelos'] / dias_periodo
 
     df_aero_disp = df_aero.rename(columns={'aerolinea': 'Aerolínea'}).copy()
-    cols_dec = ['Market Share', 'Factor Ocupación', 'Pax / Vuelo', 'Asientos / Vuelo', 'Vuelos / día']
+    cols_dec = ['Participación', 'Ocupación', 'Pax / Vuelo', 'Asientos / Vuelo', 'Vuelos / día']
     df_aero_disp[cols_dec] = df_aero_disp[cols_dec].round(1)
     km_aero = internacional.medir_km(df_filtrado, 'aerolinea')
     nombres_aero = df_aero_disp['Aerolínea'].astype(str)
@@ -1615,7 +1617,7 @@ with tab_competencia:
     df_aero_disp['Distancia media (km)'] = nombres_aero.map(km_aero['dist']).round(0)
     tabla(
         df_aero_disp, use_container_width=True, hide_index=True,
-        column_config=config_numerica(df_aero_disp, porcentajes=('Market Share', 'Factor Ocupación', 'Cuota de pasajeros-km'))
+        column_config=config_numerica(df_aero_disp, porcentajes=('Participación', 'Ocupación', 'Cuota de pasajeros-km'))
     )
     st.caption("Asientos-km y pasajeros-km = asientos o pasajeros multiplicados por la distancia de cada ruta (en línea recta): "
                "miden el tamaño real de cada aerolínea, porque no pesa lo mismo un pasajero a Ushuaia que uno a Rosario. "
@@ -1808,12 +1810,12 @@ with tab_rutas:
     # Cuadro 1: Ranking de rutas
     st.subheader("Ranking de rutas")
     df_rank_disp = df_rank.copy()
-    df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
+    df_rank_disp[['Participación', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Participación', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
     if 'Δ% vs año ant.' in df_rank_disp.columns:
         df_rank_disp['Δ% vs año ant.'] = df_rank_disp['Δ% vs año ant.'].round(1)
     tabla(
         df_rank_disp, use_container_width=True, hide_index=True,
-        column_config=config_numerica(df_rank_disp, porcentajes=('Share', 'Ocupación'))
+        column_config=config_numerica(df_rank_disp, porcentajes=('Participación', 'Ocupación'))
     )
     if hay_base_prev:
         st.caption(
