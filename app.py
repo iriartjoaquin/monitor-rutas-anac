@@ -2,6 +2,7 @@ import os
 import io
 import re
 import calendar
+import math
 from collections import Counter
 import zipfile
 import warnings
@@ -1078,7 +1079,7 @@ if btn_buscar:
 # ESTADO INICIAL EN CERO (SIN PESAR LA PÁGINA)
 # -------------------------------------------------------------
 st.markdown("---")
-st.subheader("📌 Resumen Ejecutivo del Segmento Seleccionado")
+st.subheader("📌 Resumen del segmento seleccionado")
 
 if not st.session_state.get('busqueda_activa', False):
     k1, k2, k3, k4, k5, k6 = st.columns(6)
@@ -1227,7 +1228,7 @@ with tab_panorama:
     seg_u = filtrar_segmento(df_raw, filtros, ini_u, f_max_total)
     seg_u_prev = filtrar_segmento(df_raw, filtros, restar_ano(ini_u), restar_ano(f_max_total)) if hay_u_prev else seg_u.iloc[0:0]
 
-    st.subheader(f"Último Mes Publicado: {meses_es[f_max_total.month]} {f_max_total.year}")
+    st.subheader(f"Último mes publicado: {meses_es[f_max_total.month]} {f_max_total.year}")
     if seg_u.empty:
         st.info("El segmento seleccionado no tiene vuelos en el último mes publicado.")
     else:
@@ -1255,7 +1256,7 @@ with tab_panorama:
             st.caption("La base no tiene datos del año anterior para comparar este mes.")
     st.markdown("---")
 
-    st.subheader("Mapa de Conexiones")
+    st.subheader("Mapa de conexiones")
     cm1, cm2 = st.columns([1, 1])
     with cm1:
         base_grosor = st.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="mapa_metrica")
@@ -1282,7 +1283,7 @@ with tab_panorama:
     st.markdown("---")
 
     # 1. Oferta vs. demanda vs. ocupación
-    st.markdown("#### Oferta, Demanda y Ocupación del Segmento")
+    st.markdown("#### Oferta, demanda y ocupación")
     df_od = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es'], observed=True)[['pasajeros', 'asientos']].sum().reset_index()
     df_od['periodo_orden'] = df_od['periodo_orden'].astype(str)
     df_od['periodo_mes_es'] = df_od['periodo_mes_es'].astype(str)
@@ -1308,7 +1309,7 @@ with tab_panorama:
     st.markdown("---")
 
     # Evolución anual (usa todos los años de la base; respeta ruta/aeropuertos/aerolínea, no el rango de fechas)
-    st.markdown("#### Evolución Anual")
+    st.markdown("#### Evolución anual")
     ea1, ea2 = st.columns(2)
     opc_anual = ["Año calendario", f"Acumulado enero–{meses_es[f_max_total.month].lower()}"]
     with ea1:
@@ -1352,7 +1353,7 @@ with tab_panorama:
     st.markdown("---")
 
     # Frecuencias y tamaño de aeronave
-    st.markdown("#### Frecuencias y Tamaño de Aeronave")
+    st.markdown("#### Frecuencias y tamaño de aeronave")
     g_fq = df_filtrado.groupby(['periodo_orden', 'periodo_mes_es'], observed=True).agg(
         vuelos=('vuelos', 'sum'), asientos=('asientos', 'sum'), n_dias=('fecha', 'nunique')
     ).reset_index()
@@ -1370,6 +1371,10 @@ with tab_panorama:
     g_fq['vuelos_dia'] = g_fq['vuelos'] / g_fq['dias']
     g_fq['asientos_vuelo'] = np.where(g_fq['vuelos'] > 0, g_fq['asientos'] / g_fq['vuelos'], np.nan)
 
+    # escala redonda para el eje de asientos por vuelo (0, 50, 100, 150…)
+    max_asientos = float(np.nanmax(g_fq['asientos_vuelo'])) if g_fq['asientos_vuelo'].notna().any() else 1.0
+    paso_asientos = 50 if max_asientos > 100 else (20 if max_asientos > 40 else 10)
+    tope_asientos = math.ceil(max_asientos * 1.1 / paso_asientos) * paso_asientos
     fig_fq = go.Figure()
     fig_fq.add_bar(x=g_fq['periodo_mes_es'], y=g_fq['vuelos_dia'], name='Vuelos por día', marker_color=PALETA[1],
                    hovertemplate='%{y:,.1f} vuelos/día<extra></extra>')
@@ -1380,7 +1385,8 @@ with tab_panorama:
         height=420, margin=dict(l=20, r=20, t=50, b=40),
         xaxis=dict(categoryorder='array', categoryarray=g_fq['periodo_mes_es'].tolist(), tickangle=-45),
         yaxis=dict(title='Vuelos por día'),
-        yaxis2=dict(title='Asientos por vuelo', overlaying='y', side='right', showgrid=False, rangemode='tozero'),
+        yaxis2=dict(title='Asientos por vuelo', overlaying='y', side='right', showgrid=False,
+                    range=[0, tope_asientos], tickmode='linear', tick0=0, dtick=paso_asientos),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0)
     )
     graficar(fig_fq)
@@ -1389,7 +1395,7 @@ with tab_panorama:
 
 with tab_competencia:
     # 2. Pasajeros mensuales por aerolínea
-    st.markdown("#### Evolución Mensual de Pasajeros por Operador")
+    st.markdown("#### Pasajeros por aerolínea, mes a mes")
     df_mes_aero = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
     df_mes_aero = df_mes_aero.sort_values(by=['periodo_orden', 'pasajeros'], ascending=[True, False])
     
@@ -1413,7 +1419,7 @@ with tab_competencia:
     st.markdown("---")
 
     # Participación de mercado en el tiempo (100% apilado)
-    st.markdown("#### Participación de Mercado Mes a Mes")
+    st.markdown("#### Participación de mercado, mes a mes")
     df_share = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
     df_share['periodo_orden'] = df_share['periodo_orden'].astype(str)
     df_share['periodo_mes_es'] = df_share['periodo_mes_es'].astype(str)
@@ -1434,7 +1440,7 @@ with tab_competencia:
 
     st.markdown("---")
 
-    st.markdown("#### Concentración y Cuota de Mercado por Año")
+    st.markdown("#### Concentración y cuota de mercado por año")
     if filtros.get('aerolineas'):
         st.info("Con un filtro de aerolínea activo la concentración no es comparable. Quitá el filtro de aerolínea para ver esta sección.")
     else:
@@ -1489,7 +1495,7 @@ with tab_competencia:
     st.markdown("---")
 
     # 2. Factor de Ocupación mensual por aerolínea (Curva individual por cada aerolínea)
-    st.markdown("#### Factor de Ocupación (%) por Aerolínea Mes a Mes")
+    st.markdown("#### Ocupación por aerolínea, mes a mes")
     df_mes_ocup = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True).agg(
         pasajeros=('pasajeros', 'sum'),
         asientos=('asientos', 'sum')
@@ -1523,7 +1529,7 @@ with tab_competencia:
     st.markdown("---")
 
     # Cuadro 2: Desempeño por Aerolínea
-    st.subheader("Desempeño Operativo y Comercial por Aerolínea")
+    st.subheader("Desempeño por aerolínea")
     df_aero = df_filtrado.groupby('aerolinea', observed=True).agg(
         Pasajeros=('pasajeros', 'sum'),
         Vuelos=('vuelos', 'sum'),
@@ -1547,7 +1553,7 @@ with tab_competencia:
     )
 
 with tab_destinos:
-    st.subheader("Ranking de Destinos")
+    st.subheader("Ranking de destinos")
 
     def _por_destino(df):
         g = df.groupby('destino_label', observed=True)[['vuelos', 'pasajeros']].sum()
@@ -1620,7 +1626,7 @@ with tab_destinos:
 
     st.markdown("---")
 
-    st.subheader("Pasajeros por Localidad")
+    st.subheader("Pasajeros por localidad")
 
     def _mov_pax(df):
         o = df.groupby('origen_label', observed=True)['pasajeros'].sum()
@@ -1676,7 +1682,7 @@ with tab_destinos:
 
     st.markdown("---")
 
-    st.subheader("Conectividad Federal")
+    st.subheader("Conectividad federal")
     if len(df_rank) < 3:
         st.info("Para medir conectividad federal seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país' o una aerolínea).")
     else:
@@ -1731,7 +1737,7 @@ with tab_destinos:
 
 with tab_rutas:
     # Cuadro 1: Ranking de rutas
-    st.subheader("Ranking de Rutas")
+    st.subheader("Ranking de rutas")
     df_rank_disp = df_rank.copy()
     df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']] = df_rank_disp[['Share', 'Ocupación', 'Asientos/vuelo', 'Vuelos/día']].round(1)
     if 'Δ% vs año ant.' in df_rank_disp.columns:
@@ -1753,7 +1759,7 @@ with tab_rutas:
 
     st.markdown("---")
 
-    st.subheader("Rutas Activas")
+    st.subheader("Rutas activas")
     if len(df_rank) < 3:
         st.info("Seleccioná un segmento con varias rutas (por ejemplo, 'Analizar total país') para ver las rutas activas.")
     else:
@@ -1790,7 +1796,7 @@ with tab_rutas:
 
     st.markdown("---")
 
-    st.subheader("Dependencia de un Solo Operador")
+    st.subheader("Dependencia de un solo operador")
     if filtros.get('aerolineas'):
         st.info("Con un filtro de aerolínea activo, todas las rutas figuran como de un solo operador. Quitá el filtro de aerolínea para ver esta sección.")
     elif len(df_rank) < 3:
@@ -1836,7 +1842,7 @@ with tab_rutas:
     st.markdown("---")
 
     # Balance entre sentidos: qué parte de los pasajeros de cada ruta viaja en cada dirección
-    st.markdown("#### Balance entre Sentidos (Ida vs. Vuelta)")
+    st.markdown("#### Balance entre sentidos (ida y vuelta)")
     g_sent = df_filtrado.groupby(['ruta_label', 'origen_label'], observed=True)['pasajeros'].sum().reset_index()
     g_sent['ruta_label'] = g_sent['ruta_label'].astype(str)
     g_sent['origen_label'] = g_sent['origen_label'].astype(str)
@@ -1877,7 +1883,7 @@ with tab_rutas:
     st.markdown("---")
 
     # Cuadro 2: Desempeño por Sentido de Vuelo
-    st.subheader("Desempeño por Sentido de Vuelo (Tramo)")
+    st.subheader("Desempeño por tramo (cada sentido)")
     df_tramo = df_filtrado.groupby(['tramo_label', 'aerolinea'], observed=True).agg(
         Pasajeros=('pasajeros', 'sum'),
         Vuelos=('vuelos', 'sum'),
@@ -1898,7 +1904,7 @@ with tab_rutas:
 
 with tab_datos:
     # Cuadro 3: Matriz Mensual Detallada
-    st.subheader("Matriz Mensual de Pasajeros por Operador")
+    st.subheader("Matriz mensual de pasajeros por aerolínea")
     pivot_pax = df_filtrado.pivot_table(
         index='aerolinea',
         columns='periodo_mes_es',
@@ -1925,7 +1931,7 @@ with tab_datos:
 # SECCIÓN 3: ESTACIONALIDAD DE LA RUTA (CON SELECTOR DE AÑO)
 # =============================================================
 with tab_estacionalidad:
-    st.markdown("### Análisis de Estacionalidad de la Demanda")
+    st.markdown("### Estacionalidad de la demanda")
     st.markdown("Comportamiento intra-anual del segmento elegido (ruta, aeropuertos y aerolíneas), **sin importar el período de fechas** del filtro: usa toda la base disponible.")
 
     mascara_est = pd.Series(True, index=df_raw.index)
@@ -2009,7 +2015,7 @@ with tab_estacionalidad:
                 vuelos=('vuelos', lambda x: x.sum() / cant_anos),
                 asientos=('asientos', lambda x: x.sum() / cant_anos)
             ).reset_index()
-            subtitulo_tabla = f"Promedio Mensual Histórico ({cant_anos} años completos" + ("" if incluir_pandemia else ", sin 2020 ni 2021") + ")"
+            subtitulo_tabla = f"Promedio mensual histórico ({cant_anos} años completos" + ("" if incluir_pandemia else ", sin 2020 ni 2021") + ")"
         else:
             ano_int = int(ano_est_sel)
             df_est_base = df_est_total[df_est_total['ano_num'] == ano_int].copy()
@@ -2021,7 +2027,7 @@ with tab_estacionalidad:
                 vuelos=('vuelos', 'sum'),
                 asientos=('asientos', 'sum')
             ).reset_index()
-            subtitulo_tabla = f"Estadísticas Mensuales del Año {ano_int}"
+            subtitulo_tabla = f"Estadísticas mensuales de {ano_int}"
 
         if not df_est.empty and df_est['pasajeros'].sum() > 0:
             promedio_mensual_pax = df_est['pasajeros'].mean()
@@ -2069,7 +2075,7 @@ with tab_estacionalidad:
 # =============================================================
 with tab_competencia:
     st.markdown("---")
-    st.markdown("### Comparación Interanual por Aerolínea")
+    st.markdown("### Comparación interanual por aerolínea")
     if not hay_base_prev or df_prev.empty:
         st.info("La base no tiene datos del mismo período del año anterior para comparar.")
     else:
@@ -2120,7 +2126,7 @@ with tab_competencia:
 
         cambios = tabla_yoy[tabla_yoy['Cambio de cuota'].abs() >= 0.1].sort_values('Cambio de cuota')
         if not cambios.empty:
-            st.markdown("#### Quién Ganó y Quién Perdió Cuota")
+            st.markdown("#### Quién ganó y quién perdió cuota")
             fig_shift = go.Figure(go.Bar(
                 x=cambios['Cambio de cuota'], y=cambios['Aerolínea'], orientation='h',
                 marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],
@@ -2135,7 +2141,7 @@ with tab_competencia:
 # SECCIÓN 5: DESCARGAS OFICIALES
 # =============================================================
 with tab_datos:
-    st.markdown("### Descarga de Datos Oficiales Filtrados")
+    st.markdown("### Descarga de datos filtrados")
     st.markdown("Descargá los microdatos del filtro aplicado para analizarlos en Excel o Python.")
 
     col_exp1, col_exp2 = st.columns(2)
