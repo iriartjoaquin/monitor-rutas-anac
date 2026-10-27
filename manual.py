@@ -34,6 +34,9 @@ menos de 1% de diferencia.
 - Cada pestaña termina con una aclaración en letra chica que dice qué muestra y qué filtros respeta.
 - **↺ Restablecer** vuelve todos los filtros a como estaban al entrar.
 - **ℹ️ Metodología**, al final de cada sección, tiene todas las definiciones.
+- **Mapas:** se mueven arrastrando y se acercan con la rueda del mouse (o con dos dedos en el celular). Pasando el mouse por el
+  medio de una línea ves el detalle de esa ruta, y con **Destacar las rutas de…** elegís un aeropuerto o ciudad: sus rutas
+  quedan en naranja y al costado aparece la tabla con cada una.
 """
 
 CABOTAJE = """
@@ -52,7 +55,7 @@ período: pasajeros, vuelos, asientos, ocupación, pasajeros por vuelo y HHI.
   mes del año pasado: quién agregó o sacó asientos, quién ganó cuota, qué aerolíneas empezaron o dejaron de volar cada ruta, qué
   rutas crecieron o cayeron y cuáles van más llenas o más vacías). Después, el mapa, la evolución de oferta y demanda, la
   evolución anual (en pasajeros, vuelos, ocupación, pasajeros-km o asientos-km) y el tamaño de los aviones.
-- **⚖️ Competencia:** pasajeros y participación de cada aerolínea mes a mes, concentración (HHI) por año, ocupación por
+- **⚖️ Competencia:** participación de cada aerolínea mes a mes, concentración (HHI) por año, ocupación por
   aerolínea, la tabla de desempeño (con asientos-km y pasajeros-km) y la comparación contra el año anterior.
 - **🛬 Destinos y aeropuertos:** ranking de destinos, pasajeros por ciudad y **conectividad federal** (cuánto del tráfico
   no pasa por Buenos Aires).
@@ -69,22 +72,25 @@ período: pasajeros, vuelos, asientos, ocupación, pasajeros por vuelo y HHI.
 """
 
 INTERNACIONAL = """
-**Paso 1: filtros (se aplican solos, sin botón).** La página abre con todas las rutas entre Argentina y América, en lo que
-va del año. Podés acotar por:
+**Paso 1: elegí qué querés mirar y tocá 🔍 Buscar vuelos.** La página abre con **Analizar todas las rutas** activado (toda
+América, en lo que va del año). Para mirar algo puntual, desactivalo y acotá por:
 - **Región** y **País** del otro extremo (por ejemplo, Brasil).
 - **Tipo de aerolínea:** argentinas, extranjeras de América o extranjeras de fuera de América (como Emirates o Turkish, que llegan
   a Argentina haciendo escala en otra ciudad de América).
 - **Aerolínea** y **Aeropuerto argentino** (por ejemplo, solo Córdoba).
 - **Desde / Hasta:** el período.
 - **Ver las rutas como:** *Ciudad ⇄ ciudad* (el mercado: Buenos Aires junta Aeroparque, Ezeiza y El Palomar), *Aeropuerto argentino ⇄
-  ciudad* o *Aeropuerto ⇄ aeropuerto* (para separar, por ejemplo, Galeão de Santos Dumont en Río). Cambia cómo se agrupan todas las tablas.
+  ciudad* o *Aeropuerto ⇄ aeropuerto* (para separar, por ejemplo, Galeão de Santos Dumont en Río). Cambia cómo se agrupan todas las
+  tablas y se aplica al instante, sin tocar Buscar.
+
+Los demás filtros se aplican recién al tocar **🔍 Buscar vuelos**; si cambiaste algo y no lo aplicaste, la página te avisa.
 
 **Paso 2: recorré las pestañas**
 - **📊 Panorama:** el **resumen del último mes publicado** (igual que en cabotaje, más la cuota argentina), el mapa, los pasajeros
   por tipo de aerolínea, la evolución anual y las puertas de entrada (cuánto tráfico usa aeropuertos del interior).
 - **🛫 Ficha de ruta:** la tabla con todas las rutas y, abajo, la **ficha completa** de la que elijas: quién la vuela, con qué
   frecuencia y avión, cuánto vende cada uno frente a su oferta, vuelos por día de la semana, historia desde 2017, entradas y
-  salidas de aerolíneas, estacionalidad y cuántos pasajeros salen y llegan cada mes.
+  salidas de aerolíneas y estacionalidad.
 - **🏢 Competidores:** ranking de aerolíneas (también en pasajeros-km), quién ganó y perdió cuota, el **análisis de una aerolínea**
   (sus rutas nuevas y cortadas, el cara a cara con otra aerolínea y su red en el mapa) y la **cuota argentina mes a mes**.
 - **📦 Capacidad:** qué rutas van llenas sin que nadie agregue asientos (posible demanda insatisfecha) y cuáles tienen más oferta

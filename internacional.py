@@ -20,6 +20,8 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+import mapas
+
 ZIP_INTERNACIONAL = "internacional_america.zip"
 MESES_NOMBRE = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7,
                 "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
@@ -303,7 +305,6 @@ def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto,
     out['ruta_aeropuerto'] = _combinar(np.array([e[:3] for e in etiqueta_arg], dtype=object), out['aeropuerto_ext'].astype(object),
                                        lambda a, b: f"{a} ⇄ {b}")
     out['escala'] = np.asarray(_combinar(aerolinea, pais, lambda a, p: 'si' if _es_escala(a, p) else 'no'), dtype=object) == 'si'
-    out['sentido'] = pd.Categorical(np.where(sale, 'Sale de Argentina', 'Llega a Argentina'))
     for c in ['vuelos', 'pasajeros', 'asientos']:
         out[c] = pd.to_numeric(df[c.capitalize()], errors='coerce').fillna(0).astype(np.int32)
     # distancia de la ruta (aeropuerto argentino -> ciudad extranjera), para asientos-km y pasajeros-km
@@ -356,7 +357,7 @@ def _tabla(h, t, porcentajes=(), alto_max=20, **kwargs):
     for c in t.columns:
         if c.startswith('Δ ocupación') or c.startswith('Cambio de cuota'):
             cfg[c] = st.column_config.NumberColumn(c, format="%+.1f pp")
-    h.tabla(t, use_container_width=True, hide_index=True, column_config=cfg,
+    h.tabla(t, width='stretch', hide_index=True, column_config=cfg,
                  height=int(max(min(len(t), alto_max), 1) * 35 + 38), **kwargs)
 
 
@@ -449,33 +450,58 @@ def mostrar(h):
     def _restablecer():
         for k in ('int_regiones', 'int_paises', 'int_aerolineas', 'int_grupos', 'int_aeropuertos'):
             st.session_state[k] = []
+        st.session_state['int_todo'] = True
         st.session_state['int_desde'], st.session_state['int_hasta'] = def_desde, f_max
         st.session_state['int_nivel'] = list(niveles)[0]
+        st.session_state.pop('int_aplicado', None)
 
+    st.session_state.setdefault('int_todo', True)
     with st.container(border=True):
-        st.markdown("#### 🔍 Filtros")
+        t1, t2 = st.columns([3, 2], vertical_alignment="center")
+        t1.markdown("#### 🔍 Filtros")
+        todo = t2.toggle("Analizar todas las rutas (toda América)", key='int_todo',
+                         help="Ignora los filtros de región, país y aeropuerto argentino. La aerolínea, el tipo de aerolínea y "
+                              "las fechas siguen aplicando.")
         c1, c2, c3 = st.columns(3)
-        regiones = c1.multiselect("Región", sorted(df['region'].astype(str).unique()), key='int_regiones', placeholder="Toda América")
+        regiones = c1.multiselect("Región", sorted(df['region'].astype(str).unique()), key='int_regiones', placeholder="Toda América",
+                                  disabled=todo)
         base_paises = df[df['region'].isin(regiones)] if regiones else df
-        paises = c2.multiselect("País", sorted(base_paises['pais'].astype(str).unique()), key='int_paises', placeholder="Todos")
+        paises = c2.multiselect("País", sorted(base_paises['pais'].astype(str).unique()), key='int_paises', placeholder="Todos",
+                                disabled=todo)
         grupos = c3.multiselect("Tipo de aerolínea", GRUPOS, key='int_grupos', placeholder="Todas",
                                 help="Argentinas: con certificado argentino (incluye JetSMART Argentina; JetSMART Chile cuenta como extranjera). "
                                      "Las de fuera de América llegan con escala en otra ciudad de América.")
-        c4, c5, c6, c7, c8 = st.columns([3, 3, 2, 2, 2], vertical_alignment="bottom")
+        c4, c5, c6, c7 = st.columns([3, 3, 2, 2])
         aerolineas = c4.multiselect("Aerolínea", sorted(df['aerolinea'].astype(str).unique()), key='int_aerolineas', placeholder="Todas")
         aeropuertos = c5.multiselect("Aeropuerto argentino", sorted(df['aeropuerto_arg'].astype(str).unique()), key='int_aeropuertos',
-                                     placeholder="Todos")
-        desde = c6.date_input("📅 Desde", key='int_desde', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
-        hasta = c7.date_input("📅 Hasta", key='int_hasta', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
-        c8.button("↺ Restablecer", on_click=_restablecer, use_container_width=True, key='int_reset')
-        nivel_txt = st.radio("Ver las rutas como", list(niveles), horizontal=True, key='int_nivel',
-                             help="Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, Buenos Aires = Aeroparque + Ezeiza "
-                                  "y San Pablo = Guarulhos + Viracopos + Congonhas.")
-        if desde > hasta:
-            st.warning("La fecha inicial es posterior a la final: ajustá el período.")
+                                     placeholder="Todos", disabled=todo)
+        c6.date_input("📅 Desde", key='int_desde', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
+        c7.date_input("📅 Hasta", key='int_hasta', min_value=f_min, max_value=f_max, format="DD/MM/YYYY")
+        c8, c9, c10 = st.columns([6, 2, 2], vertical_alignment="bottom")
+        nivel_txt = c8.radio("Ver las rutas como", list(niveles), horizontal=True, key='int_nivel',
+                             help="Se aplica al instante. Por ciudad suma todos los aeropuertos de cada ciudad: por ejemplo, "
+                                  "Buenos Aires = Aeroparque + Ezeiza y San Pablo = Guarulhos + Viracopos + Congonhas.")
+        buscar = c9.button("🔍 Buscar vuelos", type="primary", width='stretch', key='int_buscar')
+        c10.button("↺ Restablecer", on_click=_restablecer, width='stretch', key='int_reset')
+
+        # los filtros se aplican recién al tocar "Buscar vuelos" (al entrar, todas las rutas en lo que va del año)
+        elegidos = {'todo': todo, 'regiones': regiones, 'paises': paises, 'aerolineas': aerolineas, 'grupos': grupos,
+                    'aeropuertos': aeropuertos, 'desde': st.session_state['int_desde'], 'hasta': st.session_state['int_hasta']}
+        if buscar or 'int_aplicado' not in st.session_state:
+            st.session_state['int_aplicado'] = elegidos
+        aplicado = st.session_state['int_aplicado']
+        if elegidos != aplicado:
+            st.caption("Cambiaste filtros: tocá **🔍 Buscar vuelos** para aplicarlos.")
     rc = niveles[nivel_txt]
 
-    filtros = {'regiones': regiones, 'paises': paises, 'aerolineas': aerolineas, 'grupos': grupos, 'aeropuertos': aeropuertos}
+    desde, hasta = aplicado['desde'], aplicado['hasta']
+    if desde > hasta:
+        st.warning("La fecha inicial es posterior a la final: ajustá el período y tocá Buscar vuelos.")
+        return
+    filtros = {'regiones': [] if aplicado['todo'] else aplicado['regiones'],
+               'paises': [] if aplicado['todo'] else aplicado['paises'],
+               'aerolineas': aplicado['aerolineas'], 'grupos': aplicado['grupos'],
+               'aeropuertos': [] if aplicado['todo'] else aplicado['aeropuertos']}
     actual = _filtrar(df, desde, hasta, filtros)
     hay_prev = h.restar_ano(desde) >= f_min
     previo = _filtrar(df, h.restar_ano(desde), h.restar_ano(hasta), filtros) if hay_prev else actual.iloc[0:0]
@@ -649,7 +675,7 @@ def resumen_ultimo_mes(h, filtrar, f_min, f_max, rc, cuota_argentina=True):
                                              if t.at[k, 'asientos_ant'] else " (nueva)") for k, v in cambio.items()}
                 h.graficar(_barras_cambio(cambio, etiq, f"Asientos frente a {ly_txt}"))
         with c2:
-            st.markdown("#### Quién ganó o perdió cuota")
+            st.markdown(f"#### Quién ganó o perdió cuota frente a {ly_txt}")
             cambio = t['d_cuota'].round(1)
             cambio = cambio[cambio != 0]
             cambio = cambio.loc[cambio.abs().sort_values(ascending=False).index[:8]]
@@ -727,18 +753,41 @@ def _panorama(h, df, actual, filtros, f_min, f_max, dias, rc):
     _resumen_mes(h, df, filtros, f_min, f_max, rc)
 
     st.subheader("Mapa de conexiones")
-    mc1, mc2 = st.columns(2)
+    mc1, mc2, mc3 = st.columns([2, 2, 3])
     grosor = mc1.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="int_mapa_metrica")
-    sem_min = mc2.slider("Frecuencia mínima por ruta (vuelos semanales, ida y vuelta)", 0, 30, 1, key="int_mapa_sem",
+    vista = mc2.radio("Encuadre", ["Sudamérica", "Toda América"], horizontal=True, key="int_mapa_vista",
+                      help="Dónde arranca el mapa. Después se puede mover y acercar libremente.")
+    sem_min = mc3.slider("Frecuencia mínima por ruta (vuelos semanales, ida y vuelta)", 0, 30, 1, key="int_mapa_sem",
                          help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
-    fig_mapa, n_r, n_c, faltan = _mapa(actual, h, grosor == "Pasajeros", sem_min, dias)
-    if fig_mapa is None:
+    rutas, nodos, faltan = _rutas_mapa(actual, h, sem_min, dias)
+    if nodos is None:
         st.info("No hay rutas para mostrar con esa frecuencia mínima. Probá bajarla.")
     else:
-        h.graficar(fig_mapa, mapa=True)
-        st.caption(f"{n_r} conexiones entre aeropuertos argentinos y {n_c} ciudades de América. Líneas más gruesas = más {grosor.lower()}; los círculos de colores son "
-                   "las ciudades extranjeras (azul: Sudamérica, verde: Centroamérica y Caribe, naranja: Norteamérica) y los grises, "
-                   "los aeropuertos argentinos. Pasá el mouse para ver el detalle.")
+        opciones = ["Ninguno"] + nodos.sort_values('pasajeros', ascending=False)['nombre'].tolist()
+        if st.session_state.get('int_mapa_foco') not in opciones:
+            st.session_state['int_mapa_foco'] = "Ninguno"
+        foco_txt = st.selectbox("Destacar las rutas de un aeropuerto argentino o de una ciudad", opciones, key='int_mapa_foco',
+                                help="Pinta de naranja sus rutas y muestra al costado el detalle de cada una.")
+        foco = None if foco_txt == "Ninguno" else nodos.index[nodos['nombre'] == foco_txt][0]
+        cm, ct = st.columns([3, 2])
+        with cm:
+            h.graficar(mapas.mapa_rutas(rutas, nodos, grosor == "Pasajeros", foco, vista), mapa=True)
+        with ct:
+            if foco is None:
+                st.markdown("**Principales rutas del período**")
+                lado = rutas.sort_values('pasajeros', ascending=False).head(12)
+            else:
+                st.markdown(f"**Rutas de {foco_txt}**")
+                lado = rutas[(rutas['a'] == foco) | (rutas['b'] == foco)].sort_values('pasajeros', ascending=False)
+            t = pd.DataFrame({'Ruta': lado['a'] + ' ⇄ ' + lado['destino'], 'Pasajeros': lado['pasajeros'].astype(int),
+                              'Frecuencias semanales': lado['frec'].round(1),
+                              'Ocupación': (lado['pasajeros'] / lado['asientos'].replace(0, np.nan) * 100).round(1)})
+            h.tabla(t, width='stretch', hide_index=True, height=470,
+                    column_config=h.config_numerica(t, porcentajes=('Ocupación',)))
+        st.caption(f"{len(rutas)} conexiones entre aeropuertos argentinos y {int(nodos.index.str.contains('|', regex=False).sum())} ciudades de América. "
+                   "Arrastrá para mover el mapa y usá la rueda del mouse (o dos dedos) para acercarte. Líneas más gruesas = más "
+                   f"{grosor.lower()}; ciudades en azul: Sudamérica, verde: Centroamérica y Caribe, naranja: Norteamérica; gris: "
+                   "aeropuertos argentinos. Pasá el mouse por el medio de una línea para ver el detalle de la ruta.")
     if faltan:
         st.caption("Sin coordenadas, no se muestran: " + ", ".join(sorted(faltan)) + ".")
     st.markdown("---")
@@ -921,28 +970,6 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
     h.graficar(fig, leyenda_abajo=True)
     st.caption("Promedio de vuelos de cada día de la semana, en cada sentido, durante el período elegido.")
 
-    st.markdown("#### Pasajeros que salen y que llegan")
-    sl = r.groupby(['periodo_orden', 'periodo_mes_es', 'sentido'], observed=True)['pasajeros'].sum().unstack('sentido', fill_value=0)
-    for c in ('Sale de Argentina', 'Llega a Argentina'):
-        if c not in sl.columns:
-            sl[c] = 0
-    sl = sl.reset_index().sort_values('periodo_orden')
-    sl['periodo_mes_es'] = sl['periodo_mes_es'].astype(str)
-    sl['saldo'] = sl['Sale de Argentina'] - sl['Llega a Argentina']
-    fig = go.Figure()
-    fig.add_bar(x=sl['periodo_mes_es'], y=sl['Sale de Argentina'], name='Salen de Argentina', marker_color='#1d4ed8')
-    fig.add_bar(x=sl['periodo_mes_es'], y=sl['Llega a Argentina'], name='Llegan a Argentina', marker_color='#f59e0b')
-    fig.add_scatter(x=sl['periodo_mes_es'], y=sl['saldo'], name='Salen − llegan', mode='lines+markers',
-                    line=dict(color='#0f172a', width=2, dash='dot'))
-    fig.update_layout(barmode='group', height=380, xaxis=dict(tickangle=-45, type='category'), yaxis=dict(title='Pasajeros'))
-    h.graficar(fig, leyenda_abajo=True)
-    sale_t, llega_t = sl['Sale de Argentina'].sum(), sl['Llega a Argentina'].sum()
-    st.caption(f"En el período salieron {h.fmt_entero(sale_t)} pasajeros y llegaron {h.fmt_entero(llega_t)}. Como casi todos viajan "
-               "ida y vuelta, en el año se compensan: lo que importa es **cuándo** se abre la diferencia. Si en las vacaciones de "
-               "acá (enero, julio) salen más de los que llegan y la diferencia se da vuelta al mes siguiente, la ruta depende del "
-               "viajero argentino. Si el patrón es el inverso (llegan más en la temporada de afuera y se van después), depende del "
-               "turista extranjero. La fuente no informa la nacionalidad de los pasajeros: es una lectura indirecta.")
-
     todo = _filtrar(df, f_min, f_max, filtros)
     todo = todo[todo[rc] == ruta]
     st.markdown("#### Historia de la ruta desde 2017")
@@ -964,7 +991,7 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
     vida['Primer vuelo en la base'] = vida['min'].dt.strftime('%m/%Y')
     vida['Último vuelo'] = vida['max'].dt.strftime('%m/%Y')
     vida = vida.rename(columns={'aerolinea': 'Aerolínea'}).sort_values(['Estado', 'min'], ascending=[False, True])
-    h.tabla(vida[['Aerolínea', 'Estado', 'Primer vuelo en la base', 'Último vuelo']], use_container_width=True, hide_index=True)
+    h.tabla(vida[['Aerolínea', 'Estado', 'Primer vuelo en la base', 'Último vuelo']], width='stretch', hide_index=True)
     st.caption(f"Entradas y salidas de cada aerolínea en la ruta. La base empieza en {f_min.strftime('%m/%Y')}: "
                "«primer vuelo» puede ser anterior. «Dejó de operar» = sin vuelos en el último mes publicado.")
 
@@ -1023,7 +1050,7 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
     if 'Cambio de cuota' in ta.columns:
         cambios = ta[ta['Cambio de cuota'].abs() >= 0.3].sort_values('Cambio de cuota')
         if not cambios.empty:
-            st.markdown("#### Quién ganó y quién perdió cuota")
+            st.markdown("#### Quién ganó y quién perdió cuota frente al mismo período del año anterior")
             fig = go.Figure(go.Bar(x=cambios['Cambio de cuota'], y=cambios['Aerolínea'], orientation='h',
                                    marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],
                                    text=[f"{v:+.1f} pp".replace(".", ",") for v in cambios['Cambio de cuota']],
@@ -1109,9 +1136,11 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
             st.caption(f"{len(comunes)} rutas que operan las dos aerolíneas, ordenadas por tamaño del mercado.")
 
     st.markdown(f"#### Red de {aer} desde Argentina")
-    fig_red, n_r, n_c, _ = _mapa(a, h, True, 0, dias)
-    if fig_red is not None:
-        h.graficar(fig_red, mapa=True)
+    rutas_red, nodos_red, _ = _rutas_mapa(a, h, 0, dias)
+    n_r = len(rutas_red)
+    n_c = 0 if nodos_red is None else int(nodos_red.index.str.contains('|', regex=False).sum())
+    if nodos_red is not None:
+        h.graficar(mapas.mapa_rutas(rutas_red, nodos_red, True, None, 'Sudamérica', alto=520), mapa=True)
         st.caption(f"{n_rutas} rutas a {n_c} ciudades de América en el período elegido. El mapa dibuja una línea por "
                    "aeropuerto argentino" + (f" ({n_r} en total)." if n_r != n_rutas else "."))
     st.markdown("---")
@@ -1377,59 +1406,23 @@ programación futura de vuelos.
 """)
 
 
-def _mapa(df, h, por_pasajeros, vuelos_semana_min, dias):
-    """Mapa de rutas entre aeropuertos argentinos y ciudades de América."""
-    g = df.groupby(['aeropuerto_arg', 'ciudad_clave', 'destino', 'region'], observed=True)[['pasajeros', 'vuelos']].sum().reset_index()
+def _rutas_mapa(df, h, vuelos_semana_min, dias):
+    """Rutas aeropuerto argentino ⇄ ciudad extranjera y sus extremos, listas para mapas.mapa_rutas."""
+    g = df.groupby(['aeropuerto_arg', 'ciudad_clave', 'destino', 'region'], observed=True)[
+        ['pasajeros', 'vuelos', 'asientos']].sum().reset_index()
     for c in ('aeropuerto_arg', 'ciudad_clave', 'destino', 'region'):
         g[c] = g[c].astype(str)
-    g = g[g['vuelos'] > 0]
-    g['sem'] = g['vuelos'] / max(dias, 1) * 7
-    g = g[g['sem'] >= vuelos_semana_min]
-    if g.empty:
-        return None, 0, 0, set()
+    g = g[(g['vuelos'] > 0) & (g['vuelos'] / max(dias, 1) * 7 >= vuelos_semana_min)].copy()
     coord_arg = {**h.COORDENADAS, **COORD_ARG_EXTRA}
-    g['sigla'] = g['aeropuerto_arg'].str[:3]
-    faltan = set(g.loc[~g['ciudad_clave'].isin(COORD_CIUDADES), 'destino']) | set(g.loc[~g['sigla'].isin(coord_arg), 'aeropuerto_arg'])
-    g = g[g['ciudad_clave'].isin(COORD_CIUDADES) & g['sigla'].isin(coord_arg)]
+    g['a'] = g['aeropuerto_arg'].str[:3]
+    g['b'] = g['ciudad_clave']
+    faltan = set(g.loc[~g['b'].isin(COORD_CIUDADES), 'destino']) | set(g.loc[~g['a'].isin(coord_arg), 'aeropuerto_arg'])
+    g = g[g['b'].isin(COORD_CIUDADES) & g['a'].isin(coord_arg)]
     if g.empty:
-        return None, 0, 0, faltan
-    col = 'pasajeros' if por_pasajeros else 'vuelos'
-    vmax = max(float(g[col].max()), 1.0)
-    g['nivel'] = np.clip((np.sqrt(g[col] / vmax) * 5).astype(int), 0, 4)
-    fig = go.Figure()
-    for nivel in range(5):
-        sub = g[g['nivel'] == nivel]
-        if sub.empty:
-            continue
-        lats, lons = [], []
-        for s, c in zip(sub['sigla'], sub['ciudad_clave']):
-            lats += [coord_arg[s][0], COORD_CIUDADES[c][0], None]
-            lons += [coord_arg[s][1], COORD_CIUDADES[c][1], None]
-        fig.add_trace(go.Scattergeo(lat=lats, lon=lons, mode='lines', hoverinfo='skip', showlegend=False,
-                                    line=dict(width=0.8 + nivel * 1.6, color='rgba(29,78,216,0.40)')))
-    ciu = g.groupby(['ciudad_clave', 'destino', 'region'])[['pasajeros', 'vuelos']].sum().reset_index()
-    cmax = max(float(ciu[col].max()), 1.0)
-    top = set(ciu.nlargest(10, col)['ciudad_clave'])
-    fig.add_trace(go.Scattergeo(
-        lat=[COORD_CIUDADES[c][0] for c in ciu['ciudad_clave']], lon=[COORD_CIUDADES[c][1] for c in ciu['ciudad_clave']],
-        mode='markers+text', showlegend=False, textposition='middle right', textfont=dict(size=10, color='#0f172a'),
-        text=[c.split('|')[0] if c in top else '' for c in ciu['ciudad_clave']],
-        marker=dict(size=[6 + 22 * np.sqrt(v / cmax) for v in ciu[col]], color=[COLORES_REGION.get(r, '#64748b') for r in ciu['region']],
-                    line=dict(width=1.2, color='white')),
-        hovertext=[f"<b>{d}</b><br>{int(p):,} pasajeros<br>{int(v):,} vuelos".replace(",", ".")
-                   for d, p, v in zip(ciu['destino'], ciu['pasajeros'], ciu['vuelos'])],
-        hovertemplate='%{hovertext}<extra></extra>'))
-    arg = g.groupby('sigla')[['pasajeros', 'vuelos']].sum().reset_index()
-    amax = max(float(arg[col].max()), 1.0)
-    fig.add_trace(go.Scattergeo(
-        lat=[coord_arg[s][0] for s in arg['sigla']], lon=[coord_arg[s][1] for s in arg['sigla']],
-        mode='markers+text', showlegend=False, text=[s if s not in ('AEP', 'EPA', 'MOR', 'FDO') else '' for s in arg['sigla']],
-        textposition='middle left', textfont=dict(size=10, color='#0f172a'),
-        marker=dict(size=[6 + 18 * np.sqrt(v / amax) for v in arg[col]], color='#475569', line=dict(width=1.2, color='white')),
-        hovertext=[f"<b>{s}</b><br>{int(p):,} pasajeros internacionales".replace(",", ".") for s, p in zip(arg['sigla'], arg['pasajeros'])],
-        hovertemplate='%{hovertext}<extra></extra>'))
-    fig.update_geos(projection_type='mercator', lonaxis_range=[-125, -30], lataxis_range=[-56, 50],
-                    showland=True, landcolor='#f1f5f9', showocean=True, oceancolor='#e0f2fe', showcountries=True,
-                    countrycolor='#cbd5e1', showcoastlines=True, coastlinecolor='#94a3b8', resolution=110)
-    fig.update_layout(height=640, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)')
-    return fig, len(g), ciu['ciudad_clave'].nunique(), faltan
+        return g, None, faltan
+    g['ruta'] = g['aeropuerto_arg'] + ' ⇄ ' + g['destino']
+    g['frec'] = _frecuencia(g['vuelos'], dias)
+    nombres = dict(zip(g['a'], g['aeropuerto_arg'])) | dict(zip(g['b'], g['destino']))
+    colores = dict(zip(g['b'], g['region'].map(COLORES_REGION).fillna('#64748b')))
+    nodos = mapas.nodos_desde_rutas(g, {**coord_arg, **COORD_CIUDADES}, nombres, colores)
+    return g, nodos, faltan

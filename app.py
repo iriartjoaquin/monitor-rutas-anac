@@ -8,6 +8,7 @@ import zipfile
 from types import SimpleNamespace
 
 import internacional
+import mapas
 from manual import mostrar_manual
 import warnings
 from datetime import datetime, date, timedelta
@@ -340,76 +341,6 @@ COORDENADAS = {
 }
 
 
-def construir_mapa(df, dias, por_pasajeros, vuelos_semana_min):
-    """Mapa de rutas: líneas con grosor según pasajeros o vuelos y aeropuertos con tamaño según movimiento."""
-    g = df.groupby('ruta_label', observed=True)[['pasajeros', 'vuelos']].sum().reset_index()
-    g['ruta_label'] = g['ruta_label'].astype(str)
-    g = g[g['vuelos'] > 0].copy()
-    g['vuelos_sem'] = g['vuelos'] / (dias / 7)
-    g = g[g['vuelos_sem'] >= vuelos_semana_min]
-    partes = g['ruta_label'].str.split(' ⇄ ', n=1, expand=True)
-    if partes.shape[1] < 2 or g.empty:
-        return None, 0, 0, set()
-    g['a'] = partes[0].str[:3]
-    g['b'] = partes[1].str[:3]
-    faltan = set(g['a']).union(g['b']) - set(COORDENADAS)
-    g = g[g['a'].isin(COORDENADAS) & g['b'].isin(COORDENADAS)]
-    if g.empty:
-        return None, 0, 0, faltan
-    col = 'pasajeros' if por_pasajeros else 'vuelos'
-    vmax = max(float(g[col].max()), 1.0)
-    g['nivel'] = np.clip((np.sqrt(g[col] / vmax) * 5).astype(int), 0, 4)  # 5 grosores
-
-    fig = go.Figure()
-    for nivel in range(5):
-        sub = g[g['nivel'] == nivel]
-        if sub.empty:
-            continue
-        lats, lons = [], []
-        for a, b in zip(sub['a'], sub['b']):
-            lats += [COORDENADAS[a][0], COORDENADAS[b][0], None]
-            lons += [COORDENADAS[a][1], COORDENADAS[b][1], None]
-        fig.add_trace(go.Scattergeo(lat=lats, lon=lons, mode='lines', hoverinfo='skip', showlegend=False,
-                                    line=dict(width=0.8 + nivel * 1.7, color='rgba(29,78,216,0.45)')))
-    # puntos invisibles en el centro de cada ruta, para mostrar el detalle al pasar el mouse
-    fig.add_trace(go.Scattergeo(
-        lat=[(COORDENADAS[a][0] + COORDENADAS[b][0]) / 2 for a, b in zip(g['a'], g['b'])],
-        lon=[(COORDENADAS[a][1] + COORDENADAS[b][1]) / 2 for a, b in zip(g['a'], g['b'])],
-        mode='markers', marker=dict(size=10, opacity=0), showlegend=False,
-        text=[f"<b>{r}</b><br>{int(pa):,} pasajeros<br>{int(v):,} vuelos ({vs:.1f} por semana)".replace(",", ".")
-              for r, pa, v, vs in zip(g['ruta_label'], g['pasajeros'], g['vuelos'], g['vuelos_sem'])],
-        hovertemplate='%{text}<extra></extra>'))
-
-    nodos = {}
-    for a, b, v, pa, vu in zip(g['a'], g['b'], g[col], g['pasajeros'], g['vuelos']):
-        for ap in (a, b):
-            d = nodos.setdefault(ap, {'v': 0.0, 'pax': 0, 'vue': 0, 'rutas': 0})
-            d['v'] += v
-            d['pax'] += int(pa)
-            d['vue'] += int(vu)
-            d['rutas'] += 1
-    nv = max(max(d['v'] for d in nodos.values()), 1.0)
-    siglas = list(nodos)
-    top = set(sorted(siglas, key=lambda k: -nodos[k]['v'])[:12])
-    fig.add_trace(go.Scattergeo(
-        lat=[COORDENADAS[k][0] for k in siglas], lon=[COORDENADAS[k][1] for k in siglas],
-        mode='markers+text', showlegend=False,
-        text=[k if k in top else '' for k in siglas], textposition='top right', textfont=dict(size=11, color='#0f172a'),
-        marker=dict(size=[7 + 24 * np.sqrt(nodos[k]['v'] / nv) for k in siglas],
-                    color=['#475569' if k in AMBA_SIGLAS else '#f59e0b' for k in siglas],
-                    line=dict(width=1.5, color='white')),
-        hovertext=[f"<b>{k}</b><br>{nodos[k]['rutas']} rutas<br>{nodos[k]['pax']:,} pasajeros<br>{nodos[k]['vue']:,} vuelos".replace(",", ".")
-                   for k in siglas],
-        hovertemplate='%{hovertext}<extra></extra>'))
-    fig.update_geos(
-        scope='south america', projection_type='mercator', lonaxis_range=[-76, -50], lataxis_range=[-57, -21],
-        showland=True, landcolor='#f1f5f9', showocean=True, oceancolor='#e0f2fe', showcountries=True,
-        countrycolor='#cbd5e1', showlakes=False, showcoastlines=True, coastlinecolor='#94a3b8',
-        showsubunits=True, subunitcolor='#e2e8f0', resolution=50)
-    fig.update_layout(height=760, margin=dict(l=0, r=0, t=10, b=0), paper_bgcolor='rgba(0,0,0,0)')
-    return fig, len(g), len(nodos), faltan
-
-
 # Cada aerolínea tiene siempre el mismo color, en todos los gráficos
 COLORES_AEROLINEAS = {
     'Aerolíneas Argentinas': '#1d4ed8',
@@ -444,7 +375,7 @@ def graficar(fig, mapa=False, leyenda_abajo=False):
                               margin=dict(t=30, b=190))
         else:
             fig.update_layout(margin=dict(t=90 if arriba else 30))
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': bool(mapa), 'displaylogo': False})
+    st.plotly_chart(fig, width='stretch', config={'displayModeBar': bool(mapa), 'displaylogo': False, 'scrollZoom': bool(mapa)})
 
 
 def mostrar_metodologia(f_desde_base, f_hasta_base):
@@ -1100,7 +1031,7 @@ with st.container(border=True):
             help="Filtra los despegues desde este aeropuerto."
         )
     with col_inv:
-        st.button("⇄", on_click=intercambiar_origen_destino, use_container_width=True,
+        st.button("⇄", on_click=intercambiar_origen_destino, width='stretch',
                   disabled=chk_pais, help="Invertir origen y destino")
     with col_dest:
         sel_destinos = st.multiselect(
@@ -1131,9 +1062,9 @@ with st.container(border=True):
 
     # 4. Acciones
     with col_b1:
-        btn_buscar = st.button("🔍 Buscar vuelos", type="primary", use_container_width=True)
+        btn_buscar = st.button("🔍 Buscar vuelos", type="primary", width='stretch')
     with col_b2:
-        st.button("↺ Restablecer", use_container_width=True, on_click=restablecer_filtros,
+        st.button("↺ Restablecer", width='stretch', on_click=restablecer_filtros,
                   help="Vuelve a la vista inicial: total país en el período por defecto.")
 
     if f_desde > f_hasta:
@@ -1311,27 +1242,56 @@ with tab_panorama:
                                      f_min_total, f_max_total, 'ruta_label', cuota_argentina=False)
 
     st.subheader("Mapa de conexiones")
-    cm1, cm2 = st.columns([1, 1])
+    cm1, cm2, cm3 = st.columns([2, 3, 3])
     with cm1:
         base_grosor = st.radio("Grosor de las líneas según", ["Pasajeros", "Vuelos"], horizontal=True, key="mapa_metrica")
     with cm2:
-        sem_min = st.slider("Frecuencia mínima por ruta (vuelos por semana)", min_value=0, max_value=30, value=1, key="mapa_sem",
-                            help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
-    fig_mapa, n_rutas_mapa, n_aero_mapa, faltan_coord = construir_mapa(df_filtrado, dias_periodo, base_grosor == "Pasajeros", sem_min)
-    if fig_mapa is None:
+        sem_min = st.slider("Frecuencia mínima por ruta (vuelos por semana, ida y vuelta)", min_value=0, max_value=30, value=1,
+                            key="mapa_sem", help="Muestra solo las rutas con al menos esta cantidad de vuelos semanales promedio en el período.")
+    rutas_mapa = df_filtrado.groupby('ruta_label', observed=True)[['pasajeros', 'vuelos', 'asientos']].sum().reset_index()
+    rutas_mapa = rutas_mapa[rutas_mapa['vuelos'] > 0]
+    rutas_mapa['ruta'] = rutas_mapa['ruta_label'].astype(str)
+    rutas_mapa['a'] = rutas_mapa['ruta'].str[:3]
+    rutas_mapa['b'] = rutas_mapa['ruta'].str.split(' ⇄ ').str[1].str[:3]
+    rutas_mapa['frec'] = rutas_mapa['vuelos'] / dias_periodo * 7 / 2
+    rutas_mapa = rutas_mapa[(rutas_mapa['vuelos'] / dias_periodo * 7 >= sem_min)]
+    faltan_coord = (set(rutas_mapa['a']) | set(rutas_mapa['b'])) - set(COORDENADAS)
+    rutas_mapa = rutas_mapa[rutas_mapa['a'].isin(COORDENADAS) & rutas_mapa['b'].isin(COORDENADAS)]
+    nombres_aero = {str(x)[:3]: str(x) for x in df_filtrado['origen_label'].cat.categories}
+    nombres_aero.update({str(x)[:3]: str(x) for x in df_filtrado['destino_label'].cat.categories})
+    if rutas_mapa.empty:
         st.info("No hay rutas para mostrar con esa frecuencia mínima. Probá bajarla.")
     else:
+        nodos_mapa = mapas.nodos_desde_rutas(rutas_mapa, COORDENADAS, nombres_aero,
+                                             {k: ('#475569' if k in AMBA_SIGLAS else '#f59e0b') for k in COORDENADAS})
+        orden_nodos = nodos_mapa.sort_values('pasajeros', ascending=False)
+        opciones_foco = ["Ninguno"] + orden_nodos['nombre'].tolist()
+        if st.session_state.get('mapa_foco') not in opciones_foco:
+            st.session_state['mapa_foco'] = "Ninguno"
+        with cm3:
+            foco_txt = st.selectbox("Destacar las rutas de un aeropuerto", opciones_foco, key='mapa_foco',
+                                    help="Pinta de naranja sus rutas y muestra al costado el detalle de cada una.")
+        foco = None if foco_txt == "Ninguno" else foco_txt[:3]
         col_mapa, col_top = st.columns([3, 2])
         with col_mapa:
-            graficar(fig_mapa, mapa=True)
+            graficar(mapas.mapa_rutas(rutas_mapa, nodos_mapa, base_grosor == "Pasajeros", foco, 'Argentina'), mapa=True)
         with col_top:
-            st.markdown("**Principales rutas del período**")
-            top_mapa = df_rank.head(12)[['Ruta', 'Pasajeros']].copy()
-            top_mapa['Ruta'] = top_mapa['Ruta'].str.replace(r'(\w{3}) \([^⇄]*?\)(?= ⇄|$)', r'\1', regex=True)
-            tabla(top_mapa, use_container_width=True, hide_index=True, height=470,
-                         column_config=config_numerica(top_mapa))
-        st.caption(f"{n_rutas_mapa} rutas y {n_aero_mapa} aeropuertos. Líneas más gruesas = más {base_grosor.lower()}; "
-                   "círculos más grandes = más movimiento; gris = AMBA, naranja = interior. Pasá el mouse para ver el detalle.")
+            if foco is None:
+                st.markdown("**Principales rutas del período**")
+                lado = rutas_mapa.sort_values('pasajeros', ascending=False).head(12)
+            else:
+                st.markdown(f"**Rutas de {foco_txt}**")
+                lado = rutas_mapa[(rutas_mapa['a'] == foco) | (rutas_mapa['b'] == foco)].sort_values('pasajeros', ascending=False)
+            top_mapa = pd.DataFrame({
+                'Ruta': lado['ruta'].str.replace(r'(\w{3}) \([^⇄]*?\)(?= ⇄|$)', r'\1', regex=True),
+                'Pasajeros': lado['pasajeros'].astype(int),
+                'Frecuencias semanales': lado['frec'].round(1),
+                'Ocupación': (lado['pasajeros'] / lado['asientos'].replace(0, np.nan) * 100).round(1)})
+            tabla(top_mapa, width='stretch', hide_index=True, height=470,
+                  column_config=config_numerica(top_mapa, porcentajes=('Ocupación',)))
+        st.caption(f"{len(rutas_mapa)} rutas y {len(nodos_mapa)} aeropuertos. Arrastrá para mover el mapa y usá la rueda del "
+                   "mouse (o dos dedos) para acercarte. Líneas más gruesas = más " + base_grosor.lower() + "; círculos más grandes = "
+                   "más movimiento; gris = AMBA, naranja = interior. Pasá el mouse por el medio de una línea para ver el detalle de la ruta.")
     if faltan_coord:
         st.caption("Sin coordenadas, no se muestran: " + ", ".join(sorted(faltan_coord)) + ".")
     st.markdown("---")
@@ -1456,30 +1416,6 @@ with tab_panorama:
                "Si suben las barras, la ruta crece con más frecuencias; si sube la línea, con aviones más grandes.")
 
 with tab_competencia:
-    # 2. Pasajeros mensuales por aerolínea
-    st.markdown("#### Pasajeros por aerolínea, mes a mes")
-    df_mes_aero = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
-    df_mes_aero = df_mes_aero.sort_values(by=['periodo_orden', 'pasajeros'], ascending=[True, False])
-    
-    fig_bar = px.bar(
-        df_mes_aero,
-        x='periodo_mes_es',
-        y='pasajeros',
-        color='aerolinea',
-        title="Pasajeros Mensuales Transportados por Aerolínea (Barras Apiladas)",
-        labels={'periodo_mes_es': 'Período', 'pasajeros': 'Pasajeros'},
-        barmode='stack'
-    )
-    fig_bar.update_layout(
-        xaxis_tickangle=-45,
-        legend_title_text='Aerolínea',
-        height=480,
-        margin=dict(l=20, r=20, t=50, b=40)
-    )
-    graficar(fig_bar, leyenda_abajo=True)
-
-    st.markdown("---")
-
     # Participación de mercado en el tiempo (100% apilado)
     st.markdown("#### Participación de mercado, mes a mes")
     df_share = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
@@ -1548,7 +1484,7 @@ with tab_competencia:
             piv_t.columns = [str(c) for c in piv_t.columns]
             piv_t = piv_t.reset_index().rename(columns={'aerolinea': 'Aerolínea', 'index': 'Aerolínea'})
             st.markdown("**Cuota de mercado por aerolínea (% de pasajeros)**")
-            tabla(piv_t, use_container_width=True, hide_index=True,
+            tabla(piv_t, width='stretch', hide_index=True,
                          column_config=config_numerica(piv_t, porcentajes=tuple(c for c in piv_t.columns if c != 'Aerolínea')))
             nota_inc = ""
             if modo_hist == "Año completo" and f_max_total.month < 12:
@@ -1616,7 +1552,7 @@ with tab_competencia:
     df_aero_disp['Cuota de pasajeros-km'] = (df_aero_disp['Pasajeros-km (millones)'] / max(km_aero['rpk'].sum(), 1e-9) * 100).round(1)
     df_aero_disp['Distancia media (km)'] = nombres_aero.map(km_aero['dist']).round(0)
     tabla(
-        df_aero_disp, use_container_width=True, hide_index=True,
+        df_aero_disp, width='stretch', hide_index=True,
         column_config=config_numerica(df_aero_disp, porcentajes=('Participación', 'Ocupación', 'Cuota de pasajeros-km'))
     )
     st.caption("Asientos-km y pasajeros-km = asientos o pasajeros multiplicados por la distancia de cada ruta (en línea recta): "
@@ -1687,7 +1623,7 @@ with tab_destinos:
             ver_todos = st.toggle(f"Mostrar los {len(df_dest)} destinos", key="dest_todos",
                                   help="Amplía esta misma tabla para ver todos los destinos, sin el grupo «Resto».")
         tabla_dest = df_dest if ver_todos else top_dest
-        tabla(tabla_dest, use_container_width=True, hide_index=True, column_config=cfg_dest,
+        tabla(tabla_dest, width='stretch', hide_index=True, column_config=cfg_dest,
                      height=int((len(tabla_dest) + 1) * 35 + 3))
         if hay_base_prev:
             st.caption("Vuelos = frecuencias que llegan a cada destino. ▲ ▼ indican posiciones ganadas o perdidas respecto del mismo período del año anterior; "
@@ -1745,7 +1681,7 @@ with tab_destinos:
             st.info("Ninguna localidad alcanza el mínimo de pasajeros del año anterior; bajá el valor para ver variaciones.")
 
         df_loc_v = df_loc[['Localidad', 'Pasajeros', 'Var. %', 'Participación', 'Pasajeros año ant.']]
-        tabla(df_loc_v, use_container_width=True, hide_index=True,
+        tabla(df_loc_v, width='stretch', hide_index=True,
                      column_config={**config_numerica(df_loc_v, porcentajes=('Participación',)),
                                     'Var. %': st.column_config.NumberColumn('Var. %', format="%+.1f%%")})
         st.caption(f"Pasajeros que salen y llegan de cada localidad, de {f_d_efectiva.strftime('%d/%m/%Y')} a {f_h_efectiva.strftime('%d/%m/%Y')}, "
@@ -1814,7 +1750,7 @@ with tab_rutas:
     if 'Δ% vs año ant.' in df_rank_disp.columns:
         df_rank_disp['Δ% vs año ant.'] = df_rank_disp['Δ% vs año ant.'].round(1)
     tabla(
-        df_rank_disp, use_container_width=True, hide_index=True,
+        df_rank_disp, width='stretch', hide_index=True,
         column_config=config_numerica(df_rank_disp, porcentajes=('Participación', 'Ocupación'))
     )
     if hay_base_prev:
@@ -1900,13 +1836,13 @@ with tab_rutas:
             res['% de sus pasajeros'] = (res['Pasajeros en rutas exclusivas'] / res['aerolinea'].map(pax_aero_total) * 100).round(1)
             res = res.sort_values('Pasajeros en rutas exclusivas', ascending=False).rename(columns={'aerolinea': 'Aerolínea'})
             st.markdown("**Por aerolínea**")
-            tabla(res, use_container_width=True, hide_index=True,
+            tabla(res, width='stretch', hide_index=True,
                          column_config=config_numerica(res, porcentajes=('% de sus pasajeros',)))
 
             top_mono = g_mono.sort_values('Pasajeros', ascending=False).head(25).rename(columns={'ruta_label': 'Ruta', 'aerolinea': 'Operador único'})
             top_mono['Ocupación'] = np.where(top_mono['Asientos'] > 0, top_mono['Pasajeros'] / top_mono['Asientos'] * 100, np.nan).round(1)
             st.markdown("**Rutas más grandes con un solo operador**")
-            tabla(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], use_container_width=True, hide_index=True,
+            tabla(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], width='stretch', hide_index=True,
                          column_config=config_numerica(top_mono[['Ruta', 'Operador único', 'Pasajeros', 'Vuelos', 'Ocupación']], porcentajes=('Ocupación',)))
             st.caption("Son las rutas más frágiles: si esa aerolínea se retira o reduce frecuencias, el corredor queda sin servicio.")
 
@@ -1969,7 +1905,7 @@ with tab_rutas:
     ).copy()
     df_t_disp[['Ocupación', 'Pax/Vuelo']] = df_t_disp[['Ocupación', 'Pax/Vuelo']].round(1)
     tabla(
-        df_t_disp, use_container_width=True, hide_index=True,
+        df_t_disp, width='stretch', hide_index=True,
         column_config=config_numerica(df_t_disp, porcentajes=('Ocupación',))
     )
 
@@ -1995,7 +1931,7 @@ with tab_datos:
     fila_total.name = 'Total Mercado'
     pivot_pax_con_total = pd.concat([pivot_pax_con_total, fila_total.to_frame().T])
 
-    tabla(pivot_pax_con_total, use_container_width=True, column_config=config_numerica(pivot_pax_con_total))
+    tabla(pivot_pax_con_total, width='stretch', column_config=config_numerica(pivot_pax_con_total))
     st.markdown("---")
 
 # =============================================================
@@ -2132,7 +2068,7 @@ with tab_estacionalidad:
                     'Índice estacional': df_est['indice_estacionalidad_%'].round(1),
                 })
                 tabla(
-                    df_est_disp, use_container_width=True, hide_index=True,
+                    df_est_disp, width='stretch', hide_index=True,
                     column_config=config_numerica(df_est_disp, porcentajes=('Ocupación', 'Índice estacional'))
                 )
                 st.caption("💡 *Un índice estacional superior al 100% representa meses de temporada alta (demanda por encima de la media anual).*")
@@ -2190,14 +2126,14 @@ with tab_competencia:
         tabla_yoy = tabla_yoy.sort_values(['_orden', 'Pasajeros'], ascending=[True, False]).drop(columns='_orden')
         cfg_yoy = config_numerica(tabla_yoy, porcentajes=('Cuota año ant.', 'Cuota'))
         cfg_yoy['Cambio de cuota'] = st.column_config.NumberColumn('Cambio de cuota', format="%+.1f pp")
-        tabla(tabla_yoy, use_container_width=True, hide_index=True, column_config=cfg_yoy,
+        tabla(tabla_yoy, width='stretch', hide_index=True, column_config=cfg_yoy,
                      height=int((len(tabla_yoy) + 1) * 35 + 3))
         st.caption("Cuota = porcentaje de los pasajeros del segmento. Cambio de cuota = puntos porcentuales (pp) que cada aerolínea "
                    "ganó o perdió. Las aerolíneas con menos del 1% en ambos períodos se agrupan en “Otras aerolíneas”.")
 
         cambios = tabla_yoy[tabla_yoy['Cambio de cuota'].abs() >= 0.1].sort_values('Cambio de cuota')
         if not cambios.empty:
-            st.markdown("#### Quién ganó y quién perdió cuota")
+            st.markdown("#### Quién ganó y quién perdió cuota frente al mismo período del año anterior")
             fig_shift = go.Figure(go.Bar(
                 x=cambios['Cambio de cuota'], y=cambios['Aerolínea'], orientation='h',
                 marker_color=['#10b981' if v >= 0 else '#ef4444' for v in cambios['Cambio de cuota']],

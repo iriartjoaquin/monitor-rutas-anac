@@ -1,6 +1,6 @@
-streamlit
+streamlit==1.65.0
 pandas==2.2.3
-plotly
+plotly==7.1.0
 requests
 openpyxl
 xlsxwriter
