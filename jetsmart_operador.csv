@@ -1,0 +1,724 @@
+anio,mes,sigla_arg,ciudad,vuelos_ar,vuelos_cl
+2019,1,COR,La Serena,0,18
+2019,1,COR,Santiago,0,21
+2019,1,EPA,Asunción,0,1
+2019,1,EPA,Santiago,12,73
+2019,1,MDZ,La Serena,0,18
+2019,1,MDZ,Santiago,0,31
+2019,2,COR,La Serena,0,14
+2019,2,COR,Santiago,0,16
+2019,2,EPA,Santiago,0,80
+2019,2,MDZ,La Serena,0,14
+2019,2,MDZ,Santiago,0,24
+2019,3,COR,Santiago,0,16
+2019,3,EPA,Santiago,0,83
+2019,3,MDZ,Santiago,2,12
+2019,3,RGL,Punta Arenas,0,1
+2019,3,RGL,Santiago,0,1
+2019,4,CRD,Puerto Montt,0,2
+2019,4,EPA,Santiago,7,50
+2019,5,EPA,Santiago,16,13
+2019,6,EPA,Santiago,20,13
+2019,6,EZE,Santiago,1,0
+2019,7,EPA,Santiago,17,16
+2019,8,EPA,Santiago,16,11
+2019,9,EPA,Santiago,21,7
+2019,10,EPA,Santiago,18,11
+2019,11,EPA,Santiago,10,7
+2019,11,EZE,Lima,1,0
+2019,11,EZE,Santiago,4,0
+2019,12,EPA,Santiago,24,13
+2019,12,EZE,Santiago,4,0
+2020,1,EPA,Santiago,46,38
+2020,2,EPA,Santiago,47,36
+2020,3,EPA,Santiago,35,17
+2020,3,EZE,Santiago,1,0
+2020,4,EZE,Lima,1,0
+2020,7,EZE,Lima,1,0
+2020,7,EZE,Santiago,2,0
+2020,8,ROS,Lima,1,0
+2020,9,EPA,Lima,1,0
+2020,9,EZE,Santiago,0,2
+2020,10,EPA,Alajuela,1,0
+2020,10,EPA,Lima,2,0
+2020,10,EPA,Montevideo,2,0
+2020,10,EZE,Lima,1,0
+2020,10,EZE,Santiago,4,3
+2020,11,EPA,Lima,1,0
+2020,11,EPA,Montevideo,1,0
+2020,11,EZE,Alajuela,1,0
+2020,11,EZE,Lima,2,0
+2020,11,EZE,Montevideo,3,0
+2020,11,EZE,Santiago,3,4
+2020,12,EZE,Santiago,14,2
+2021,1,EZE,Santiago,10,9
+2021,2,EZE,Lima,2,0
+2021,2,EZE,Santiago,6,2
+2021,3,AEP,Santiago,2,0
+2021,3,EZE,Lima,1,0
+2021,3,EZE,Santiago,5,8
+2021,5,AEP,Lima,3,0
+2021,5,AEP,Montevideo,2,0
+2021,5,AEP,Santiago,2,0
+2021,5,EZE,Guayaquil,1,0
+2021,5,EZE,Lima,1,0
+2021,5,EZE,Santiago,2,0
+2021,6,AEP,Santiago,4,0
+2021,7,AEP,Lima,2,0
+2021,7,AEP,Santiago,6,0
+2021,7,EZE,Santiago,0,4
+2021,8,AEP,Lima,4,0
+2021,8,AEP,Santiago,11,0
+2021,9,AEP,Santiago,9,0
+2021,10,AEP,Concepcion,1,0
+2021,10,AEP,Santiago,14,5
+2021,10,EZE,Santiago,1,0
+2021,11,AEP,Santiago,30,10
+2021,11,EZE,Santiago,1,0
+2021,12,AEP,Santiago,40,8
+2021,12,EZE,Santiago,6,4
+2022,1,AEP,Santiago,40,10
+2022,1,EZE,Santiago,1,4
+2022,2,AEP,Santiago,39,2
+2022,2,EZE,Lima,1,0
+2022,2,EZE,Santiago,2,0
+2022,3,AEP,Santiago,43,4
+2022,3,EZE,Santiago,4,0
+2022,4,AEP,Santiago,42,8
+2022,4,COR,Santiago,4,0
+2022,4,EZE,Santiago,2,0
+2022,5,AEP,Santiago,49,2
+2022,5,EZE,Santiago,4,3
+2022,5,EZE,São Paulo,1,0
+2022,6,AEP,Santiago,55,2
+2022,6,EZE,Montevideo,1,0
+2022,6,EZE,Santiago,11,3
+2022,7,AEP,Santiago,59,4
+2022,7,EZE,Montevideo,0,1
+2022,7,EZE,Santiago,13,8
+2022,8,AEP,Santiago,67,2
+2022,8,COR,Montevideo,1,0
+2022,8,COR,Santiago,1,0
+2022,8,EZE,Alajuela,2,0
+2022,8,EZE,Santiago,5,19
+2022,9,AEP,Alajuela,1,0
+2022,9,AEP,Asunción,1,0
+2022,9,AEP,Santiago,57,6
+2022,9,EZE,Alajuela,4,0
+2022,9,EZE,Lima,7,0
+2022,9,EZE,Miami,1,0
+2022,9,EZE,Santiago,6,9
+2022,9,MDZ,Santiago,0,1
+2022,10,AEP,Santiago,8,64
+2022,10,EZE,Alajuela,1,0
+2022,10,EZE,Lima,27,0
+2022,10,EZE,Santiago,5,9
+2022,11,AEP,Santiago,10,49
+2022,11,EZE,Asunción,10,0
+2022,11,EZE,Lima,31,0
+2022,11,EZE,Santiago,26,5
+2022,11,EZE,São Paulo,1,0
+2022,12,AEP,Santiago,8,54
+2022,12,BRC,Santiago,0,6
+2022,12,EZE,Asunción,23,0
+2022,12,EZE,Lima,55,0
+2022,12,EZE,Río de Janeiro,24,0
+2022,12,EZE,Santiago,28,9
+2022,12,EZE,São Paulo,1,0
+2023,1,AEP,Santiago,9,40
+2023,1,EZE,Asunción,27,0
+2023,1,EZE,Lima,57,0
+2023,1,EZE,Río de Janeiro,41,0
+2023,1,EZE,Santiago,48,10
+2023,1,EZE,São Paulo,2,0
+2023,2,AEP,Santiago,8,52
+2023,2,AEP,São Paulo,1,0
+2023,2,EZE,Asunción,21,0
+2023,2,EZE,Lima,51,0
+2023,2,EZE,Río de Janeiro,39,0
+2023,2,EZE,Santiago,25,17
+2023,2,EZE,São Paulo,2,0
+2023,3,AEP,Santiago,9,58
+2023,3,EZE,Alajuela,1,0
+2023,3,EZE,Asunción,23,0
+2023,3,EZE,Lima,41,0
+2023,3,EZE,Río de Janeiro,28,0
+2023,3,EZE,Santiago,30,6
+2023,3,EZE,São Paulo,2,0
+2023,4,AEP,Asunción,22,0
+2023,4,AEP,Santiago,22,64
+2023,4,EZE,Asunción,2,0
+2023,4,EZE,Florianópolis,1,0
+2023,4,EZE,Lima,27,0
+2023,4,EZE,Río de Janeiro,34,0
+2023,4,EZE,Santiago,22,9
+2023,4,EZE,São Paulo,1,0
+2023,5,AEP,Asunción,28,0
+2023,5,AEP,Santiago,28,66
+2023,5,EZE,Lima,36,0
+2023,5,EZE,Montevideo,1,0
+2023,5,EZE,Río de Janeiro,42,0
+2023,5,EZE,Santiago,18,4
+2023,5,EZE,São Paulo,3,0
+2023,6,AEP,Asunción,25,0
+2023,6,AEP,Río de Janeiro,1,0
+2023,6,AEP,Santiago,27,66
+2023,6,EZE,Lima,34,0
+2023,6,EZE,Río de Janeiro,32,0
+2023,6,EZE,Santiago,25,1
+2023,6,EZE,São Paulo,1,0
+2023,7,AEP,Asunción,25,0
+2023,7,AEP,Santiago,24,71
+2023,7,EZE,Asunción,1,0
+2023,7,EZE,Lima,48,0
+2023,7,EZE,Río de Janeiro,41,0
+2023,7,EZE,Santiago,23,17
+2023,7,EZE,São Paulo,1,0
+2023,8,AEP,Asunción,25,0
+2023,8,AEP,Lima,1,0
+2023,8,AEP,Montevideo,1,0
+2023,8,AEP,Santiago,29,65
+2023,8,EZE,Lima,48,0
+2023,8,EZE,Montevideo,0,1
+2023,8,EZE,Río de Janeiro,42,0
+2023,8,EZE,Santiago,28,17
+2023,9,AEP,Asunción,26,0
+2023,9,AEP,Santiago,26,73
+2023,9,EZE,Alajuela,1,0
+2023,9,EZE,Lima,56,0
+2023,9,EZE,Río de Janeiro,40,0
+2023,9,EZE,Santiago,33,32
+2023,9,EZE,São Paulo,1,0
+2023,10,AEP,Asunción,22,0
+2023,10,AEP,Punta del Este,1,0
+2023,10,AEP,Santiago,26,76
+2023,10,EZE,Asunción,1,0
+2023,10,EZE,Lima,59,0
+2023,10,EZE,Miami,1,0
+2023,10,EZE,Río de Janeiro,47,0
+2023,10,EZE,Santiago,54,10
+2023,10,EZE,São Paulo,3,0
+2023,11,AEP,Asunción,24,0
+2023,11,AEP,Montevideo,1,0
+2023,11,AEP,Punta del Este,1,0
+2023,11,AEP,Santiago,23,76
+2023,11,EZE,Florianópolis,1,0
+2023,11,EZE,Lima,52,0
+2023,11,EZE,Río de Janeiro,62,0
+2023,11,EZE,Santiago,64,2
+2023,11,EZE,São Paulo,3,0
+2023,12,AEP,Asunción,20,0
+2023,12,AEP,Montevideo,1,0
+2023,12,AEP,Punta del Este,1,0
+2023,12,AEP,Santiago,21,55
+2023,12,BRC,Santiago,0,10
+2023,12,COR,Lima,1,1
+2023,12,COR,Santiago,1,0
+2023,12,EZE,Asunción,4,0
+2023,12,EZE,Florianópolis,26,0
+2023,12,EZE,Lima,60,0
+2023,12,EZE,Río de Janeiro,84,0
+2023,12,EZE,Santiago,80,13
+2023,12,EZE,São Paulo,1,0
+2024,1,AEP,Asunción,32,0
+2024,1,AEP,Santiago,27,80
+2024,1,EZE,Asunción,2,0
+2024,1,EZE,Florianópolis,68,0
+2024,1,EZE,Lima,57,0
+2024,1,EZE,Río de Janeiro,123,0
+2024,1,EZE,Santiago,79,6
+2024,1,EZE,São Paulo,3,0
+2024,2,AEP,Asunción,29,0
+2024,2,AEP,Lima,1,0
+2024,2,AEP,Montevideo,1,0
+2024,2,AEP,Punta del Este,1,0
+2024,2,AEP,Santiago,22,84
+2024,2,EZE,Florianópolis,74,0
+2024,2,EZE,Lima,54,0
+2024,2,EZE,Montevideo,0,1
+2024,2,EZE,Río de Janeiro,129,0
+2024,2,EZE,Santiago,81,4
+2024,2,EZE,São Paulo,2,0
+2024,2,MDZ,Foz Do Iguaçu,0,1
+2024,2,MDZ,Santiago,0,1
+2024,3,AEP,Asunción,34,0
+2024,3,AEP,Santiago,23,90
+2024,3,EZE,Concepcion,10,0
+2024,3,EZE,Florianópolis,62,0
+2024,3,EZE,Lima,62,0
+2024,3,EZE,Río de Janeiro,128,0
+2024,3,EZE,Santiago,112,2
+2024,3,EZE,São Paulo,1,0
+2024,3,IGR,Asunción,1,0
+2024,3,MDZ,Santiago,0,30
+2024,4,AEP,Asunción,34,0
+2024,4,AEP,Lima,1,0
+2024,4,AEP,Montevideo,0,1
+2024,4,AEP,Santiago,43,85
+2024,4,EZE,Concepcion,21,0
+2024,4,EZE,Florianópolis,38,0
+2024,4,EZE,Lima,58,0
+2024,4,EZE,Montevideo,0,1
+2024,4,EZE,Río de Janeiro,100,0
+2024,4,EZE,Santiago,42,3
+2024,4,EZE,São Paulo,2,0
+2024,4,MDZ,Santiago,0,34
+2024,5,AEP,Asunción,32,0
+2024,5,AEP,Concepcion,1,0
+2024,5,AEP,Montevideo,10,0
+2024,5,AEP,Río de Janeiro,1,0
+2024,5,AEP,Santiago,23,82
+2024,5,EZE,Concepcion,12,0
+2024,5,EZE,Florianópolis,30,0
+2024,5,EZE,Lima,59,0
+2024,5,EZE,Río de Janeiro,76,0
+2024,5,EZE,Santiago,22,0
+2024,5,EZE,São Paulo,5,0
+2024,5,MDZ,Santiago,0,34
+2024,6,AEP,Alajuela,2,0
+2024,6,AEP,Asunción,24,0
+2024,6,AEP,Montevideo,95,0
+2024,6,AEP,Santiago,44,72
+2024,6,EZE,Florianópolis,18,0
+2024,6,EZE,Lima,61,0
+2024,6,EZE,Montevideo,1,2
+2024,6,EZE,Río de Janeiro,67,0
+2024,6,EZE,Santiago,3,1
+2024,6,EZE,São Paulo,1,0
+2024,6,MDZ,Santiago,0,35
+2024,7,AEP,Asunción,34,0
+2024,7,AEP,Lima,1,0
+2024,7,AEP,Montevideo,83,2
+2024,7,AEP,Río de Janeiro,1,0
+2024,7,AEP,Santiago,18,130
+2024,7,EZE,Curitiba,16,0
+2024,7,EZE,Florianópolis,26,0
+2024,7,EZE,Lima,62,0
+2024,7,EZE,Río de Janeiro,88,0
+2024,7,EZE,Santiago,0,2
+2024,7,EZE,São Paulo,2,0
+2024,7,IGR,Asunción,1,0
+2024,7,MDZ,Santiago,0,44
+2024,8,AEP,Asunción,31,0
+2024,8,AEP,Lima,1,0
+2024,8,AEP,Montevideo,66,0
+2024,8,AEP,Punta del Este,1,0
+2024,8,AEP,Santiago,14,82
+2024,8,EZE,Curitiba,18,0
+2024,8,EZE,Florianópolis,17,0
+2024,8,EZE,Lima,53,0
+2024,8,EZE,Montevideo,1,0
+2024,8,EZE,Río de Janeiro,59,0
+2024,8,EZE,Santiago,0,2
+2024,8,EZE,São Paulo,1,0
+2024,8,MDZ,Calama,0,1
+2024,8,MDZ,Santiago,0,38
+2024,9,AEP,Alajuela,1,0
+2024,9,AEP,Asunción,36,0
+2024,9,AEP,Lima,0,2
+2024,9,AEP,Montevideo,58,0
+2024,9,AEP,Santiago,50,89
+2024,9,EZE,Curitiba,17,0
+2024,9,EZE,Lima,51,0
+2024,9,EZE,Montevideo,2,0
+2024,9,EZE,Río de Janeiro,69,0
+2024,9,EZE,São Paulo,1,0
+2024,9,MDZ,Santiago,0,40
+2024,10,AEP,Asunción,32,0
+2024,10,AEP,Lima,8,0
+2024,10,AEP,Río de Janeiro,12,0
+2024,10,AEP,Santiago,45,97
+2024,10,AEP,São Paulo,1,0
+2024,10,COR,Lima,1,0
+2024,10,COR,Santiago,0,1
+2024,10,COR,São Paulo,0,1
+2024,10,EZE,Alajuela,1,0
+2024,10,EZE,Asunción,2,0
+2024,10,EZE,Lima,51,0
+2024,10,EZE,Río de Janeiro,75,0
+2024,10,EZE,Santiago,7,6
+2024,10,EZE,São Paulo,11,0
+2024,10,MDZ,Santiago,1,36
+2024,11,AEP,Asunción,32,0
+2024,11,AEP,Lima,55,0
+2024,11,AEP,Río de Janeiro,55,0
+2024,11,AEP,Santiago,35,108
+2024,11,AEP,São Paulo,2,0
+2024,11,EZE,Antofagasta,0,1
+2024,11,EZE,Asunción,16,0
+2024,11,EZE,Florianópolis,1,0
+2024,11,EZE,Lima,5,0
+2024,11,EZE,Montevideo,0,1
+2024,11,EZE,Río de Janeiro,51,1
+2024,11,EZE,Santiago,0,9
+2024,11,EZE,São Paulo,8,0
+2024,11,MDZ,Iquique,0,1
+2024,11,MDZ,Santiago,0,32
+2024,11,NQN,Montevideo,0,1
+2024,11,NQN,Santiago,0,1
+2024,12,AEP,Asunción,36,0
+2024,12,AEP,Florianópolis,28,0
+2024,12,AEP,Lima,58,0
+2024,12,AEP,Río de Janeiro,50,0
+2024,12,AEP,Santiago,79,42
+2024,12,BRC,Santiago,5,2
+2024,12,EZE,Florianópolis,25,0
+2024,12,EZE,Lima,3,0
+2024,12,EZE,Río de Janeiro,96,0
+2024,12,EZE,Santiago,5,2
+2024,12,EZE,São Paulo,3,0
+2024,12,MDZ,Santiago,0,26
+2025,1,AEP,Asunción,29,0
+2025,1,AEP,Florianópolis,97,0
+2025,1,AEP,Lima,62,0
+2025,1,AEP,Río de Janeiro,62,0
+2025,1,AEP,Santiago,13,114
+2025,1,EZE,Florianópolis,4,0
+2025,1,EZE,Río de Janeiro,106,0
+2025,1,EZE,Santiago,1,2
+2025,1,EZE,São Paulo,1,0
+2025,1,MDZ,Santiago,0,34
+2025,2,AEP,Asunción,32,0
+2025,2,AEP,Florianópolis,93,0
+2025,2,AEP,Lima,55,0
+2025,2,AEP,Montevideo,0,1
+2025,2,AEP,Río de Janeiro,55,0
+2025,2,AEP,Santiago,0,130
+2025,2,EZE,Florianópolis,25,0
+2025,2,EZE,Río de Janeiro,115,0
+2025,2,MDZ,Santiago,0,32
+2025,3,AEP,Asunción,35,0
+2025,3,AEP,Florianópolis,98,0
+2025,3,AEP,Lima,63,0
+2025,3,AEP,Montevideo,1,0
+2025,3,AEP,Río de Janeiro,63,0
+2025,3,AEP,Santiago,2,132
+2025,3,AEP,São Paulo,1,0
+2025,3,EZE,Alajuela,1,0
+2025,3,EZE,Asunción,1,0
+2025,3,EZE,Florianópolis,23,0
+2025,3,EZE,Lima,1,0
+2025,3,EZE,Río de Janeiro,152,0
+2025,3,EZE,Santiago,5,11
+2025,3,EZE,São Paulo,2,0
+2025,3,MDZ,Santiago,0,46
+2025,4,AEP,Asunción,39,0
+2025,4,AEP,Florianópolis,59,0
+2025,4,AEP,Lima,59,0
+2025,4,AEP,Montevideo,2,0
+2025,4,AEP,Río de Janeiro,59,0
+2025,4,AEP,Santiago,26,87
+2025,4,AEP,São Paulo,1,0
+2025,4,EZE,Asunción,2,0
+2025,4,EZE,Florianópolis,1,0
+2025,4,EZE,Lima,2,0
+2025,4,EZE,Montevideo,1,0
+2025,4,EZE,Río de Janeiro,95,0
+2025,4,EZE,Santiago,7,15
+2025,4,MDZ,Santiago,0,42
+2025,5,AEP,Asunción,42,0
+2025,5,AEP,Florianópolis,56,0
+2025,5,AEP,Lima,62,0
+2025,5,AEP,Río de Janeiro,117,0
+2025,5,AEP,Santiago,35,99
+2025,5,AEP,São Paulo,1,0
+2025,5,COR,Lima,0,4
+2025,5,EZE,Lima,2,0
+2025,5,EZE,Río de Janeiro,18,0
+2025,5,EZE,Santiago,7,6
+2025,5,MDZ,Río de Janeiro,0,12
+2025,5,MDZ,Santiago,0,56
+2025,5,MDZ,São Paulo,0,2
+2025,6,AEP,Alajuela,1,0
+2025,6,AEP,Asunción,52,0
+2025,6,AEP,Florianópolis,26,0
+2025,6,AEP,Lima,60,0
+2025,6,AEP,Río de Janeiro,120,0
+2025,6,AEP,Santiago,62,80
+2025,6,COR,Santiago,0,1
+2025,6,COR,São Paulo,0,1
+2025,6,EZE,Montevideo,1,0
+2025,6,EZE,Panamá,0,1
+2025,6,EZE,Recife,1,0
+2025,6,EZE,Río de Janeiro,9,0
+2025,6,EZE,Santiago,12,18
+2025,6,MDZ,Río de Janeiro,0,18
+2025,6,MDZ,Santiago,0,78
+2025,7,AEP,Asunción,53,0
+2025,7,AEP,Florianópolis,15,0
+2025,7,AEP,Lima,62,0
+2025,7,AEP,Río de Janeiro,122,0
+2025,7,AEP,Santiago,108,50
+2025,7,AEP,São Paulo,1,0
+2025,7,EZE,Asunción,2,0
+2025,7,EZE,Florianópolis,1,0
+2025,7,EZE,Montevideo,4,0
+2025,7,EZE,Recife,41,0
+2025,7,EZE,Río de Janeiro,73,0
+2025,7,EZE,Santiago,21,11
+2025,7,EZE,São Paulo,2,0
+2025,7,MDZ,Río de Janeiro,0,15
+2025,7,MDZ,Santiago,1,58
+2025,8,AEP,Asunción,51,0
+2025,8,AEP,Florianópolis,19,0
+2025,8,AEP,Lima,62,0
+2025,8,AEP,Río de Janeiro,120,0
+2025,8,AEP,Santiago,83,51
+2025,8,AEP,São Paulo,3,0
+2025,8,EZE,Recife,34,0
+2025,8,EZE,Río de Janeiro,26,0
+2025,8,EZE,Santiago,17,31
+2025,8,EZE,São Paulo,2,0
+2025,8,MDZ,Río de Janeiro,0,17
+2025,8,MDZ,Santiago,0,45
+2025,9,AEP,Asunción,52,0
+2025,9,AEP,Florianópolis,24,0
+2025,9,AEP,Lima,60,0
+2025,9,AEP,Montevideo,2,0
+2025,9,AEP,Recife,1,0
+2025,9,AEP,Río de Janeiro,117,0
+2025,9,AEP,Santiago,53,64
+2025,9,AEP,São Paulo,1,0
+2025,9,BRC,Montevideo,2,0
+2025,9,COR,Río de Janeiro,0,1
+2025,9,EZE,Montevideo,4,0
+2025,9,EZE,Recife,34,0
+2025,9,EZE,Río de Janeiro,30,0
+2025,9,EZE,Santiago,8,11
+2025,9,MDZ,Río de Janeiro,0,13
+2025,9,MDZ,Santiago,0,52
+2025,10,AEP,Asunción,62,0
+2025,10,AEP,Florianópolis,26,0
+2025,10,AEP,Lima,50,9
+2025,10,AEP,Montevideo,1,0
+2025,10,AEP,Recife,1,0
+2025,10,AEP,Río de Janeiro,113,0
+2025,10,AEP,Santiago,42,108
+2025,10,AEP,São Paulo,3,1
+2025,10,COR,Río de Janeiro,32,0
+2025,10,COR,Santiago,0,1
+2025,10,COR,São Paulo,2,0
+2025,10,EZE,Florianópolis,1,0
+2025,10,EZE,Lima,1,0
+2025,10,EZE,Recife,43,0
+2025,10,EZE,Río de Janeiro,68,0
+2025,10,EZE,Santiago,2,25
+2025,10,IGR,Foz Do Iguaçu,1,0
+2025,10,MDZ,Río de Janeiro,0,17
+2025,10,MDZ,Santiago,0,46
+2025,10,MDZ,São Paulo,0,1
+2025,11,AEP,Asunción,61,0
+2025,11,AEP,Florianópolis,36,0
+2025,11,AEP,Lima,1,59
+2025,11,AEP,Montevideo,1,0
+2025,11,AEP,Río de Janeiro,115,0
+2025,11,AEP,Santiago,132,12
+2025,11,AEP,São Paulo,1,0
+2025,11,COR,Río de Janeiro,35,0
+2025,11,COR,São Paulo,3,0
+2025,11,EZE,Asunción,10,0
+2025,11,EZE,Florianópolis,2,0
+2025,11,EZE,Montevideo,1,0
+2025,11,EZE,Recife,52,0
+2025,11,EZE,Río de Janeiro,56,0
+2025,11,EZE,Santiago,35,8
+2025,11,EZE,São Paulo,26,0
+2025,11,MDZ,Río de Janeiro,0,16
+2025,11,MDZ,Santiago,0,60
+2025,12,AEP,Asunción,59,0
+2025,12,AEP,Florianópolis,56,0
+2025,12,AEP,Lima,0,63
+2025,12,AEP,Río de Janeiro,121,0
+2025,12,AEP,Santiago,123,23
+2025,12,BRC,Concepcion,0,4
+2025,12,BRC,La Serena,0,1
+2025,12,BRC,Puerto Montt,0,1
+2025,12,BRC,Santiago,0,24
+2025,12,COR,Río de Janeiro,35,0
+2025,12,EZE,Asunción,1,0
+2025,12,EZE,Florianópolis,43,0
+2025,12,EZE,Lima,1,0
+2025,12,EZE,Montevideo,3,0
+2025,12,EZE,Natal,4,0
+2025,12,EZE,Recife,61,0
+2025,12,EZE,Río de Janeiro,75,0
+2025,12,EZE,Santiago,36,6
+2025,12,MDZ,Río de Janeiro,0,27
+2025,12,MDZ,Santiago,0,41
+2025,12,NQN,Florianópolis,2,0
+2026,1,AEP,Asunción,77,0
+2026,1,AEP,Florianópolis,62,0
+2026,1,AEP,Lima,0,62
+2026,1,AEP,Natal,1,0
+2026,1,AEP,Río de Janeiro,141,0
+2026,1,AEP,Santiago,44,96
+2026,1,COR,Montevideo,1,0
+2026,1,COR,Río de Janeiro,52,0
+2026,1,COR,São Paulo,1,0
+2026,1,EZE,Asunción,4,0
+2026,1,EZE,Florianópolis,159,0
+2026,1,EZE,Natal,56,0
+2026,1,EZE,Parnamirim,5,0
+2026,1,EZE,Recife,60,0
+2026,1,EZE,Río de Janeiro,128,0
+2026,1,EZE,Santiago,2,31
+2026,1,EZE,São Paulo,2,0
+2026,1,MDZ,Puerto Montt,0,1
+2026,1,MDZ,Río de Janeiro,0,25
+2026,1,MDZ,Santiago,0,28
+2026,1,SLA,Iquique,10,0
+2026,2,AEP,Asunción,75,0
+2026,2,AEP,Florianópolis,53,0
+2026,2,AEP,Lima,0,54
+2026,2,AEP,Río de Janeiro,130,1
+2026,2,AEP,Santiago,52,71
+2026,2,AEP,São Paulo,4,1
+2026,2,COR,Río de Janeiro,46,0
+2026,2,EZE,Asunción,4,0
+2026,2,EZE,Florianópolis,135,0
+2026,2,EZE,Montevideo,1,0
+2026,2,EZE,Natal,52,0
+2026,2,EZE,Parnamirim,1,0
+2026,2,EZE,Recife,52,0
+2026,2,EZE,Río de Janeiro,110,0
+2026,2,EZE,Santiago,23,15
+2026,2,MDZ,Río de Janeiro,0,21
+2026,2,MDZ,Santiago,0,26
+2026,2,MDZ,São Paulo,0,1
+2026,2,SLA,Iquique,9,0
+2026,3,AEP,Asunción,82,0
+2026,3,AEP,Florianópolis,69,0
+2026,3,AEP,Lima,0,62
+2026,3,AEP,Montevideo,1,0
+2026,3,AEP,Natal,6,0
+2026,3,AEP,Parnamirim,1,0
+2026,3,AEP,Recife,7,0
+2026,3,AEP,Río de Janeiro,158,0
+2026,3,AEP,Santiago,90,62
+2026,3,AEP,São Paulo,3,0
+2026,3,COR,Florianópolis,1,0
+2026,3,COR,Río de Janeiro,42,0
+2026,3,EZE,Asunción,7,0
+2026,3,EZE,Florianópolis,121,0
+2026,3,EZE,Montevideo,4,0
+2026,3,EZE,Natal,49,0
+2026,3,EZE,Parnamirim,7,0
+2026,3,EZE,Recife,56,0
+2026,3,EZE,Río de Janeiro,85,0
+2026,3,EZE,Santiago,25,5
+2026,3,EZE,São Paulo,2,0
+2026,3,MDZ,Río de Janeiro,0,27
+2026,3,MDZ,Santiago,0,40
+2026,3,MDZ,São Paulo,0,1
+2026,3,RES,Asunción,1,0
+2026,4,AEP,Asunción,83,0
+2026,4,AEP,Brasilia,1,0
+2026,4,AEP,Florianópolis,12,0
+2026,4,AEP,Lima,1,59
+2026,4,AEP,Natal,37,0
+2026,4,AEP,Parnamirim,1,0
+2026,4,AEP,Recife,43,0
+2026,4,AEP,Río de Janeiro,140,0
+2026,4,AEP,Santiago,84,59
+2026,4,AEP,São Paulo,4,0
+2026,4,COR,Río de Janeiro,9,0
+2026,4,EZE,Asunción,3,0
+2026,4,EZE,Florianópolis,26,0
+2026,4,EZE,Montevideo,5,0
+2026,4,EZE,Puerto Natales,2,0
+2026,4,EZE,Recife,2,0
+2026,4,EZE,Río de Janeiro,63,0
+2026,4,EZE,Santiago,9,3
+2026,4,EZE,São Paulo,3,0
+2026,4,MDZ,Río de Janeiro,0,18
+2026,4,MDZ,Santiago,0,46
+2026,4,RES,Foz Do Iguaçu,0,1
+2026,4,RES,Santiago,0,1
+2026,5,AEP,Asunción,86,0
+2026,5,AEP,Brasilia,1,0
+2026,5,AEP,Lima,1,62
+2026,5,AEP,Natal,25,0
+2026,5,AEP,Parnamirim,1,0
+2026,5,AEP,Recife,36,0
+2026,5,AEP,Río de Janeiro,119,0
+2026,5,AEP,Salvador,1,0
+2026,5,AEP,Santiago,83,72
+2026,5,AEP,São Paulo,1,0
+2026,5,EZE,Lima,1,0
+2026,5,EZE,Río de Janeiro,1,0
+2026,5,EZE,Santiago,0,5
+2026,5,MDZ,Río de Janeiro,0,20
+2026,5,MDZ,Santiago,0,81
+2026,6,AEP,Asunción,68,0
+2026,6,AEP,Lima,0,62
+2026,6,AEP,Montevideo,1,0
+2026,6,AEP,Natal,26,0
+2026,6,AEP,Parnamirim,1,0
+2026,6,AEP,Recife,25,0
+2026,6,AEP,Río de Janeiro,102,0
+2026,6,AEP,Santiago,94,56
+2026,6,AEP,São Paulo,1,0
+2026,6,BRC,Montevideo,2,0
+2026,6,COR,Río de Janeiro,0,1
+2026,6,COR,Santiago,0,1
+2026,6,EZE,Asunción,9,0
+2026,6,EZE,Montevideo,2,0
+2026,6,EZE,Recife,1,0
+2026,6,EZE,Santiago,1,7
+2026,6,MDZ,Río de Janeiro,0,16
+2026,6,MDZ,Santiago,0,70
+2026,6,MDZ,São Paulo,0,1
+2026,7,AEP,Asunción,62,0
+2026,7,AEP,Florianópolis,1,0
+2026,7,AEP,Lima,0,62
+2026,7,AEP,Montevideo,1,0
+2026,7,AEP,Natal,36,0
+2026,7,AEP,Porto Alegre,1,0
+2026,7,AEP,Recife,44,0
+2026,7,AEP,Río de Janeiro,128,0
+2026,7,AEP,Santiago,93,98
+2026,7,AEP,São Paulo,3,1
+2026,7,BRC,Montevideo,2,0
+2026,7,COR,Santiago,0,3
+2026,7,EZE,Montevideo,4,0
+2026,7,EZE,Recife,1,0
+2026,7,EZE,Río de Janeiro,36,0
+2026,7,EZE,Santiago,15,9
+2026,7,MDZ,Río de Janeiro,0,18
+2026,7,MDZ,Santiago,0,56
+2026,8,AEP,Asunción,57,0
+2026,8,AEP,Brasilia,1,0
+2026,8,AEP,Lima,0,57
+2026,8,AEP,Natal,34,0
+2026,8,AEP,Recife,37,0
+2026,8,AEP,Río de Janeiro,108,0
+2026,8,AEP,Santiago,71,82
+2026,8,AEP,São Paulo,2,0
+2026,8,COR,Santiago,0,1
+2026,8,COR,São Paulo,0,1
+2026,8,EZE,Asunción,3,0
+2026,8,EZE,Lima,0,4
+2026,8,EZE,Natal,2,0
+2026,8,EZE,Recife,3,0
+2026,8,EZE,Río de Janeiro,5,1
+2026,8,EZE,Santiago,3,11
+2026,8,MDZ,Río de Janeiro,0,17
+2026,8,MDZ,Santiago,0,54
+2026,9,AEP,Asunción,60,0
+2026,9,AEP,Lima,1,60
+2026,9,AEP,Natal,34,0
+2026,9,AEP,Recife,43,0
+2026,9,AEP,Río de Janeiro,119,0
+2026,9,AEP,Santiago,86,88
+2026,9,AEP,São Paulo,0,1
+2026,9,COR,Río de Janeiro,0,1
+2026,9,COR,Santiago,0,1
+2026,9,EZE,Montevideo,5,1
+2026,9,EZE,Natal,1,0
+2026,9,EZE,Recife,2,0
+2026,9,EZE,Río de Janeiro,4,0
+2026,9,EZE,Santiago,6,12
+2026,9,EZE,São Paulo,0,1
+2026,9,IGR,Montevideo,1,0
+2026,9,MDZ,Río de Janeiro,0,16
+2026,9,MDZ,Santiago,0,53

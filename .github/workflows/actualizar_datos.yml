@@ -70,18 +70,32 @@ jobs:
             python actualizar_zip.py --tipo internacional
           fi
 
+      - name: Verificar si falta separar JetSMART Argentina / Chile (chequeo liviano)
+        id: chk_js
+        run: python actualizar_jetsmart.py --verificar
+
+      - name: Separar JetSMART Argentina / Chile con los movimientos de ANAC (jetsmart_operador.csv)
+        if: steps.chk_js.outputs.pendiente_js == 'true' || inputs.forzar
+        id: act_js
+        run: |
+          pip install pandas
+          python actualizar_jetsmart.py
+
       - name: Guardar cambios en GitHub
-        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true'
+        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || steps.act_js.outputs.changed == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add conectividad_aerea.zip internacional_america.zip
+          git add conectividad_aerea.zip internacional_america.zip jetsmart_operador.csv
           MENSAJE="Actualización automática de datos:"
           if [ "${{ steps.act.outputs.changed }}" = "true" ]; then
             MENSAJE="$MENSAJE cabotaje hasta ${{ steps.act.outputs.ultima_fecha }} (${{ steps.act.outputs.filas }} filas)"
           fi
           if [ "${{ steps.act_int.outputs.changed }}" = "true" ]; then
             MENSAJE="$MENSAJE internacional hasta ${{ steps.act_int.outputs.ultima_fecha }} (${{ steps.act_int.outputs.filas }} filas)"
+          fi
+          if [ "${{ steps.act_js.outputs.changed }}" = "true" ]; then
+            MENSAJE="$MENSAJE JetSMART Argentina/Chile según ANAC"
           fi
           git commit -m "$MENSAJE"
           git push

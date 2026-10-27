@@ -28,21 +28,22 @@ DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 AMBA = {'AEP', 'EZE', 'EPA', 'MOR', 'FDO'}
 
 # ---------------------------------------------------------------------------------------------- aerolíneas
-# Aerolíneas con certificado argentino. JetSMART va aparte: SINTA agrupa en un solo nombre sus filiales
-# de Argentina, Chile y Perú, así que no se puede saber qué parte de sus vuelos es argentina.
+# Aerolíneas con certificado argentino. SINTA agrupa a JetSMART en un solo nombre; sus vuelos se reparten entre
+# la filial argentina y la chilena con los movimientos de ANAC (ver actualizar_jetsmart.py y _separar_jetsmart).
+JETSMART_AR, JETSMART_CL = 'JetSMART Argentina', 'JetSMART Chile'
 ARGENTINAS = {'Aerolíneas Argentinas', 'Flybondi', 'Andes Líneas Aéreas', 'LADE - Líneas Aéreas Del Estado',
-              'American Jet', 'Flyest'}
-JETSMART = {'JetSMART Airlines'}
+              'American Jet', 'Flyest', JETSMART_AR}
+JETSMART = {'JetSMART Airlines', JETSMART_AR, JETSMART_CL}
+REFERENCIA_JETSMART = "jetsmart_operador.csv"
 FUERA_DE_AMERICA = {'Turkish Airlines', 'KLM', 'Emirates Airline', 'Ethiopian Airlines', 'British Airways',
                     'Qatar Airways', 'Swiss International Air Lines', 'Air Europa', 'Lufthansa', 'Iberia Airlines',
                     'ITA Airways', 'Air France', 'Air New Zealand', 'Plus Ultra', 'Icelandair', 'ASL Airlines France'}
-GRUPOS = ['Argentinas', 'JetSMART (grupo regional)', 'Extranjeras de América', 'Extranjeras de fuera de América']
-COLORES_GRUPO = {'Argentinas': '#1d4ed8', 'JetSMART (grupo regional)': '#e11d48',
-                 'Extranjeras de América': '#94a3b8', 'Extranjeras de fuera de América': '#f59e0b'}
+GRUPOS = ['Argentinas', 'Extranjeras de América', 'Extranjeras de fuera de América']
+COLORES_GRUPO = {'Argentinas': '#1d4ed8', 'Extranjeras de América': '#94a3b8', 'Extranjeras de fuera de América': '#f59e0b'}
 COLORES_REGION = {'América del Sur': '#1d4ed8', 'América Central y Caribe': '#10b981', 'América del Norte': '#f59e0b'}
 # Colores fijos de las principales aerolíneas internacionales (se suman a los de cabotaje)
 COLORES_INTERNACIONALES = {
-    'Gol Transportes Aéreos': '#f97316', 'Avianca': '#7c3aed', 'American Airlines': '#0f766e', 'Sky Airline': '#14b8a6',
+    JETSMART_AR: '#e11d48', JETSMART_CL: '#fb7185', 'Gol Transportes Aéreos': '#f97316', 'Avianca': '#7c3aed', 'American Airlines': '#0f766e', 'Sky Airline': '#14b8a6',
     'Arajet': '#9f1239', 'United Airlines': '#1e3a8a', 'Delta Air Lines': '#b91c1c', 'Aeroméxico': '#334155',
     'Boliviana de Aviación': '#65a30d', 'Azul Linhas Aereas Brasileiras': '#38bdf8', 'Air Canada': '#dc2626',
     'Paranair': '#a855f7', 'Turkish Airlines': '#be123c', 'Emirates Airline': '#ca8a04', 'KLM': '#0284c7',
@@ -144,8 +145,6 @@ def _combinar(a, b, armar):
 def _grupo(aerolinea):
     if aerolinea in ARGENTINAS:
         return 'Argentinas'
-    if aerolinea in JETSMART:
-        return 'JetSMART (grupo regional)'
     if aerolinea in FUERA_DE_AMERICA:
         return 'Extranjeras de fuera de América'
     return 'Extranjeras de América'
@@ -153,7 +152,7 @@ def _grupo(aerolinea):
 
 def _es_escala(aerolinea, pais):
     """El tramo es la continuación de un vuelo con escala si la aerolínea vuela desde un país que no es el suyo."""
-    if aerolinea in ARGENTINAS or aerolinea in JETSMART:  # JetSMART: su filial argentina vuela directo desde Argentina
+    if aerolinea in ARGENTINAS or aerolinea in JETSMART:  # JetSMART Chile también vuela a Lima o Brasil con su certificado
         return False
     if aerolinea in FUERA_DE_AMERICA:
         return True
@@ -195,8 +194,50 @@ def _ciudad_argentina(etiqueta):
     return etiqueta[i + 1:-1] if i >= 0 else etiqueta
 
 
+def _separar_jetsmart(empresa, ano, mes, dia, sigla_arg, ciudad, vuelos, referencia):
+    """Reparte los vuelos de 'JetSMART Airlines' entre su filial argentina y la chilena.
+
+    Para cada mes, aeropuerto argentino y ciudad extranjera, ANAC dice qué parte de los vuelos hizo cada filial.
+    Cada fila (un día de una ruta) se asigna entera a una filial: dentro del grupo, ordenadas por día, las primeras
+    filas hasta completar la parte argentina van a JetSMART Argentina y el resto a JetSMART Chile. Así los totales
+    por mes y ruta coinciden con ANAC sin partir vuelos en fracciones. Si ANAC no tiene ese mes y ruta, se usa la
+    parte de la ciudad en ese mes, después la de la ciudad en el año y después la de la ciudad en toda la serie;
+    sin ningún dato (vuelos anteriores a 2019) se asigna a JetSMART Chile, la única filial que volaba a Argentina.
+    """
+    empresa = np.asarray(empresa, dtype=object).copy()
+    es_js = empresa == 'JetSMART Airlines'
+    if not es_js.any():
+        return empresa
+    t = pd.DataFrame({'anio': ano[es_js], 'mes': mes[es_js], 'dia': dia[es_js], 'sigla_arg': sigla_arg[es_js],
+                      'ciudad': ciudad[es_js], 'vuelos': vuelos[es_js], 'pos': np.flatnonzero(es_js)})
+    t['parte_ar'] = np.nan
+    if referencia is not None and not referencia.empty:
+        r = referencia.copy()
+        for claves in (['anio', 'mes', 'sigla_arg', 'ciudad'], ['anio', 'mes', 'ciudad'], ['anio', 'ciudad'], ['ciudad']):
+            g = r.groupby(claves)[['vuelos_ar', 'vuelos_cl']].sum()
+            parte = (g['vuelos_ar'] / (g['vuelos_ar'] + g['vuelos_cl'])).rename('p')
+            p = t[claves].join(parte, on=claves)['p']
+            t['parte_ar'] = t['parte_ar'].fillna(p)
+        t.loc[t['anio'] < r['anio'].min(), 'parte_ar'] = 0.0
+    t['parte_ar'] = t['parte_ar'].fillna(0.0)
+    t = t.sort_values(['anio', 'mes', 'sigla_arg', 'ciudad', 'dia', 'pos'])
+    grupo = t.groupby(['anio', 'mes', 'sigla_arg', 'ciudad'], sort=False)['vuelos']
+    acumulado, total = grupo.cumsum(), grupo.transform('sum')
+    medio = acumulado - t['vuelos'] / 2  # el vuelo "del medio" de la fila
+    a_argentina = medio < t['parte_ar'] * total
+    empresa[t['pos'].to_numpy()] = np.where(a_argentina, JETSMART_AR, JETSMART_CL)
+    return empresa
+
+
+def _leer_referencia_jetsmart(ruta):
+    try:
+        return pd.read_csv(ruta, dtype={'sigla_arg': str, 'ciudad': str})
+    except (OSError, ValueError):
+        return None
+
+
 @st.cache_resource(show_spinner="Cargando la base internacional…")
-def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto):
+def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto, modificado_jetsmart=0):
     """Lee y prepara la base internacional una sola vez (se vuelve a leer sólo si el archivo cambia)."""
     if not os.path.exists(ruta):
         return None
@@ -220,22 +261,25 @@ def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto)
     out['dia_semana'] = out['fecha'].dt.dayofweek.fillna(0).astype(np.int8)
     out['periodo_orden'] = _combinar(out['ano_num'], out['mes_num'], lambda y, m: f"{y}-{m:02d}")
     out['periodo_mes_es'] = _combinar(out['ano_num'], out['mes_num'], lambda y, m: f"{MESES_CORTOS[m - 1]}-{str(y)[2:]}")
-    aer = df['Empresa agrupada'].astype(object)
-    nombres = {a: _limpiar_texto(a) for a in aer.unique()}
-    aerolinea = aer.map(nombres).to_numpy(dtype=object)
-    out['aerolinea'] = pd.Categorical(aerolinea)
-    out['grupo'] = pd.Categorical(out['aerolinea'].astype(object).map(_grupo), categories=GRUPOS)
-
     aero_arg = lado('Origen aeropuerto', 'Destino aeropuerto', extranjero=False)
     etiquetas_arg = {a: _etiqueta_aeropuerto(a) for a in pd.unique(aero_arg)}
     etiqueta_arg = np.array([etiquetas_arg[a] for a in aero_arg], dtype=object)
-    out['aeropuerto_arg'] = pd.Categorical(etiqueta_arg)
-    ciudad_arg = _combinar(etiqueta_arg, etiqueta_arg, lambda e, _: _ciudad_argentina(e))
-    out['ciudad_arg'] = ciudad_arg
     pais = lado('Origen país', 'Destino país', extranjero=True)
     aero_ext = lado('Origen aeropuerto', 'Destino aeropuerto', extranjero=True)
     loc_ext = lado('Origen localidad', 'Destino localidad', extranjero=True)
     ciudad = np.asarray(_combinar(loc_ext, aero_ext, _ciudad), dtype=object)
+
+    aer = df['Empresa agrupada'].astype(object)
+    nombres = {a: _limpiar_texto(a) for a in aer.unique()}
+    aerolinea = _separar_jetsmart(
+        aer.map(nombres).to_numpy(dtype=object), out['ano_num'].to_numpy(), out['mes_num'].to_numpy(),
+        df['Dia'].to_numpy(), np.array([e[:3] for e in etiqueta_arg], dtype=object), ciudad,
+        pd.to_numeric(df['Vuelos'], errors='coerce').fillna(0).to_numpy(), _leer_referencia_jetsmart(REFERENCIA_JETSMART))
+    out['aerolinea'] = pd.Categorical(aerolinea)
+    out['grupo'] = pd.Categorical(out['aerolinea'].astype(object).map(_grupo), categories=GRUPOS)
+    out['aeropuerto_arg'] = pd.Categorical(etiqueta_arg)
+    ciudad_arg = _combinar(etiqueta_arg, etiqueta_arg, lambda e, _: _ciudad_argentina(e))
+    out['ciudad_arg'] = ciudad_arg
     codigo = np.asarray(_combinar(aero_ext, aero_ext, lambda a, _: _codigo_aeropuerto(a)), dtype=object)
     out['pais'] = pd.Categorical(pais)
     out['region'] = pd.Categorical(lado('Origen continente', 'Destino continente', extranjero=True))
@@ -339,7 +383,8 @@ def _lista_aerolineas(df, col):
 def mostrar(h):
     h.COLORES_AEROLINEAS.update(COLORES_INTERNACIONALES)
     df = cargar_internacional(ZIP_INTERNACIONAL, os.path.getmtime(ZIP_INTERNACIONAL) if os.path.exists(ZIP_INTERNACIONAL) else 0,
-                              h.construir_etiqueta_aeropuerto, h.limpiar_mojibake_texto)
+                              h.construir_etiqueta_aeropuerto, h.limpiar_mojibake_texto,
+                              os.path.getmtime(REFERENCIA_JETSMART) if os.path.exists(REFERENCIA_JETSMART) else 0)
     if df is None or df.empty:
         st.info("Todavía no está cargada la base internacional (internacional_america.zip).")
         return
@@ -376,8 +421,8 @@ def mostrar(h):
         base_paises = df[df['region'].isin(regiones)] if regiones else df
         paises = c2.multiselect("País", sorted(base_paises['pais'].astype(str).unique()), key='int_paises', placeholder="Todos")
         grupos = c3.multiselect("Tipo de aerolínea", GRUPOS, key='int_grupos', placeholder="Todas",
-                                help="Argentinas: con certificado argentino. JetSMART va aparte porque la fuente no separa sus filiales "
-                                     "de Argentina, Chile y Perú. Las de fuera de América llegan con escala en otra ciudad de América.")
+                                help="Argentinas: con certificado argentino (incluye JetSMART Argentina; JetSMART Chile cuenta como extranjera). "
+                                     "Las de fuera de América llegan con escala en otra ciudad de América.")
         c4, c5, c6, c7, c8 = st.columns([3, 3, 2, 2, 2], vertical_alignment="bottom")
         aerolineas = c4.multiselect("Aerolínea", sorted(df['aerolinea'].astype(str).unique()), key='int_aerolineas', placeholder="Todas")
         aeropuertos = c5.multiselect("Aeropuerto argentino", sorted(df['aeropuerto_arg'].astype(str).unique()), key='int_aeropuertos',
@@ -415,7 +460,7 @@ def mostrar(h):
                 help=f"Ciudades con al menos 4 vuelos por mes en promedio. Con algún vuelo (incluye chárters y desvíos): "
                      f"{(vuelos_ciudad > 0).sum()}.")
     k[5].metric("Cuota argentina", h.fmt_porcentaje(_cuota_arg(actual)),
-                help="Porcentaje de los pasajeros transportados por aerolíneas argentinas (sin contar JetSMART).")
+                help="Porcentaje de los pasajeros transportados por aerolíneas argentinas (incluye JetSMART Argentina).")
 
     tabs = st.tabs(["📊 Panorama", "🛫 Ficha de ruta", "🏢 Competidores", "📦 Capacidad y ocupación", "💡 Oportunidades",
                     "🏙️ Destinos", "🔁 Escalas", "📋 Datos"])
@@ -885,8 +930,8 @@ def _oportunidades(h, actual, previo, rc, hay_prev, dias):
     else:
         cols = [c for c in ['Ruta', 'Pasajeros', 'Var. %', 'Frecuencias semanales', 'Ocupación', 'Aerolíneas'] if c in sin.columns]
         _tabla(h, sin[cols], porcentajes=('Ocupación',), alto_max=15)
-        st.caption("Rutas con al menos 1.000 pasajeros donde no vuela ninguna aerolínea argentina (JetSMART se cuenta aparte, "
-                   "porque la fuente no separa su filial argentina).")
+        st.caption("Rutas con al menos 1.000 pasajeros donde no vuela ninguna aerolínea argentina "
+                   "(JetSMART Argentina cuenta como argentina; JetSMART Chile, como extranjera).")
     st.markdown("---")
 
     st.subheader("Destinos que solo tienen vuelo directo desde Buenos Aires")
@@ -958,7 +1003,7 @@ def _destinos(h, actual, previo, hay_prev, dias):
             fig.update_layout(height=max(320, 34 * len(orden) + 120))
             h.graficar(fig, leyenda_abajo=True)
         st.caption("Var. % compara con el mismo período del año anterior. Cuota argentina = parte de los pasajeros llevada por "
-                   "aerolíneas argentinas (sin JetSMART). Podés ordenar por cualquier columna.")
+                   "aerolíneas argentinas (incluye JetSMART Argentina). Podés ordenar por cualquier columna.")
         st.markdown("---")
 
 
@@ -1024,13 +1069,17 @@ Aeroparque, Ezeiza, El Palomar, Morón y San Fernando) o aeropuerto ⇄ aeropuer
 - **Variaciones:** contra el mismo período del año anterior. «Nueva o reanudada» = casi sin tráfico el año anterior.
 
 **Tipos de aerolínea**
-- **Argentinas:** Aerolíneas Argentinas, Flybondi, Andes, LADE, American Jet y Flyest.
-- **JetSMART (grupo regional):** la fuente agrupa sus filiales de Argentina, Chile y Perú en un solo nombre.
+- **Argentinas:** Aerolíneas Argentinas, Flybondi, JetSMART Argentina, Andes, LADE, American Jet y Flyest.
+- **JetSMART Argentina y JetSMART Chile:** SINTA informa a JetSMART con un solo nombre. Para separarlas se usan los
+  aterrizajes y despegues de ANAC (datos.gob.ar), que identifican a la empresa que operó cada vuelo
+  (JetSMART Airlines S.A. = Argentina; JetSMART Airlines SpA = Chile). Con esos datos se reparte, para cada mes,
+  aeropuerto argentino y ciudad extranjera, la misma proporción de vuelos que informa ANAC. Antes de 2019 todos sus
+  vuelos se asignan a JetSMART Chile.
 - **Extranjeras de América** y **extranjeras de fuera de América**.
 
 **Escalas y quinta libertad.** Un tramo se considera continuación de un vuelo con escala (o de quinta libertad) cuando la
 aerolínea vuela entre Argentina y un país que no es el suyo (por ejemplo, Air Canada desde San Pablo). JetSMART queda
-afuera porque su filial argentina vuela directo desde Argentina.
+afuera: su filial chilena opera algunas rutas desde Perú o Brasil con su propio certificado.
 
 **Lo que la fuente no tiene:** tarifas, número de vuelo, tipo de avión, origen y destino real del pasajero (conexiones) ni la
 programación futura de vuelos.
