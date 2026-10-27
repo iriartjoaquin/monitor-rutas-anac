@@ -187,6 +187,15 @@ def _codigo_aeropuerto(nombre):
     return corto.replace('Aeropuerto Internacional ', '').strip()
 
 
+def _distancia_km(a, b):
+    """Distancia ortodrómica (en línea recta sobre la Tierra) entre dos puntos (lat, lon); NaN si falta alguno."""
+    if not a or not b:
+        return np.nan
+    la1, lo1, la2, lo2 = map(np.radians, (a[0], a[1], b[0], b[1]))
+    x = np.sin((la2 - la1) / 2) ** 2 + np.cos(la1) * np.cos(la2) * np.sin((lo2 - lo1) / 2) ** 2
+    return float(round(6371 * 2 * np.arcsin(np.sqrt(x))))
+
+
 def _ciudad_argentina(etiqueta):
     """'EZE (Ezeiza)' -> 'Buenos Aires'; 'COR (Córdoba)' -> 'Córdoba'."""
     sigla = etiqueta[:3]
@@ -239,7 +248,7 @@ def _leer_referencia_jetsmart(ruta):
 
 
 @st.cache_resource(show_spinner="Cargando la base internacional…")
-def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto, modificado_jetsmart=0):
+def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto, modificado_jetsmart=0, _coord_arg=None):
     """Lee y prepara la base internacional una sola vez (se vuelve a leer sólo si el archivo cambia)."""
     if not os.path.exists(ruta):
         return None
@@ -297,6 +306,10 @@ def cargar_internacional(ruta, modificado, _etiqueta_aeropuerto, _limpiar_texto,
     out['sentido'] = pd.Categorical(np.where(sale, 'Sale de Argentina', 'Llega a Argentina'))
     for c in ['vuelos', 'pasajeros', 'asientos']:
         out[c] = pd.to_numeric(df[c.capitalize()], errors='coerce').fillna(0).astype(np.int32)
+    # distancia de la ruta (aeropuerto argentino -> ciudad extranjera), para asientos-km y pasajeros-km
+    coord_arg = _coord_arg or {}
+    out['km'] = np.asarray(_combinar(np.array([e[:3] for e in etiqueta_arg], dtype=object), out['ciudad_clave'].astype(object),
+                                     lambda a, c: _distancia_km(coord_arg.get(a), COORD_CIUDADES.get(c))), dtype=float).astype(np.float32)
     return out[out['fecha'].notna()].reset_index(drop=True)
 
 
@@ -369,6 +382,17 @@ def _ranking(actual, previo, col, hay_prev, dias):
     return t.sort_values('Pasajeros', ascending=False).reset_index(drop=True)
 
 
+def _km(df, col):
+    """Asientos-km y pasajeros-km (en millones) por la columna pedida, y distancia media por pasajero."""
+    d = df[df['km'].notna()]
+    g = pd.DataFrame({'ask': d['asientos'] * d['km'], 'rpk': d['pasajeros'] * d['km'], 'pasajeros': d['pasajeros'],
+                      col: d[col]}).groupby(col, observed=True).sum()
+    g.index = g.index.astype(str)
+    g['dist'] = g['rpk'] / g['pasajeros'].replace(0, np.nan)
+    g[['ask', 'rpk']] = g[['ask', 'rpk']] / 1e6
+    return g
+
+
 def _hhi(serie):
     tot = serie.sum()
     return int(round(((serie / tot * 100) ** 2).sum())) if tot > 0 else 0
@@ -397,7 +421,8 @@ def mostrar(h):
     h.COLORES_AEROLINEAS.update(COLORES_INTERNACIONALES)
     df = cargar_internacional(ZIP_INTERNACIONAL, os.path.getmtime(ZIP_INTERNACIONAL) if os.path.exists(ZIP_INTERNACIONAL) else 0,
                               h.construir_etiqueta_aeropuerto, h.limpiar_mojibake_texto,
-                              os.path.getmtime(REFERENCIA_JETSMART) if os.path.exists(REFERENCIA_JETSMART) else 0)
+                              os.path.getmtime(REFERENCIA_JETSMART) if os.path.exists(REFERENCIA_JETSMART) else 0,
+                              {**h.COORDENADAS, **COORD_ARG_EXTRA})
     if df is None or df.empty:
         st.info("Todavía no está cargada la base internacional (internacional_america.zip).")
         return
@@ -515,6 +540,48 @@ def _barras_cambio(serie, etiquetas, sufijo, alto_min=220):
                                  range=[bajo - margen if bajo < 0 else 0, alto + margen if alto > 0 else 0]),
                       yaxis=dict(title=''))
     return fig
+
+
+def _cuota_mensual(h, df, actual, filtros, f_min, f_max):
+    """Cuota argentina mes a mes, en total y por país, desde 2017."""
+    st.subheader("Cuota argentina mes a mes")
+    sin_aer = {**filtros, 'grupos': [], 'aerolineas': []}  # la cuota se calcula sobre todas las aerolíneas
+    base = _filtrar(df, f_min, f_max, sin_aer)
+    if base.empty:
+        st.info("No hay datos con los filtros elegidos.")
+        return
+    paises_top = (actual.groupby('pais', observed=True)['pasajeros'].sum().sort_values(ascending=False)
+                  .index.astype(str)[:12].tolist())
+    defecto = [p for p in paises_top[:3]]
+    st.session_state.setdefault('int_cuota_paises', defecto)
+    st.session_state['int_cuota_paises'] = [p for p in st.session_state['int_cuota_paises'] if p in paises_top]
+    elegidos = st.multiselect("Sumar países al gráfico", paises_top, key='int_cuota_paises',
+                              help="La línea gruesa es el total; podés sumar la cuota argentina en cada país.")
+    arg = base['grupo'] == 'Argentinas'
+    m = pd.DataFrame({'periodo': base['periodo_orden'].astype(str), 'pais': base['pais'].astype(str),
+                      'total': base['pasajeros'], 'arg': np.where(arg, base['pasajeros'], 0)})
+    tot = m.groupby('periodo')[['total', 'arg']].sum()
+    fig = go.Figure()
+    fig.add_scatter(x=tot.index, y=(tot['arg'] / tot['total'].replace(0, np.nan) * 100).round(1), name='Total',
+                    mode='lines', line=dict(color='#1d4ed8', width=3))
+    paleta = ['#f97316', '#10b981', '#a855f7', '#ef4444', '#0ea5e9', '#ca8a04', '#64748b', '#db2777']
+    por_pais = m[m['pais'].isin(elegidos)].groupby(['pais', 'periodo'])[['total', 'arg']].sum()
+    for i, pais in enumerate(elegidos):
+        if pais not in por_pais.index.get_level_values(0):
+            continue
+        t = por_pais.loc[pais]
+        fig.add_scatter(x=t.index, y=(t['arg'] / t['total'].replace(0, np.nan) * 100).round(1), name=pais, mode='lines',
+                        line=dict(color=paleta[i % len(paleta)], width=1.6))
+    if '2020-03' in tot.index and '2021-10' in tot.index:
+        fig.add_vrect(x0='2020-03', x1='2021-10', fillcolor='#e2e8f0', opacity=0.5, line_width=0, layer='below',
+                      annotation_text='Pandemia', annotation_position='top left', annotation_font_color='#64748b')
+    fig.update_layout(height=400, yaxis=dict(title='Cuota argentina', ticksuffix='%', rangemode='tozero'),
+                      xaxis=dict(title='', type='category', nticks=20, tickangle=-45), hovermode='x unified')
+    h.graficar(fig, leyenda_abajo=True)
+    st.caption("Parte de los pasajeros llevada por aerolíneas argentinas (incluye JetSMART Argentina), cada mes desde 2017. "
+               "Respeta los filtros de región, país y aeropuerto, pero no los de aerolínea ni tipo de aerolínea (la cuota siempre "
+               "se mide sobre todas). En la pandemia (zona gris) casi no hubo vuelos y los saltos son vuelos especiales de repatriación.")
+    st.markdown("---")
 
 
 def _resumen_mes(h, df, filtros, f_min, f_max, rc):
@@ -681,10 +748,17 @@ def _panorama(h, df, actual, filtros, f_min, f_max, dias, rc):
     base_a = _filtrar(df, f_min, f_max, filtros)
     if modo != opc[0]:
         base_a = base_a[base_a['mes_num'] <= f_max.month]
-    ga = base_a.groupby(['ano_num', 'grupo'], observed=True)['pasajeros'].sum().reset_index()
+    medidas = {"Pasajeros": None, "Pasajeros-km": 'pasajeros', "Asientos-km": 'asientos'}
+    medida = st.radio("Medir en", list(medidas), horizontal=True, key="int_anual_medida",
+                      help="Pasajeros-km y asientos-km multiplican por la distancia de cada ruta: miden el tamaño real del tráfico "
+                           "y de la oferta (un pasajero a Miami pesa más que uno a Montevideo).")
+    base_m = base_a.assign(valor=base_a['pasajeros'] if medidas[medida] is None
+                           else base_a[medidas[medida]] * base_a['km'].fillna(0) / 1e6)
+    ga = base_m.groupby(['ano_num', 'grupo'], observed=True)['valor'].sum().reset_index()
     ga['ano_num'], ga['grupo'] = ga['ano_num'].astype(str), ga['grupo'].astype(str)
-    fig = px.bar(ga, x='ano_num', y='pasajeros', color='grupo', color_discrete_map=COLORES_GRUPO,
-                 category_orders={'grupo': GRUPOS}, labels={'ano_num': 'Año', 'pasajeros': 'Pasajeros', 'grupo': ''})
+    eje = 'Pasajeros' if medidas[medida] is None else f"{medida} (millones)"
+    fig = px.bar(ga, x='ano_num', y='valor', color='grupo', color_discrete_map=COLORES_GRUPO,
+                 category_orders={'grupo': GRUPOS}, labels={'ano_num': 'Año', 'valor': eje, 'grupo': ''})
     incompleto = modo == opc[0] and f_max.month < 12
     if incompleto:  # el año en curso, más claro
         for tr in fig.data:
@@ -694,6 +768,8 @@ def _panorama(h, df, actual, filtros, f_min, f_max, dias, rc):
     nota = f" {f_max.year} está incompleto (hasta el {f_max.strftime('%d/%m/%Y')}) y se muestra más claro." if incompleto else ""
     st.caption("Respeta los filtros, salvo las fechas: muestra todos los años de la base." + nota)
     st.markdown("---")
+
+    _cuota_mensual(h, df, actual, filtros, f_min, f_max)
 
     st.subheader("Puertas de entrada: aeropuertos argentinos")
     pa = _ranking(actual, actual.iloc[0:0], 'aeropuerto_arg', False, dias).rename(columns={'clave': 'Aeropuerto'})
@@ -759,7 +835,9 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
     k[4].metric("Asientos por vuelo", h.fmt_entero(asi / vue) if vue else "s/d", help="Tamaño promedio del avión.")
     k[5].metric("Aerolíneas · HHI", f"{(por_aer > 0).sum()} · {h.fmt_entero(_hhi(por_aer))}",
                 help="Cantidad de aerolíneas que operan y concentración del mercado (HHI de 0 a 10.000; más de 2.500 = concentrado).")
-    st.caption("Las variaciones comparan con el mismo período del año anterior.")
+    dist = r['km'].mean()
+    st.caption("Las variaciones comparan con el mismo período del año anterior."
+               + (f" Distancia aproximada de la ruta: {h.fmt_entero(dist)} km (en línea recta)." if pd.notna(dist) else ""))
 
     st.markdown("#### Quién vuela la ruta")
     g = _por(r, 'aerolinea')
@@ -831,6 +909,28 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
     h.graficar(fig, leyenda_abajo=True)
     st.caption("Promedio de vuelos de cada día de la semana, en cada sentido, durante el período elegido.")
 
+    st.markdown("#### Pasajeros que salen y que llegan")
+    sl = r.groupby(['periodo_orden', 'periodo_mes_es', 'sentido'], observed=True)['pasajeros'].sum().unstack('sentido', fill_value=0)
+    for c in ('Sale de Argentina', 'Llega a Argentina'):
+        if c not in sl.columns:
+            sl[c] = 0
+    sl = sl.reset_index().sort_values('periodo_orden')
+    sl['periodo_mes_es'] = sl['periodo_mes_es'].astype(str)
+    sl['saldo'] = sl['Sale de Argentina'] - sl['Llega a Argentina']
+    fig = go.Figure()
+    fig.add_bar(x=sl['periodo_mes_es'], y=sl['Sale de Argentina'], name='Salen de Argentina', marker_color='#1d4ed8')
+    fig.add_bar(x=sl['periodo_mes_es'], y=sl['Llega a Argentina'], name='Llegan a Argentina', marker_color='#f59e0b')
+    fig.add_scatter(x=sl['periodo_mes_es'], y=sl['saldo'], name='Salen − llegan', mode='lines+markers',
+                    line=dict(color='#0f172a', width=2, dash='dot'))
+    fig.update_layout(barmode='group', height=380, xaxis=dict(tickangle=-45, type='category'), yaxis=dict(title='Pasajeros'))
+    h.graficar(fig, leyenda_abajo=True)
+    sale_t, llega_t = sl['Sale de Argentina'].sum(), sl['Llega a Argentina'].sum()
+    st.caption(f"En el período salieron {h.fmt_entero(sale_t)} pasajeros y llegaron {h.fmt_entero(llega_t)}. Como casi todos viajan "
+               "ida y vuelta, en el año se compensan: lo que importa es **cuándo** se abre la diferencia. Si en las vacaciones de "
+               "acá (enero, julio) salen más de los que llegan y la diferencia se da vuelta al mes siguiente, la ruta depende del "
+               "viajero argentino. Si el patrón es el inverso (llegan más en la temporada de afuera y se van después), depende del "
+               "turista extranjero. La fuente no informa la nacionalidad de los pasajeros: es una lectura indirecta.")
+
     todo = _filtrar(df, f_min, f_max, filtros)
     todo = todo[todo[rc] == ruta]
     st.markdown("#### Historia de la ruta desde 2017")
@@ -887,8 +987,27 @@ def _competidores(h, actual, previo, rc, hay_prev, dias):
     if hay_prev and not previo.empty:
         p = _por(previo, 'aerolinea')['pasajeros']
         ta['Cambio de cuota'] = (ta['Participación'] - ta['Aerolínea'].map(p).fillna(0) / max(p.sum(), 1) * 100).round(1)
-    _tabla(h, ta.drop(columns=['Cuota argentina']), porcentajes=('Ocupación', 'Participación'), alto_max=15)
-    st.caption("Participación = parte de los pasajeros del período. Cambio de cuota = puntos porcentuales ganados o perdidos.")
+    km = _km(actual, 'aerolinea')
+    ta['Asientos-km (millones)'] = ta['Aerolínea'].map(km['ask']).round(1)
+    ta['Pasajeros-km (millones)'] = ta['Aerolínea'].map(km['rpk']).round(1)
+    ta['Cuota de pasajeros-km'] = (ta['Pasajeros-km (millones)'] / max(km['rpk'].sum(), 1e-9) * 100).round(1)
+    ta['Distancia media (km)'] = ta['Aerolínea'].map(km['dist']).round(0)
+    _tabla(h, ta.drop(columns=['Cuota argentina']), porcentajes=('Ocupación', 'Participación', 'Cuota de pasajeros-km'), alto_max=15)
+    st.caption("Participación = parte de los pasajeros del período. Cambio de cuota = puntos porcentuales ganados o perdidos. "
+               "Asientos-km y pasajeros-km = asientos o pasajeros multiplicados por la distancia de cada ruta: es la forma "
+               "estándar de medir el tamaño de una aerolínea, porque no pesa lo mismo un pasajero a Montevideo que uno a Miami. "
+               "Distancia media = kilómetros que vuela en promedio cada pasajero.")
+    top = ta.head(12)
+    fig = go.Figure()
+    fig.add_bar(y=top['Aerolínea'], x=top['Participación'], name='Cuota de pasajeros', orientation='h', marker_color='#93c5fd')
+    fig.add_bar(y=top['Aerolínea'], x=top['Cuota de pasajeros-km'], name='Cuota de pasajeros-km', orientation='h',
+                marker_color='#1d4ed8')
+    fig.update_layout(barmode='group', height=34 * len(top) * 1.6 + 80, yaxis=dict(autorange='reversed', title=''),
+                      xaxis=dict(title='% del total', ticksuffix='%'), legend=dict(orientation='h', y=1.08, x=0))
+    st.markdown("#### Cuota de pasajeros vs. cuota de pasajeros-km")
+    h.graficar(fig)
+    st.caption("Las 12 aerolíneas con más pasajeros. Si la barra oscura es más larga, la aerolínea vuela rutas más largas que el "
+               "promedio (por ejemplo, a Estados Unidos o el Caribe); si es más corta, se concentra en rutas cortas (Brasil, Chile, Uruguay).")
     if 'Cambio de cuota' in ta.columns:
         cambios = ta[ta['Cambio de cuota'].abs() >= 0.3].sort_values('Cambio de cuota')
         if not cambios.empty:
@@ -1223,6 +1342,7 @@ Aeroparque, Ezeiza, El Palomar, Morón y San Fernando) o aeropuerto ⇄ aeropuer
 - **Frecuencias semanales:** vuelos por semana en cada sentido (un vuelo diario = 7).
 - **Ocupación:** pasajeros ÷ asientos. **Asientos por vuelo:** tamaño promedio del avión.
 - **Cuota de pasajeros vs. cuota de asientos:** si una aerolínea tiene más cuota de pasajeros que de asientos, vende mejor que su oferta.
+- **Asientos-km y pasajeros-km:** asientos o pasajeros por la distancia en línea recta entre el aeropuerto argentino y la ciudad extranjera (aproximada: no es la distancia exacta que vuela cada avión).
 - **HHI:** concentración del mercado de la ruta (0 a 10.000; más de 2.500 = concentrado).
 - **Variaciones:** contra el mismo período del año anterior. «Nueva o reanudada» = casi sin tráfico el año anterior.
 
