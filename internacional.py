@@ -504,6 +504,7 @@ def mostrar(h):
         f'<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">📅 Datos del {f_min.strftime("%d/%m/%Y")} al {f_max.strftime("%d/%m/%Y")}</span>'
         '<span class="chip" style="background:#e0f2fe;color:#0c4a6e;border-color:#bae6fd;">🌎 Todas las rutas entre Argentina y el resto de América</span>'
         '</div>', unsafe_allow_html=True)
+    h.mostrar_novedades('internacional')
 
     # ------------------------------------------------------------------ filtros
     def_desde = date(f_max.year, 1, 1) if date(f_max.year, 1, 1) >= f_min else f_min

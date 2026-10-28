@@ -15,6 +15,10 @@ GENERAL = """
 así que siempre hay un mes y medio de atraso. Los datos se compararon contra los registros propios de ANAC y coinciden con
 menos de 1% de diferencia.
 
+**🆕 Qué cambió.** Arriba de cada sección, antes de los filtros, hay un resumen fijo del último mes publicado para todo el
+mercado: pasajeros, asientos y ocupación contra el mismo mes del año anterior, las aerolíneas y rutas que más se movieron, y
+quién empezó o dejó de volar cada ruta contra el mes anterior. Es lo primero para mirar cuando salen datos nuevos.
+
 **Palabras que vas a ver**
 - **Frecuencias semanales:** vuelos por semana en cada sentido. Un vuelo diario ida y vuelta = 7.
 - **Ocupación:** pasajeros ÷ asientos. Un avión con 180 asientos y 153 pasajeros va al 85%.

@@ -1,0 +1,235 @@
+{
+ "generado": "2026-10-28",
+ "cabotaje": {
+  "mes": "2026-09",
+  "mes_txt": "septiembre 2026",
+  "ly_txt": "septiembre 2025",
+  "ant_txt": "agosto 2026",
+  "kpis": [
+   {
+    "nombre": "Pasajeros",
+    "valor": "1.439.254",
+    "delta": "+0,9%"
+   },
+   {
+    "nombre": "Asientos",
+    "valor": "1.650.598",
+    "delta": "-4,3%"
+   },
+   {
+    "nombre": "Vuelos",
+    "valor": "10.926",
+    "delta": "-4,5%"
+   },
+   {
+    "nombre": "Ocupación",
+    "valor": "87,2%",
+    "delta": "+4,5 pp"
+   }
+  ],
+  "destacados": [
+   "**Flybondi** perdió 16,3 pp de cuota (dejó de volar).",
+   "**Aerolíneas Argentinas** ganó 8,3 pp de cuota (pasajeros +15,4%).",
+   "**JetSMART Airlines** ganó 7,6 pp de cuota (pasajeros +34,2%).",
+   "**AEP (Aeroparque) ⇄ SLA (Salta)** fue de las que más crecieron: 80.568 pasajeros (+27,6%).",
+   "**AEP (Aeroparque) ⇄ BRC (Bariloche)** fue de las que más crecieron: 122.718 pasajeros (+15,7%).",
+   "**AEP (Aeroparque) ⇄ MDZ (Mendoza)** fue de las que más cayeron: 91.300 pasajeros (-12,8%).",
+   "**AEP (Aeroparque) ⇄ CNQ (Corrientes)** fue de las que más cayeron: 8.487 pasajeros (-57,8%)."
+  ],
+  "altas": [
+   {
+    "ruta": "BRC (Bariloche) ⇄ FTE (El Calafate)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 24,
+    "pasajeros": 2755
+   },
+   {
+    "ruta": "ROS (Rosario) ⇄ SDE (Santiago del Estero)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 8,
+    "pasajeros": 991
+   },
+   {
+    "ruta": "BRC (Bariloche) ⇄ MDQ (Mar del Plata)",
+    "aerolinea": "Andes Líneas Aéreas",
+    "vuelos": 5,
+    "pasajeros": 924
+   },
+   {
+    "ruta": "EZE (Ezeiza) ⇄ FTE (El Calafate)",
+    "aerolinea": "JetSMART Airlines",
+    "vuelos": 10,
+    "pasajeros": 758
+   },
+   {
+    "ruta": "BRC (Bariloche) ⇄ UAQ (San Juan)",
+    "aerolinea": "Andes Líneas Aéreas",
+    "vuelos": 4,
+    "pasajeros": 680
+   }
+  ],
+  "bajas": [
+   {
+    "ruta": "CPC (San Martín de los Andes) ⇄ EZE (Ezeiza)",
+    "aerolinea": "JetSMART Airlines",
+    "vuelos": 20,
+    "pasajeros": 2963
+   },
+   {
+    "ruta": "CPC (San Martín de los Andes) ⇄ ROS (Rosario)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 15,
+    "pasajeros": 2137
+   },
+   {
+    "ruta": "COR (Córdoba) ⇄ CPC (San Martín de los Andes)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 12,
+    "pasajeros": 1615
+   },
+   {
+    "ruta": "BRC (Bariloche) ⇄ MDZ (Mendoza)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 8,
+    "pasajeros": 1130
+   },
+   {
+    "ruta": "EZE (Ezeiza) ⇄ JUJ (Jujuy)",
+    "aerolinea": "Flybondi",
+    "vuelos": 5,
+    "pasajeros": 596
+   },
+   {
+    "ruta": "EZE (Ezeiza) ⇄ SFN (Santa Fe)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 4,
+    "pasajeros": 278
+   }
+  ]
+ },
+ "internacional": {
+  "mes": "2026-09",
+  "mes_txt": "septiembre 2026",
+  "ly_txt": "septiembre 2025",
+  "ant_txt": "agosto 2026",
+  "kpis": [
+   {
+    "nombre": "Pasajeros",
+    "valor": "1.059.960",
+    "delta": "+4,3%"
+   },
+   {
+    "nombre": "Asientos",
+    "valor": "1.308.913",
+    "delta": "+1,3%"
+   },
+   {
+    "nombre": "Vuelos",
+    "valor": "6.888",
+    "delta": "-0,8%"
+   },
+   {
+    "nombre": "Ocupación",
+    "valor": "81,0%",
+    "delta": "+2,3 pp"
+   },
+   {
+    "nombre": "Cuota argentina",
+    "valor": "23,4%",
+    "delta": "-4,7 pp"
+   }
+  ],
+  "destacados": [
+   "**LATAM** ganó 3,3 pp de cuota (pasajeros +20,4%).",
+   "**Aerolíneas Argentinas** perdió 2,8 pp de cuota (pasajeros -10,0%).",
+   "**Gol Transportes Aéreos** perdió 2,7 pp de cuota (pasajeros -17,8%).",
+   "**Flybondi** perdió 2,7 pp de cuota (dejó de volar).",
+   "**Buenos Aires ⇄ Miami (Estados Unidos)** fue de las que más crecieron: 66.301 pasajeros (+18,3%).",
+   "**Buenos Aires ⇄ Lima (Perú)** fue de las que más crecieron: 72.993 pasajeros (+13,1%).",
+   "**Buenos Aires ⇄ São Paulo (Brasil)** fue de las que más cayeron: 160.335 pasajeros (-8,9%).",
+   "**Buenos Aires ⇄ Florianópolis (Brasil)** fue de las que más cayeron: 9.398 pasajeros (-45,5%)."
+  ],
+  "altas": [
+   {
+    "ruta": "Bariloche ⇄ Montevideo (Uruguay)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 6,
+    "pasajeros": 996
+   },
+   {
+    "ruta": "Rosario ⇄ Santa Cruz de la Sierra (Bolivia)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 7,
+    "pasajeros": 772
+   }
+  ],
+  "bajas": [
+   {
+    "ruta": "Bariloche ⇄ São Paulo (Brasil)",
+    "aerolinea": "LATAM",
+    "vuelos": 85,
+    "pasajeros": 16489
+   },
+   {
+    "ruta": "Bariloche ⇄ São Paulo (Brasil)",
+    "aerolinea": "Azul Linhas Aereas Brasileiras",
+    "vuelos": 59,
+    "pasajeros": 9014
+   },
+   {
+    "ruta": "Ushuaia ⇄ São Paulo (Brasil)",
+    "aerolinea": "LATAM",
+    "vuelos": 36,
+    "pasajeros": 6478
+   },
+   {
+    "ruta": "Bariloche ⇄ São Paulo (Brasil)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 30,
+    "pasajeros": 4339
+   },
+   {
+    "ruta": "Ushuaia ⇄ São Paulo (Brasil)",
+    "aerolinea": "Gol Transportes Aéreos",
+    "vuelos": 26,
+    "pasajeros": 3972
+   },
+   {
+    "ruta": "Bariloche ⇄ Santiago (Chile)",
+    "aerolinea": "Sky Airline",
+    "vuelos": 26,
+    "pasajeros": 2786
+   },
+   {
+    "ruta": "Bariloche ⇄ Belo Horizonte (Brasil)",
+    "aerolinea": "Azul Linhas Aereas Brasileiras",
+    "vuelos": 16,
+    "pasajeros": 2453
+   },
+   {
+    "ruta": "Buenos Aires ⇄ Dallas-Fort Worth (Estados Unidos)",
+    "aerolinea": "American Airlines",
+    "vuelos": 5,
+    "pasajeros": 1086
+   },
+   {
+    "ruta": "Rosario ⇄ São Paulo (Brasil)",
+    "aerolinea": "Aerolíneas Argentinas",
+    "vuelos": 6,
+    "pasajeros": 664
+   },
+   {
+    "ruta": "Buenos Aires ⇄ La Serena (Chile)",
+    "aerolinea": "Andes Líneas Aéreas",
+    "vuelos": 4,
+    "pasajeros": 506
+   },
+   {
+    "ruta": "Mendoza ⇄ Punta Cana (República Dominicana)",
+    "aerolinea": "Arajet",
+    "vuelos": 4,
+    "pasajeros": 178
+   }
+  ]
+ }
+}

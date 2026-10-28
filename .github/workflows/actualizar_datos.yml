@@ -11,9 +11,14 @@ on:
         description: 'Descargar y reemplazar aunque el tablero no tenga datos más nuevos'
         type: boolean
         default: false
+      aviso:
+        description: 'Recalcular "Qué cambió" y mandar el aviso por mail aunque no haya datos nuevos (para probar)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: actualizar-datos
@@ -81,12 +86,24 @@ jobs:
           pip install pandas
           python actualizar_jetsmart.py
 
+      - name: Calcular qué cambió en el último mes (novedades.json, lo muestra la página)
+        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || steps.act_js.outputs.changed == 'true' || inputs.aviso
+        id: nov
+        run: |
+          pip install -r requirements.txt
+          python generar_novedades.py
+          echo "mes=$(python -c "import json; print(json.load(open('novedades.json', encoding='utf-8'))['cabotaje']['mes_txt'])")" >> "$GITHUB_OUTPUT"
+
       - name: Guardar cambios en GitHub
-        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || steps.act_js.outputs.changed == 'true'
+        if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || steps.act_js.outputs.changed == 'true' || inputs.aviso
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add conectividad_aerea.zip internacional_america.zip jetsmart_operador.csv
+          git add conectividad_aerea.zip internacional_america.zip jetsmart_operador.csv novedades.json
+          if git diff --cached --quiet; then
+            echo "Nada para guardar."
+            exit 0
+          fi
           MENSAJE="Actualización automática de datos:"
           if [ "${{ steps.act.outputs.changed }}" = "true" ]; then
             MENSAJE="$MENSAJE cabotaje hasta ${{ steps.act.outputs.ultima_fecha }} (${{ steps.act.outputs.filas }} filas)"
@@ -99,3 +116,19 @@ jobs:
           fi
           git commit -m "$MENSAJE"
           git push
+
+      # El aviso es un "issue" del repositorio: GitHub se lo manda por mail al dueño (por la mención).
+      # Se manda una sola vez por mes, aunque cabotaje e internacional se actualicen en días distintos.
+      - name: Avisar por mail qué cambió
+        if: steps.nov.outcome == 'success' && (steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || inputs.aviso)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MES: ${{ steps.nov.outputs.mes }}
+        run: |
+          TITULO="✈️ Qué cambió en $MES"
+          if [ "${{ inputs.aviso }}" != "true" ] && gh issue list --state all --search "in:title \"$TITULO\"" --json title --jq '.[].title' | grep -qxF "$TITULO"; then
+            echo "El aviso de $MES ya se mandó."
+            exit 0
+          fi
+          { echo "@${{ github.repository_owner }}"; echo; cat novedades_mail.md; } > cuerpo.md
+          gh issue create --title "$TITULO" --body-file cuerpo.md
