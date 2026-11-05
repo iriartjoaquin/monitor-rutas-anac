@@ -171,6 +171,18 @@ def grafico_ocupacion(x, ocupacion, alto=260):
     return fig
 
 
+def ordenar_meses(fig):
+    """Meses derechos y como máximo 6 rótulos, contando desde el último, para que entren también en el celular."""
+    eje = fig.layout.xaxis
+    if eje.tickangle != -45:
+        return
+    meses = list(eje.categoryarray) if eje.categoryarray is not None else list(
+        dict.fromkeys(x for tr in fig.data if tr.x is not None for x in tr.x))
+    rotulos = meses[::-max(1, math.ceil(len(meses) / 6))][::-1]
+    textos = [f"{meses_es[int(str(m)[5:])]}-{str(m)[2:4]}" if re.fullmatch(r'\d{4}-\d{2}', str(m)) else str(m) for m in rotulos]
+    fig.update_xaxes(title_text=None, tickangle=0, nticks=None, tickmode='array', tickvals=rotulos, ticktext=textos)
+
+
 def graficar(fig, mapa=False, leyenda_abajo=False):
     """Muestra un gráfico Plotly pensado también para pantallas chicas: sin título interno ni barra de
     herramientas (salvo el mapa, que la necesita para hacer zoom)."""
@@ -183,13 +195,17 @@ def graficar(fig, mapa=False, leyenda_abajo=False):
             tr.marker.color = color
     fig.update_layout(separators=',.')  # números con formato argentino en ejes y carteles (1.234,5)
     if not mapa:
+        ordenar_meses(fig)
         fig.update_layout(title_text=None)
         lg = fig.layout.legend
         arriba = lg.orientation == 'h' and lg.y is not None and lg.y >= 1
         if leyenda_abajo:
-            fig.update_layout(height=(fig.layout.height or 450) + 120,
-                              legend=dict(orientation='h', yanchor='top', y=-0.4, xanchor='left', x=0, title_text=''),
-                              margin=dict(t=30, b=190))
+            # la leyenda va apenas debajo de los meses; la distancia se pasa a proporción del área del gráfico
+            alto = (fig.layout.height or 450) + 60
+            distancia = 75 if fig.layout.xaxis.title.text else 50  # si el eje tiene título, la leyenda va debajo de él
+            fig.update_layout(height=alto,
+                              legend=dict(orientation='h', yanchor='top', y=-distancia / (alto - 110), xanchor='left', x=0, title_text=''),
+                              margin=dict(t=30, b=80, r=30))
         else:
             fig.update_layout(margin=dict(t=90 if arriba else 30))
     st.plotly_chart(fig, width='stretch', config={'displayModeBar': bool(mapa), 'displaylogo': False, 'scrollZoom': bool(mapa)})
@@ -977,6 +993,8 @@ with tab_panorama:
                "Si suben las barras, la ruta crece con más frecuencias; si sube la línea, con aviones más grandes.")
 
 with tab_competencia:
+    st.caption("⚠️ Las cuotas se miden por tramo de vuelo, no por viaje completo: quien vuela Córdoba–Aeroparque–Bariloche cuenta en "
+               "las dos rutas. Los datos no dicen dónde empezó ni dónde terminó el viaje de cada pasajero.")
     # Participación de mercado en el tiempo (100% apilado)
     st.markdown("#### Participación de mercado, mes a mes")
     df_share = df_top8.groupby(['periodo_orden', 'periodo_mes_es', 'aerolinea'], observed=True)['pasajeros'].sum().reset_index()
@@ -1070,18 +1088,23 @@ with tab_competencia:
             x='periodo_mes_es',
             y='ocupacion_%',
             color='aerolinea',
-            title="Evolución del Factor de Ocupación (%) por Operador (Curva individual por aerolínea)",
-            labels={'periodo_mes_es': 'Período', 'ocupacion_%': 'Factor de Ocupación (%)', 'aerolinea': 'Aerolínea'},
+            labels={'periodo_mes_es': 'Período', 'ocupacion_%': 'Ocupación', 'aerolinea': 'Aerolínea'},
             markers=True
         )
+        # se ven las 4 con más pasajeros; el eje se ajusta solo a las líneas visibles
+        principales = set(df_mes_ocup.groupby('aerolinea', observed=True)['pasajeros'].sum().nlargest(4).index.astype(str))
+        fig_line.for_each_trace(lambda tr: tr.update(visible=True if tr.name in principales else 'legendonly'))
         fig_line.update_layout(
-            yaxis_range=[0, 105],
+            yaxis_ticksuffix='%',
             xaxis_tickangle=-45,
             legend_title_text='Aerolínea',
             height=480,
             margin=dict(l=20, r=20, t=50, b=40)
         )
         graficar(fig_line, leyenda_abajo=True)
+        if df_mes_ocup['aerolinea'].astype(str).nunique() > 4:
+            st.caption("Se ven las 4 aerolíneas con más pasajeros. Tocá un nombre de la leyenda para sumar o sacar una línea. "
+                       "El eje no arranca en 0: mirá los porcentajes.")
     else:
         st.info("No se registran asientos ofertados para calcular el factor de ocupación en este segmento.")
 

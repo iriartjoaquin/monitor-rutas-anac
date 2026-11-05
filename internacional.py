@@ -1045,6 +1045,9 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
 
 
 def _competidores(h, actual, previo, rc, hay_prev, dias):
+    st.caption("⚠️ Las cuotas se miden por tramo de vuelo, no por viaje completo: quien vuela Córdoba–Buenos Aires–Miami figura solo en "
+               "Buenos Aires ⇄ Miami, y quien sigue de San Pablo a Europa, solo en el tramo a San Pablo. Los datos no dicen dónde "
+               "empezó ni dónde terminó el viaje de cada pasajero.")
     st.subheader("Ranking de aerolíneas")
     ta = _ranking(actual, previo, 'aerolinea', hay_prev, dias).rename(columns={'clave': 'Aerolínea'})
     grupos = actual.groupby('aerolinea', observed=True)['grupo'].first()
