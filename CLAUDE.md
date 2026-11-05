@@ -47,7 +47,8 @@ y mirando la página en el navegador.
 
 - **Los archivos de datos** (`*.zip`, `jetsmart_operador.csv`, `novedades.json`): solo los actualiza el agente.
 - **El workflow** `.github/workflows/actualizar_datos.yml`: horarios, permisos y el aviso por mail.
-- **Versiones fijas** en `requirements.txt` (streamlit 1.65.0, plotly 7.1.0, pandas 2.2.3).
+- **Versiones fijas** en `requirements.txt` (streamlit 1.65.0, plotly 7.1.0, pandas 2.2.3) y en el workflow (las mismas, más numpy 2.5.4 y
+  playwright 1.64.1). Si cambia una, hay que cambiarla en los dos lados.
 - **Hacer `git push`**: publica la página al instante. Preguntar antes, salvo que me lo hayas pedido.
 - **El alcance**: cabotaje más internacional dentro de América, datos desde 2017.
 - **Decisiones ya tomadas**:

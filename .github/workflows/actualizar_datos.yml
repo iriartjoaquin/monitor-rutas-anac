@@ -52,7 +52,7 @@ jobs:
       - name: Instalar dependencias
         if: steps.chk.outputs.pendiente == 'true' || steps.chk.outputs.pendiente_int == 'true'
         run: |
-          pip install pandas playwright
+          pip install pandas==2.2.3 numpy==2.5.4 playwright==1.64.1
           playwright install --with-deps chromium
 
       - name: Actualizar cabotaje (conectividad_aerea.zip) desde el tablero de SINTA
@@ -83,14 +83,14 @@ jobs:
         if: steps.chk_js.outputs.pendiente_js == 'true' || inputs.forzar
         id: act_js
         run: |
-          pip install pandas
+          pip install pandas==2.2.3 numpy==2.5.4
           python actualizar_jetsmart.py
 
       - name: Calcular qué cambió en el último mes (novedades.json, lo muestra la página)
         if: steps.act.outputs.changed == 'true' || steps.act_int.outputs.changed == 'true' || steps.act_js.outputs.changed == 'true' || inputs.aviso
         id: nov
         run: |
-          pip install -r requirements.txt
+          pip install pandas==2.2.3 numpy==2.5.4 streamlit==1.65.0 plotly==7.1.0
           python generar_novedades.py
           echo "mes=$(python -c "import json; print(json.load(open('novedades.json', encoding='utf-8'))['cabotaje']['mes_txt'])")" >> "$GITHUB_OUTPUT"
 
