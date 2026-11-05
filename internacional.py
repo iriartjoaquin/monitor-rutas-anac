@@ -47,9 +47,9 @@ COLORES_GRUPO = {'Argentinas': '#1d4ed8', 'Extranjeras de América': '#94a3b8', 
 COLORES_REGION = {'América del Sur': '#1d4ed8', 'América Central y Caribe': '#10b981', 'América del Norte': '#f59e0b'}
 # Colores fijos de las principales aerolíneas internacionales (se suman a los de cabotaje)
 COLORES_INTERNACIONALES = {
-    OTRAS: '#cbd5e1', JETSMART_AR: '#e11d48', JETSMART_CL: '#fb7185', 'Gol Transportes Aéreos': '#f97316', 'Avianca': '#7c3aed', 'American Airlines': '#0f766e', 'Sky Airline': '#14b8a6',
-    'Arajet': '#9f1239', 'United Airlines': '#1e3a8a', 'Delta Air Lines': '#b91c1c', 'Aeroméxico': '#334155',
-    'Boliviana de Aviación': '#65a30d', 'Azul Linhas Aereas Brasileiras': '#38bdf8', 'Air Canada': '#dc2626',
+    OTRAS: '#cbd5e1', JETSMART_AR: '#e11d48', JETSMART_CL: '#fb7185', 'Gol Transportes Aéreos': '#9a3412', 'Avianca': '#a21caf', 'American Airlines': '#334155', 'Sky Airline': '#2dd4bf',
+    'Arajet': '#ca8a04', 'United Airlines': '#1e3a8a', 'Delta Air Lines': '#7f1d1d', 'Aeroméxico': '#64748b',
+    'Boliviana de Aviación': '#84cc16', 'Azul Linhas Aereas Brasileiras': '#7dd3fc', 'Air Canada': '#c084fc',
     'Paranair': '#a855f7', 'Turkish Airlines': '#be123c', 'Emirates Airline': '#ca8a04', 'KLM': '#0284c7',
     'Ethiopian Airlines': '#15803d', 'Qatar Airways': '#701a75', 'British Airways': '#475569',
 }
@@ -976,14 +976,12 @@ def _ficha_ruta(h, df, actual, previo, filtros, rc, nivel_txt, hay_prev, dias, f
     for aer in [a for a in orden if a != OTRAS] + [a for a in orden if a == OTRAS]:
         sub = m[m['aerolinea'] == aer]
         fig.add_bar(x=sub['periodo_mes_es'], y=sub['frec'].round(1), name=aer)
-    fig.add_scatter(x=oc['periodo_mes_es'], y=(oc['pasajeros'] / oc['asientos'].replace(0, np.nan) * 100).round(1),
-                    name='Ocupación (%)', yaxis='y2', mode='lines+markers', line=dict(color='#0f172a', width=2, dash='dot'))
     fig.update_layout(barmode='stack', height=440,
                       xaxis=dict(categoryorder='array', categoryarray=oc['periodo_mes_es'].tolist(), tickangle=-45),
-                      yaxis=dict(title='Frecuencias semanales (por sentido)'),
-                      yaxis2=dict(title='Ocupación', overlaying='y', side='right', range=[0, 105], tickvals=[0, 25, 50, 75, 100],
-                                  ticksuffix='%', showgrid=False))
+                      yaxis=dict(title='Frecuencias semanales (por sentido)'))
     h.graficar(fig, leyenda_abajo=True)
+    h.graficar(h.grafico_ocupacion(oc['periodo_mes_es'].tolist(),
+                                   (oc['pasajeros'] / oc['asientos'].replace(0, np.nan) * 100).round(1).tolist()))
     if OTRAS in m['aerolinea'].values:
         st.caption(f"Para que se lean mejor, los gráficos de la ficha muestran las {MAX_AEROLINEAS_GRAFICO} aerolíneas con más "
                    "pasajeros y juntan el resto en «Otras aerolíneas». La tabla de arriba las tiene a todas.")

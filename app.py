@@ -145,13 +145,30 @@ COLORES_AEROLINEAS = {
     'Aerolíneas Argentinas': '#1d4ed8',
     'JetSMART Airlines': '#e11d48',
     'Flybondi': '#f59e0b',
-    'Andes Líneas Aéreas': '#10b981',
-    'LADE - Líneas Aéreas Del Estado': '#8b5cf6',
+    'Andes Líneas Aéreas': '#059669',
+    'LADE - Líneas Aéreas Del Estado': '#6b21a8',
     'LATAM': '#0ea5e9',
-    'Copa Airlines': '#84cc16',
+    'Copa Airlines': '#15803d',
     'American Jet': '#64748b',
     'Otras aerolíneas': '#cbd5e1',
 }
+
+
+def grafico_ocupacion(x, ocupacion, alto=260):
+    """Línea de ocupación, para mostrar debajo de un gráfico de barras con los mismos meses.
+    El eje se ajusta a los datos en tramos de 10 puntos: si fuera de 0 a 100, la línea quedaría casi plana."""
+    validos = pd.Series(ocupacion).dropna()
+    piso = max(0, math.floor(validos.min() / 10) * 10) if not validos.empty else 0
+    techo = min(100, math.ceil(validos.max() / 10) * 10) if not validos.empty else 100
+    if techo <= piso:
+        piso, techo = max(0, piso - 10), min(100, techo + 10)
+    fig = go.Figure(go.Scatter(x=x, y=ocupacion, mode='lines+markers', name='Ocupación', connectgaps=False,
+                               line=dict(color='#0f172a', width=2), marker=dict(size=8),
+                               hovertemplate='%{y:.1f}%<extra>Ocupación</extra>'))
+    fig.update_layout(height=alto, showlegend=False, margin=dict(l=20, r=20, t=30, b=40),
+                      xaxis=dict(categoryorder='array', categoryarray=list(x), tickangle=-45),
+                      yaxis=dict(title='Ocupación', ticksuffix='%', range=[piso - 2, techo + 2]))
+    return fig
 
 
 def graficar(fig, mapa=False, leyenda_abajo=False):
@@ -164,6 +181,7 @@ def graficar(fig, mapa=False, leyenda_abajo=False):
         elif color and tr.type == 'scatter':
             tr.line.color = color
             tr.marker.color = color
+    fig.update_layout(separators=',.')  # números con formato argentino en ejes y carteles (1.234,5)
     if not mapa:
         fig.update_layout(title_text=None)
         lg = fig.layout.legend
@@ -390,7 +408,7 @@ UTILES = SimpleNamespace(
     fmt_decimal=fmt_decimal, meses_es=meses_es, sanitizar_fecha=sanitizar_fecha, restar_ano=restar_ano,
     construir_etiqueta_aeropuerto=construir_etiqueta_aeropuerto, limpiar_mojibake_texto=limpiar_mojibake_texto,
     COORDENADAS=COORDENADAS, COLORES_AEROLINEAS=COLORES_AEROLINEAS, PALETA=PALETA,
-    mostrar_novedades=mostrar_novedades)
+    mostrar_novedades=mostrar_novedades, grafico_ocupacion=grafico_ocupacion)
 
 if seccion == SECCIONES[1]:
     internacional.mostrar(UTILES)
@@ -850,17 +868,14 @@ with tab_panorama:
     fig_od = go.Figure()
     fig_od.add_bar(x=df_od['periodo_mes_es'], y=df_od['asientos'], name='Asientos ofrecidos', marker_color='#cbd5e1')
     fig_od.add_bar(x=df_od['periodo_mes_es'], y=df_od['pasajeros'], name='Pasajeros', marker_color=PALETA[0])
-    fig_od.add_scatter(x=df_od['periodo_mes_es'], y=df_od['ocup'], name='Ocupación (%)', yaxis='y2',
-                       mode='lines+markers', line=dict(color=PALETA[2], width=3), connectgaps=False,
-                       hovertemplate='%{y:.1f}%<extra>Ocupación</extra>')
     fig_od.update_layout(
         barmode='overlay', height=440, margin=dict(l=20, r=20, t=50, b=40),
         xaxis=dict(categoryorder='array', categoryarray=df_od['periodo_mes_es'].tolist(), tickangle=-45),
         yaxis=dict(title='Asientos / Pasajeros'),
-        yaxis2=dict(title='Ocupación', overlaying='y', side='right', range=[0, 105], tickvals=[0, 25, 50, 75, 100], ticksuffix='%', showgrid=False),
         legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0)
     )
     graficar(fig_od)
+    graficar(grafico_ocupacion(df_od['periodo_mes_es'].tolist(), df_od['ocup'].tolist()))
     st.caption("Si las barras grises superan mucho a las azules, hay capacidad ociosa; si se igualan y la ocupación se acerca al 100%, la ruta está saturada.")
 
     st.markdown("---")
@@ -943,19 +958,22 @@ with tab_panorama:
     fig_fq = go.Figure()
     fig_fq.add_bar(x=g_fq['periodo_mes_es'], y=g_fq['vuelos_dia'], name='Vuelos por día', marker_color=PALETA[1],
                    hovertemplate='%{y:,.1f} vuelos/día<extra></extra>')
-    fig_fq.add_scatter(x=g_fq['periodo_mes_es'], y=g_fq['asientos_vuelo'], name='Asientos por vuelo', yaxis='y2',
-                       mode='lines+markers', line=dict(color=PALETA[4], width=3),
-                       hovertemplate='%{y:,.0f} asientos/vuelo<extra></extra>')
     fig_fq.update_layout(
         height=420, margin=dict(l=20, r=20, t=50, b=40),
         xaxis=dict(categoryorder='array', categoryarray=g_fq['periodo_mes_es'].tolist(), tickangle=-45),
-        yaxis=dict(title='Vuelos por día'),
-        yaxis2=dict(title='Asientos por vuelo', overlaying='y', side='right', showgrid=False,
-                    range=[0, tope_asientos], tickmode='linear', tick0=0, dtick=paso_asientos),
-        legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='left', x=0)
+        yaxis=dict(title='Vuelos por día')
     )
     graficar(fig_fq)
-    st.caption("Barras: frecuencia operada (vuelos por día). Línea: tamaño promedio de la aeronave. "
+    fig_av = go.Figure(go.Scatter(x=g_fq['periodo_mes_es'], y=g_fq['asientos_vuelo'], mode='lines+markers', name='Asientos por vuelo',
+                                  line=dict(color='#0f172a', width=2), marker=dict(size=8),
+                                  hovertemplate='%{y:,.0f} asientos/vuelo<extra></extra>'))
+    fig_av.update_layout(
+        height=260, showlegend=False, margin=dict(l=20, r=20, t=30, b=40),
+        xaxis=dict(categoryorder='array', categoryarray=g_fq['periodo_mes_es'].tolist(), tickangle=-45),
+        yaxis=dict(title='Asientos por vuelo', range=[0, tope_asientos], tickmode='linear', tick0=0, dtick=paso_asientos)
+    )
+    graficar(fig_av)
+    st.caption("Arriba: frecuencia operada (vuelos por día). Abajo: tamaño promedio de la aeronave. "
                "Si suben las barras, la ruta crece con más frecuencias; si sube la línea, con aviones más grandes.")
 
 with tab_competencia:
